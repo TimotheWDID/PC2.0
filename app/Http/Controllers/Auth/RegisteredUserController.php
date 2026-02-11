@@ -37,7 +37,9 @@ class RegisteredUserController extends Controller
             'address' => 'nullable|string|max:1024',
             'postal_code' => 'nullable|string|max:20',
             'city' => 'nullable|string|max:255',
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+                'first_name' => 'nullable|string|max:255',
+                'last_name' => 'nullable|string|max:255',
+                'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
         // Concatenate address parts into a single `address` string so we don't

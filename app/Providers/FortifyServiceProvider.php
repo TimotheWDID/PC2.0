@@ -24,6 +24,8 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Laravel\Fortify\Fortify::createUsersUsing(\App\Actions\Fortify\CreateNewUser::class);
+        \Laravel\Fortify\Fortify::updateUserProfileInformationUsing(\App\Actions\Fortify\UpdateUserProfileInformation::class);
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
 
