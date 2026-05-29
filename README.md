@@ -277,3 +277,15 @@ Bonnes pratiques:
 ```bash
 * * * * * cd /var/www/supportpc && php artisan schedule:run >> /dev/null 2>&1
 ```
+
+
+
+npm install
+npm run build
+git add .
+git commit -m "update prod"
+git push origin main
+
+
+Coté serv
+touch ~/public_html_support/index.php
