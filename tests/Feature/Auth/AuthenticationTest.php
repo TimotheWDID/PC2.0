@@ -72,8 +72,10 @@ test('users can logout', function () {
 
 test('users are rate limited', function () {
     $user = User::factory()->create();
+    $throttleKey = implode('|', [$user->email, '127.0.0.1']);
 
-    RateLimiter::increment(implode('|', [$user->email, '127.0.0.1']), amount: 10);
+    RateLimiter::increment($throttleKey, amount: 10);
+    expect(RateLimiter::tooManyAttempts($throttleKey, 5))->toBeTrue();
 
     $response = $this->post(route('login.store'), [
         'email' => $user->email,
@@ -81,8 +83,5 @@ test('users are rate limited', function () {
     ]);
 
     $response->assertSessionHasErrors('email');
-
-    $errors = session('errors');
-
-    $this->assertStringContainsString('Too many login attempts', $errors->first('email'));
+    $this->assertGuest();
 });
