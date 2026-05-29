@@ -5,24 +5,63 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Ticket;
+use App\Models\Commande;
 use Coderflex\LaravelTicket\Models\Category;
 use Illuminate\Support\Facades\Auth;
+use App\Support\TicketLabelSettings;
 
 class TicketController extends Controller
 {
+    private function authorizeTicketAccess(Ticket $ticket): void
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        if ($user->agent) {
+            return;
+        }
+
+        if ((int) $ticket->user_id !== (int) $user->id) {
+            abort(403, 'Acces non autorise.');
+        }
+    }
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
         $query = Ticket::query()->with('user');
+        $user = Auth::user();
+
+        if (!$user) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        if (!$user->agent) {
+            $query->where('user_id', $user->id);
+        }
 
         // Filter by status if provided
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
-        $tickets = $query->get()->map(function ($t) {
+        $rawTickets = $query->get();
+
+        $linkedCommandes = Commande::select('id', 'ticket_id', 'nom')
+            ->whereNotNull('ticket_id')
+            ->whereIn('ticket_id', $rawTickets->pluck('id'))
+            ->orderByDesc('created_at')
+            ->get()
+            ->groupBy('ticket_id')
+            ->map(fn($group) => $group->first());
+
+        $tickets = $rawTickets->map(function ($t) use ($linkedCommandes) {
+            $commande = $linkedCommandes->get($t->id);
+
             return [
                 'id' => $t->id,
                 'title' => $t->title ?? null,
@@ -32,13 +71,61 @@ class TicketController extends Controller
                     'id' => $t->user->id,
                     'name' => $t->user->first_name . ' ' . $t->user->last_name,
                 ] : null,
+                'commande' => $commande ? [
+                    'id' => $commande->id,
+                    'nom' => $commande->nom,
+                ] : null,
             ];
         });
 
+        $linkableCommandes = Commande::with('user:id,first_name,last_name,email')
+            ->select('id', 'ticket_id', 'nom', 'fournisseur', 'command_number', 'user_id')
+            ->whereNull('ticket_id')
+            ->orderByDesc('created_at')
+            ->limit(300)
+            ->get()
+            ->map(function ($commande) {
+                return [
+                    'id' => $commande->id,
+                    'nom' => $commande->nom,
+                    'fournisseur' => $commande->fournisseur,
+                    'command_number' => $commande->command_number,
+                    'user_name' => $commande->user ? $commande->user->name : null,
+                    'user_email' => $commande->user ? $commande->user->email : null,
+                ];
+            });
+
         return Inertia::render('Tickets/Index', [
             'tickets' => $tickets,
+            'linkableCommandes' => $linkableCommandes,
             'currentStatus' => $request->status ?? null,
         ]);
+    }
+
+    /**
+     * Link an existing commande to a ticket.
+     */
+    public function linkCommande(Request $request, Ticket $ticket)
+    {
+        $this->authorizeTicketAccess($ticket);
+
+        $validated = $request->validate([
+            'commande_id' => 'required|exists:commandes,id',
+        ]);
+
+        $commande = Commande::findOrFail($validated['commande_id']);
+
+        if (!is_null($commande->ticket_id) && (int) $commande->ticket_id !== (int) $ticket->id) {
+            return back()->withErrors([
+                'commande_id' => 'Cette commande est deja liee a un autre ticket.',
+            ]);
+        }
+
+        $commande->update([
+            'ticket_id' => $ticket->id,
+        ]);
+
+        return back()->with('success', 'Commande liee au ticket avec succes.');
     }
 
     /**
@@ -52,10 +139,10 @@ class TicketController extends Controller
         ]);
 
         $currentUser = Auth::user();
-        $isAdmin = $currentUser && $currentUser->agent && $currentUser->agent->is_admin;
+        $isAgent = $currentUser && $currentUser->agent;
 
         $users = [];
-        if ($isAdmin) {
+        if ($isAgent) {
             $users = \App\Models\User::whereDoesntHave('agent')->get()->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->first_name . ' ' . $u->last_name,
@@ -65,7 +152,7 @@ class TicketController extends Controller
 
         return Inertia::render('Tickets/Create', [
             'categories' => $categories,
-            'isAdmin' => $isAdmin,
+            'isAgent' => $isAgent,
             'users' => $users,
         ]);
     }
@@ -76,7 +163,7 @@ class TicketController extends Controller
     public function store(Request $request)
     {
         $currentUser = Auth::user();
-        $isAdmin = $currentUser && $currentUser->agent && $currentUser->agent->is_admin;
+        $isAgent = $currentUser && $currentUser->agent;
 
         $rules = [
             'title' => 'required|string|max:255',
@@ -85,7 +172,7 @@ class TicketController extends Controller
         ];
 
         // Si admin, il doit spécifier un utilisateur
-        if ($isAdmin) {
+        if ($isAgent) {
             $rules['user_selection'] = 'required|in:existing,new';
             $rules['user_id'] = 'nullable|integer';
             $rules['user_email'] = 'nullable|email|max:255';
@@ -96,7 +183,7 @@ class TicketController extends Controller
         $ticket = new Ticket();
 
         // Déterminer l'user_id du ticket
-        if ($isAdmin && $data['user_selection'] === 'new') {
+        if ($isAgent && $data['user_selection'] === 'new') {
             // Créer un nouvel utilisateur
             $address = $request->input('user_address', '');
             $postalCode = $request->input('user_postal_code', '');
@@ -135,7 +222,7 @@ class TicketController extends Controller
                 ]);
             }
             $ticket->user_id = $user->id;
-        } elseif ($isAdmin && $data['user_selection'] === 'existing' && !empty($data['user_id'])) {
+        } elseif ($isAgent && $data['user_selection'] === 'existing' && !empty($data['user_id'])) {
             // Utiliser un utilisateur existant
             $ticket->user_id = $data['user_id'];
         } else {
@@ -157,8 +244,51 @@ class TicketController extends Controller
             }
         }
 
+        if ($request->boolean('print_label')) {
+            return redirect()->route('tickets.printLabel', $ticket->id);
+        }
+
         // Redirect to dashboard after creating a ticket
         return redirect()->route('dashboard');
+    }
+
+    /**
+     * Printer settings page for ticket labels.
+     */
+    public function printSettings()
+    {
+        return Inertia::render('Tickets/PrinterSettings');
+    }
+
+    /**
+     * Printable label view for a ticket.
+     */
+    public function printLabel(string $id)
+    {
+        $ticket = Ticket::with('user', 'category')->findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        return Inertia::render('Tickets/PrintLabel', [
+            'ticket' => [
+                'id' => $ticket->id,
+                'title' => $ticket->title ?? null,
+                'message' => $ticket->message ?? null,
+                'created_at' => $ticket->created_at ? $ticket->created_at->format('d/m/Y H:i') : null,
+                'priority' => $ticket->priority ?? null,
+                'status' => $ticket->status ?? null,
+                'user' => $ticket->user ? [
+                    'name' => $ticket->user->first_name . ' ' . $ticket->user->last_name,
+                    'email' => $ticket->user->email,
+                    'phone' => $ticket->user->phone,
+                    'address' => $ticket->user->address,
+                ] : null,
+                'category' => $ticket->category ? [
+                    'name' => $ticket->category->name,
+                ] : null,
+                'qr_payload' => url(route('tickets.show', $ticket->id)),
+            ],
+            'labelSettings' => TicketLabelSettings::load(),
+        ]);
     }
 
     /**
@@ -167,6 +297,7 @@ class TicketController extends Controller
     public function show(string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
         $ticket->load(['user', 'assignee', 'category']);
 
         $categories = Category::all()->map(fn($c) => [
@@ -249,6 +380,7 @@ class TicketController extends Controller
     public function edit(string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
         $categories = Category::all()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
@@ -286,6 +418,7 @@ class TicketController extends Controller
     public function update(Request $request, string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
 
         $data = $request->validate([
             'title' => 'required|string|max:255',
@@ -336,6 +469,7 @@ class TicketController extends Controller
     public function destroy(string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
         $ticket->delete();
 
         return redirect()->route('tickets.index');
@@ -347,6 +481,7 @@ class TicketController extends Controller
     public function updateStatus(Request $request, string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
 
         $data = $request->validate([
             'status' => 'required|in:open,in_progress,pending,resolved,closed',
@@ -364,6 +499,7 @@ class TicketController extends Controller
     public function updatePriority(Request $request, string $id)
     {
         $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
 
         $data = $request->validate([
             'priority' => 'required|in:low,medium,high',

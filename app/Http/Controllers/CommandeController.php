@@ -11,6 +11,30 @@ use Inertia\Inertia;
 
 class CommandeController extends Controller
 {
+    private function getTicketOptions()
+    {
+        return Ticket::with(['user:id,first_name,last_name,email,phone'])
+            ->select('id', 'title', 'uuid', 'user_id')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($ticket) {
+                return [
+                    'id' => $ticket->id,
+                    'title' => $ticket->title,
+                    'uuid' => $ticket->uuid,
+                    'user' => $ticket->user ? [
+                        'id' => $ticket->user->id,
+                        'name' => $ticket->user->name,
+                        'first_name' => $ticket->user->first_name,
+                        'last_name' => $ticket->user->last_name,
+                        'email' => $ticket->user->email,
+                        'phone' => $ticket->user->phone,
+                    ] : null,
+                ];
+            })
+            ->values();
+    }
+
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
@@ -69,12 +93,20 @@ class CommandeController extends Controller
                 'email' => $user->email,
             ];
         });
-        $tickets = Ticket::select('id', 'title', 'uuid')->get();
+        $tickets = $this->getTicketOptions();
+        $ticketId = $request->query('ticket_id');
+        $ticketUserId = null;
+
+        if (!empty($ticketId)) {
+            $ticket = Ticket::select('id', 'user_id')->find($ticketId);
+            $ticketUserId = $ticket ? $ticket->user_id : null;
+        }
 
         return Inertia::render('Commandes/Create', [
             'users' => $users,
             'tickets' => $tickets,
-            'ticketId' => $request->query('ticket_id'),
+            'ticketId' => $ticketId,
+            'ticketUserId' => $ticketUserId,
         ]);
     }
 
@@ -131,7 +163,7 @@ class CommandeController extends Controller
                 'email' => $user->email,
             ];
         });
-        $tickets = Ticket::select('id', 'title', 'uuid')->get();
+        $tickets = $this->getTicketOptions();
 
         return Inertia::render('Commandes/Edit', [
             'commande' => $commande,
@@ -215,7 +247,7 @@ class CommandeController extends Controller
                 'email' => $user->email,
             ];
         });
-        $tickets = Ticket::select('id', 'title', 'uuid')->get();
+        $tickets = $this->getTicketOptions();
 
         return Inertia::render('Commandes/CreateBulk', [
             'users' => $users,

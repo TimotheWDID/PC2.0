@@ -12,6 +12,8 @@ type User = {
   id: number;
   name: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
 };
 
 type Ticket = {
@@ -167,7 +169,11 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                         <td className="px-4 py-4 text-sm font-medium">{commande.nom}</td>
                         <td className="px-4 py-4 text-sm">{commande.command_number || '-'}</td>
                         <td className="px-4 py-4 text-sm">{commande.fournisseur || '-'}</td>
-                        <td className="px-4 py-4 text-sm">{commande.user?.name || '-'}</td>
+                        <td className="px-4 py-4 text-sm">
+                          {commande.user
+                            ? (commande.user.name || `${commande.user.first_name ?? ''} ${commande.user.last_name ?? ''}`.trim() || commande.user.email)
+                            : '-'}
+                        </td>
                         <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                           {commande.ticket ? (
                             <Link href={`/tickets/${commande.ticket.id}`} className="text-blue-600 hover:underline">

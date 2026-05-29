@@ -10,12 +10,29 @@ use Illuminate\Support\Facades\Auth;
 
 class MessageController extends Controller
 {
+    private function authorizeTicketAccess(Ticket $ticket): void
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        if ($user->agent) {
+            return;
+        }
+
+        if ((int) $ticket->user_id !== (int) $user->id) {
+            abort(403, 'Acces non autorise.');
+        }
+    }
     /**
      * Get all messages for a specific ticket
      */
     public function index($ticketId)
     {
         $ticket = Ticket::findOrFail($ticketId);
+        $this->authorizeTicketAccess($ticket);
 
         $messages = $ticket->messages()
             ->with('author:id,first_name,last_name,email')
@@ -47,6 +64,7 @@ class MessageController extends Controller
     public function store(Request $request, $ticketId)
     {
         $ticket = Ticket::findOrFail($ticketId);
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'content' => 'required|string|max:5000',
@@ -96,6 +114,9 @@ class MessageController extends Controller
         $message = Message::where('ticket_id', $ticketId)
             ->where('id', $messageId)
             ->firstOrFail();
+
+        $ticket = Ticket::findOrFail($ticketId);
+        $this->authorizeTicketAccess($ticket);
 
         // Only allow the author or an admin to delete
         if ($message->author_id !== Auth::id()) {

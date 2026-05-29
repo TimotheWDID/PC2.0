@@ -8,7 +8,7 @@
     <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
     <!-- Favicon et autres métas -->
-    <link rel="icon" href="/images/logo32.svg" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('images/logo32.svg') }}" type="image/svg+xml">
     @inertiaHead
 
     <!-- Chargement du JS via Vite -->

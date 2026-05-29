@@ -26,7 +26,7 @@ Route::resource('tickets', \App\Http\Controllers\TicketController::class);
                     <td>{{ $ticket->status ?? '-' }}</td>
                     <td>{{ $ticket->created_at->format('d/m/Y H:i') }}</td>
                     <td>
-                        <a href="{{ route('tickets.show', $ticket->id) }}" class="btn btn-info btn-sm">Voir</a>
+                        <a href="{{ route('tickets.show', $ticket->hashid) }}" class="btn btn-info btn-sm">Voir</a>
                         <a href="{{ route('tickets.edit', $ticket->id) }}" class="btn btn-warning btn-sm">Modifier</a>
                         <form action="{{ route('tickets.destroy', $ticket->id) }}" method="POST" style="display:inline-block">
                             @csrf

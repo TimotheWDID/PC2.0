@@ -57,6 +57,11 @@ const mainNavItems: NavItem[] = [
                 href: '/tickets?status=closed',
                 icon: null,
             },
+            {
+                title: 'Imprimante tickets',
+                href: '/tickets/print-settings',
+                icon: null,
+            },
         ],
     },
     {

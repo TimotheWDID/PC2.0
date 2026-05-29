@@ -9,7 +9,7 @@ Vous avez un nouveau message sur votre ticket.
 {!! nl2br(e($messageBody)) !!}
 @endcomponent
 
-@component('mail::button', ['url' => route('tickets.show', $ticket->id)])
+@component('mail::button', ['url' => route('tickets.show', $ticket->hashid)])
 Voir le ticket
 @endcomponent
 

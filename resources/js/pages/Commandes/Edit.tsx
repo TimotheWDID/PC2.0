@@ -7,18 +7,26 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 type User = {
   id: number;
-  name: string;
-  email: string;
+  name?: string;
+  email?: string | null;
 };
 
 type Ticket = {
   id: number;
   title: string;
   uuid: string;
+  user?: {
+    id: number;
+    name?: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
 };
 
 type Commande = {
@@ -57,7 +65,6 @@ const statutColors: Record<string, string> = {
 export default function Edit({ commande, users, tickets }: { commande: Commande; users: User[]; tickets: Ticket[] }) {
   const { data, setData, put, processing, errors } = useForm({
     user_id: commande.user_id.toString(),
-    user_search: '',
     ticket_id: commande.ticket_id?.toString() || '',
     nom: commande.nom,
     fournisseur: commande.fournisseur,
@@ -66,44 +73,78 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
     statut: commande.statut,
   });
 
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>(users);
-  const [selectedUserName, setSelectedUserName] = useState('');
-  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [ticketSearchQuery, setTicketSearchQuery] = useState('');
+  const [showTicketDropdown, setShowTicketDropdown] = useState(false);
+  const [showTicketDetails, setShowTicketDetails] = useState(false);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter((user) => {
+      const name = (user.name ?? '').toLowerCase();
+      const email = (user.email ?? '').toLowerCase();
+      return name.includes(query) || email.includes(query);
+    });
+  }, [searchQuery, users]);
+
+  const getTicketCustomerName = (ticket: Ticket): string => {
+    return ticket.user?.name?.trim()
+      || `${ticket.user?.first_name ?? ''} ${ticket.user?.last_name ?? ''}`.trim()
+      || '';
+  };
+
+  const filteredTickets = useMemo(() => {
+    const query = ticketSearchQuery.trim().toLowerCase();
+
+    if (!query) return tickets;
+
+    return tickets.filter((ticket) => {
+      const customerName = getTicketCustomerName(ticket).toLowerCase();
+      const email = (ticket.user?.email ?? '').toLowerCase();
+      const phone = (ticket.user?.phone ?? '').toLowerCase();
+      const title = (ticket.title ?? '').toLowerCase();
+      const id = ticket.id.toString();
+
+      return id.includes(query)
+        || title.includes(query)
+        || customerName.includes(query)
+        || email.includes(query)
+        || phone.includes(query);
+    });
+  }, [ticketSearchQuery, tickets]);
+
+  const selectedTicket = useMemo(() => {
+    if (!data.ticket_id) return null;
+    return tickets.find((ticket) => ticket.id.toString() === data.ticket_id) ?? null;
+  }, [data.ticket_id, tickets]);
+
+  const formatTicketOption = (ticket: Ticket): string => {
+    const customerName = getTicketCustomerName(ticket);
+
+    return [
+      `#${ticket.id}`,
+      ticket.title,
+      customerName || null,
+      ticket.user?.email || null,
+      ticket.user?.phone || null,
+    ]
+      .filter(Boolean)
+      .join(' - ');
+  };
 
   useEffect(() => {
     const currentUser = users.find(u => u.id === commande.user_id);
     if (currentUser) {
-      setSelectedUserName(currentUser.name);
+      setSelectedUser(currentUser);
     }
   }, []);
 
-  const handleUserSearch = (value: string) => {
-    setData('user_search', value);
-    setSelectedUserName('');
-    setData('user_id', '');
-
-    if (value.trim() === '') {
-      setFilteredUsers(users);
-      setShowCreateUser(false);
-    } else {
-      const filtered = users.filter(user =>
-        user.name.toLowerCase().includes(value.toLowerCase()) ||
-        user.email.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredUsers(filtered);
-      setShowCreateUser(filtered.length === 0);
-    }
-    setShowUserDropdown(true);
-  };
-
-  const selectUser = (user: User) => {
-    setData('user_id', user.id.toString());
-    setSelectedUserName(user.name);
-    setData('user_search', '');
-    setShowUserDropdown(false);
-    setShowCreateUser(false);
-  };
+  useEffect(() => {
+    if (!selectedTicket) return;
+    setTicketSearchQuery(formatTicketOption(selectedTicket));
+  }, [selectedTicket]);
 
   const handleCreateUser = () => {
     window.open('/users/create', '_blank');
@@ -153,62 +194,73 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
           <CardContent>
             <form onSubmit={submit} className="space-y-4">
               <div className="relative">
-                <Label htmlFor="user_search">Utilisateur *</Label>
-                <div className="relative">
-                  <Input
-                    id="user_search"
-                    type="text"
-                    placeholder="Rechercher un utilisateur..."
-                    value={selectedUserName || data.user_search}
-                    onChange={(e) => handleUserSearch(e.target.value)}
-                    onFocus={() => setShowUserDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
-                    className="pr-10"
-                  />
-                  {selectedUserName && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedUserName('');
-                        setData('user_id', '');
-                        setData('user_search', '');
-                        setShowUserDropdown(false);
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+                <Label htmlFor="search_user">Utilisateur *</Label>
+                <Input
+                  id="search_user"
+                  type="text"
+                  placeholder="Tapez un nom ou email..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selectedUser) {
+                      setSelectedUser(null);
+                      setData('user_id', '');
+                    }
+                  }}
+                />
 
-                {showUserDropdown && (data.user_search || !selectedUserName) && (
-                  <div className="absolute z-50 mt-1 w-full rounded-md border border-input bg-popover shadow-lg max-h-60 overflow-auto">
-                    {filteredUsers.length > 0 ? (
-                      <ul className="py-1">
-                        {filteredUsers.map((user) => (
-                          <li
-                            key={user.id}
-                            onClick={() => selectUser(user)}
-                            className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                          >
-                            <div className="font-medium">{user.name}</div>
-                            <div className="text-sm text-muted-foreground">{user.email}</div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : showCreateUser ? (
-                      <div className="p-4">
-                        <p className="text-sm text-muted-foreground mb-2">Aucun utilisateur trouvé</p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCreateUser}
-                        >
-                          Créer un nouvel utilisateur
-                        </Button>
-                      </div>
-                    ) : null}
+                {selectedUser && (
+                  <div className="mt-3 p-3 bg-background border rounded-md">
+                    <p className="font-medium">{selectedUser.name}</p>
+                    <p className="text-sm text-gray-600">{selectedUser.email || "Pas d'email"}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedUser(null);
+                        setSearchQuery('');
+                        setData('user_id', '');
+                      }}
+                      className="mt-2"
+                    >
+                      Changer d'utilisateur
+                    </Button>
+                  </div>
+                )}
+
+                {searchQuery && !selectedUser && filteredUsers.length > 0 && (
+                  <div className="mt-2 border rounded-md max-h-48 overflow-y-auto">
+                    {filteredUsers.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setData('user_id', user.id.toString());
+                          setSearchQuery('');
+                        }}
+                        className="w-full text-left p-3 hover:bg-gray-100 border-b last:border-b-0"
+                      >
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-sm text-gray-600">{user.email || "Pas d'email"}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {searchQuery && !selectedUser && filteredUsers.length === 0 && (
+                  <div className="mt-2 p-3 bg-background border rounded-md">
+                    <p className="text-sm">Aucun utilisateur trouvé.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCreateUser}
+                      className="mt-2"
+                    >
+                      Créer un nouvel utilisateur
+                    </Button>
                   </div>
                 )}
 
@@ -218,20 +270,119 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
 
               <div>
                 <Label htmlFor="ticket_id">Ticket (optionnel)</Label>
-                <select
-                  id="ticket_id"
-                  name="ticket_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={data.ticket_id}
-                  onChange={(e) => setData('ticket_id', e.target.value)}
-                >
-                  <option value="">-- Aucun --</option>
-                  {tickets.map((ticket) => (
-                    <option key={ticket.id} value={ticket.id}>
-                      #{ticket.id} - {ticket.title}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Input
+                    id="ticket_id"
+                    type="text"
+                    placeholder="Rechercher et selectionner un ticket (id, titre, client, email, tel)..."
+                    value={ticketSearchQuery}
+                    onChange={(e) => {
+                      setTicketSearchQuery(e.target.value);
+                      setShowTicketDropdown(true);
+                      setShowTicketDetails(false);
+                      setData('ticket_id', '');
+                    }}
+                    onFocus={() => setShowTicketDropdown(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setShowTicketDropdown(false), 150);
+                    }}
+                  />
+
+                  {showTicketDropdown && (
+                    <div className="absolute z-20 mt-1 w-full border rounded-md bg-background shadow max-h-56 overflow-y-auto">
+                      <button
+                        type="button"
+                        className="w-full text-left p-3 hover:bg-muted border-b"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setData('ticket_id', '');
+                          setTicketSearchQuery('');
+                          setShowTicketDetails(false);
+                          setShowTicketDropdown(false);
+                        }}
+                      >
+                        -- Aucun --
+                      </button>
+
+                      {filteredTickets.map((ticket) => {
+                        const label = formatTicketOption(ticket);
+
+                        return (
+                          <button
+                            key={ticket.id}
+                            type="button"
+                            className="w-full text-left p-3 hover:bg-muted border-b last:border-b-0"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setData('ticket_id', ticket.id.toString());
+                              setTicketSearchQuery(label);
+                              setShowTicketDetails(false);
+                              setShowTicketDropdown(false);
+                            }}
+                          >
+                            <span className="text-sm">{label}</span>
+                          </button>
+                        );
+                      })}
+
+                      {filteredTickets.length === 0 && (
+                        <div className="p-3 text-sm text-muted-foreground">Aucun ticket ne correspond a votre recherche.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {selectedTicket && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        onClick={() => setShowTicketDetails((prev) => !prev)}
+                      >
+                        {showTicketDetails ? 'Masquer les details' : 'Afficher plus de details'}
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/tickets/${selectedTicket.id}`}>
+                          Afficher le ticket
+                        </Link>
+                      </Button>
+                    </div>
+
+                    {showTicketDetails && (
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <p className="text-sm font-medium">Details du ticket</p>
+                        <div className="grid gap-2 text-xs sm:grid-cols-2">
+                          <div>
+                            <span className="text-muted-foreground">ID:</span>{' '}
+                            <span className="font-medium">#{selectedTicket.id}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">UUID:</span>{' '}
+                            <span className="font-medium">{selectedTicket.uuid}</span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground">Titre:</span>{' '}
+                            <span className="font-medium">{selectedTicket.title}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Client:</span>{' '}
+                            <span className="font-medium">{getTicketCustomerName(selectedTicket) || 'Non renseigne'}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Email:</span>{' '}
+                            <span className="font-medium">{selectedTicket.user?.email || 'Non renseigne'}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Telephone:</span>{' '}
+                            <span className="font-medium">{selectedTicket.user?.phone || 'Non renseigne'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {errors.ticket_id && <div className="text-red-500 text-sm mt-1">{errors.ticket_id}</div>}
               </div>
 

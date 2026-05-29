@@ -27,6 +27,7 @@ class User extends Authenticatable
         'phone',
         'address',
         'internal_note',
+        'ticket_label_settings',
         'default_notification_preference',
     ];
 
@@ -53,6 +54,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'ticket_label_settings' => 'array',
         ];
     }
 

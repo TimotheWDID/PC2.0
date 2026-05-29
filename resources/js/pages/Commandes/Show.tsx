@@ -3,6 +3,16 @@ import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { useState } from 'react';
@@ -57,6 +67,12 @@ const statutColors: Record<string, string> = {
 
 export default function Show({ commande }: { commande: Commande }) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [fournisseurInput, setFournisseurInput] = useState(commande.fournisseur ?? '');
+  const [commandNumberInput, setCommandNumberInput] = useState(commande.command_number ?? '');
 
   const handleDelete = () => {
     if (confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) {
@@ -65,11 +81,54 @@ export default function Show({ commande }: { commande: Commande }) {
     }
   };
 
-  const handleStatusChange = (newStatus: string) => {
-    router.patch(`/commandes/${commande.id}/status`, { statut: newStatus }, {
+  const requiresFournisseur = (status: string) => status !== 'new';
+  const requiresCommandNumber = (status: string) => ['commandé', 'réceptionner', 'traité'].includes(status);
+
+  const openStatusModal = (newStatus: string) => {
+    setPendingStatus(newStatus);
+    setStatusError(null);
+    setStatusModalOpen(true);
+  };
+
+  const handleStatusChange = () => {
+    if (!pendingStatus) return;
+
+    const fournisseur = fournisseurInput.trim();
+    const commandNumber = commandNumberInput.trim();
+
+    if (requiresFournisseur(pendingStatus) && !fournisseur) {
+      setStatusError('Le fournisseur est requis pour ce statut.');
+      return;
+    }
+
+    if (requiresCommandNumber(pendingStatus) && !commandNumber) {
+      setStatusError('Le numero de commande est requis pour ce statut.');
+      return;
+    }
+
+    setStatusSubmitting(true);
+
+    router.put(`/commandes/${commande.id}`, {
+      user_id: commande.user_id,
+      ticket_id: commande.ticket_id,
+      nom: commande.nom,
+      fournisseur,
+      command_number: commandNumber,
+      invoice_id: commande.invoice_id,
+      statut: pendingStatus,
+    }, {
       preserveScroll: true,
       onSuccess: () => {
-        // Optional: Show success message
+        setStatusModalOpen(false);
+        setPendingStatus(null);
+        setStatusError(null);
+      },
+      onError: (errors) => {
+        const firstError = (errors.statut || errors.fournisseur || errors.command_number || errors.nom) as string | undefined;
+        setStatusError(firstError || 'Impossible de modifier le statut pour le moment.');
+      },
+      onFinish: () => {
+        setStatusSubmitting(false);
       },
     });
   };
@@ -194,7 +253,7 @@ export default function Show({ commande }: { commande: Commande }) {
                 <Button
                   key={value}
                   variant={commande.statut === value ? 'default' : 'outline'}
-                  onClick={() => handleStatusChange(value)}
+                  onClick={() => openStatusModal(value)}
                   disabled={commande.statut === value}
                 >
                   {label}
@@ -203,6 +262,80 @@ export default function Show({ commande }: { commande: Commande }) {
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={statusModalOpen} onOpenChange={setStatusModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmer le changement de statut</DialogTitle>
+              <DialogDescription>
+                Vous allez passer la commande au statut{' '}
+                <span className="font-semibold">{pendingStatus ? statutLabels[pendingStatus] : '-'}</span>.
+                Renseignez les prerequis ci-dessous si necessaire.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {pendingStatus && requiresFournisseur(pendingStatus) && (
+                <div className="space-y-2">
+                  <Label htmlFor="modal_fournisseur">Fournisseur *</Label>
+                  <Input
+                    id="modal_fournisseur"
+                    value={fournisseurInput}
+                    onChange={(e) => {
+                      setFournisseurInput(e.target.value);
+                      if (statusError) setStatusError(null);
+                    }}
+                    placeholder="Nom du fournisseur"
+                  />
+                </div>
+              )}
+
+              {pendingStatus && requiresCommandNumber(pendingStatus) && (
+                <div className="space-y-2">
+                  <Label htmlFor="modal_command_number">Numero de commande *</Label>
+                  <Input
+                    id="modal_command_number"
+                    value={commandNumberInput}
+                    onChange={(e) => {
+                      setCommandNumberInput(e.target.value);
+                      if (statusError) setStatusError(null);
+                    }}
+                    placeholder="Ex: CMD-2026-001"
+                  />
+                </div>
+              )}
+
+              {pendingStatus === 'new' && (
+                <p className="text-sm text-muted-foreground">Aucun prerequis obligatoire pour ce statut.</p>
+              )}
+
+              {statusError && (
+                <p className="text-sm text-red-500">{statusError}</p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setStatusModalOpen(false);
+                  setStatusError(null);
+                }}
+                disabled={statusSubmitting}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                onClick={handleStatusChange}
+                disabled={statusSubmitting}
+              >
+                {statusSubmitting ? 'Mise a jour...' : 'Valider le changement'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

@@ -35,6 +35,25 @@ const translatePriority = (priority: string): string => {
   return translations[priority] || priority;
 };
 
+const formatDateTime = (value?: string | null): string => {
+  if (!value) {
+    return '-';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const statutLabels: Record<string, string> = {
   'open': 'Ouvert',
   'in_progress': 'En cours',
@@ -46,28 +65,28 @@ const statutLabels: Record<string, string> = {
 const statutUI: Record<string, { badge: string; btn: string; btnActive: string }> = {
   open: {
     badge: 'bg-[#2a3ff5] text-white',
-    btn: 'border border-[#2a3ff5] text-[#141d3a] bg-white hover:bg-[#f3f4f6]',
-    btnActive: 'bg-[#2a3ff5] text-white border border-[#2a3ff5] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#2a3ff5] text-white border border-[#2a3ff5] shadow-sm dark:bg-[#3a4dff] dark:border-[#3a4dff]',
   },
   in_progress: {
     badge: 'bg-[#63d7ca] text-[#141d3a]',
-    btn: 'border border-[#63d7ca] text-[#141d3a] bg-white hover:bg-[#e8f4f2]',
-    btnActive: 'bg-[#63d7ca] text-[#141d3a] border border-[#63d7ca] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#63d7ca] text-[#141d3a] border border-[#63d7ca] shadow-sm dark:bg-[#43bfb1] dark:border-[#43bfb1] dark:text-[#081a2b]',
   },
   pending: {
     badge: 'bg-[#b3b6bf] text-[#141d3a]',
-    btn: 'border border-[#b3b6bf] text-[#141d3a] bg-white hover:bg-[#f3f4f6]',
-    btnActive: 'bg-[#b3b6bf] text-[#141d3a] border border-[#b3b6bf] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#b3b6bf] text-[#141d3a] border border-[#b3b6bf] shadow-sm dark:bg-[#8f95a3] dark:border-[#8f95a3] dark:text-[#0f1426]',
   },
   resolved: {
     badge: 'bg-[#141d3a] text-white',
-    btn: 'border border-[#141d3a] text-[#141d3a] bg-white hover:bg-[#e5e7eb]',
-    btnActive: 'bg-[#141d3a] text-white border border-[#141d3a] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#141d3a] text-white border border-[#141d3a] shadow-sm dark:bg-[#26325f] dark:border-[#26325f]',
   },
   closed: {
     badge: 'bg-[#f3f4f6] text-[#141d3a] border border-[#b3b6bf]',
-    btn: 'border border-[#b3b6bf] text-[#141d3a] bg-white hover:bg-[#f3f4f6]',
-    btnActive: 'bg-[#f3f4f6] text-[#141d3a] border border-[#b3b6bf] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#f3f4f6] text-[#141d3a] border border-[#b3b6bf] shadow-sm dark:bg-[#7e8594] dark:border-[#7e8594] dark:text-[#0f1426]',
   },
 };
 
@@ -80,18 +99,18 @@ const priorityLabels: Record<string, string> = {
 const priorityUI: Record<string, { badge: string; btn: string; btnActive: string }> = {
   low: {
     badge: 'bg-[#b3b6bf] text-[#141d3a]',
-    btn: 'border border-[#b3b6bf] text-[#141d3a] bg-white hover:bg-[#f3f4f6]',
-    btnActive: 'bg-[#b3b6bf] text-[#141d3a] border border-[#b3b6bf] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#b3b6bf] text-[#141d3a] border border-[#b3b6bf] shadow-sm dark:bg-[#8f95a3] dark:border-[#8f95a3] dark:text-[#0f1426]',
   },
   medium: {
     badge: 'bg-[#63d7ca] text-[#141d3a]',
-    btn: 'border border-[#63d7ca] text-[#141d3a] bg-white hover:bg-[#e8f4f2]',
-    btnActive: 'bg-[#63d7ca] text-[#141d3a] border border-[#63d7ca] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#63d7ca] text-[#141d3a] border border-[#63d7ca] shadow-sm dark:bg-[#43bfb1] dark:border-[#43bfb1] dark:text-[#081a2b]',
   },
   high: {
     badge: 'bg-[#2a3ff5] text-white',
-    btn: 'border border-[#2a3ff5] text-[#141d3a] bg-white hover:bg-[#e5e7eb]',
-    btnActive: 'bg-[#2a3ff5] text-white border border-[#2a3ff5] shadow-sm',
+    btn: 'border border-border bg-background text-foreground hover:bg-muted',
+    btnActive: 'bg-[#2a3ff5] text-white border border-[#2a3ff5] shadow-sm dark:bg-[#3a4dff] dark:border-[#3a4dff]',
   },
 };
 
@@ -142,7 +161,7 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
   };
 
   const handleStatusChange = (newStatus: string) => {
-    router.patch(`/tickets/${ticket.id}/status`, { status: newStatus }, {
+    router.post(`/tickets/${ticket.id}/status`, { status: newStatus, _method: 'patch' }, {
       preserveScroll: true,
       onSuccess: () => {
         setFormData({ ...formData, status: newStatus });
@@ -151,7 +170,7 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
   };
 
   const handlePriorityChange = (newPriority: string) => {
-    router.patch(`/tickets/${ticket.id}/priority`, { priority: newPriority }, {
+    router.post(`/tickets/${ticket.id}/priority`, { priority: newPriority, _method: 'patch' }, {
       preserveScroll: true,
       onSuccess: () => {
         setFormData({ ...formData, priority: newPriority });
@@ -163,12 +182,19 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={ticket.title ?? 'Ticket'} />
       <div className="py-4 w-full">
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-2">
           <Link href="/tickets">
             <Button variant="outline" size="sm">
               ← Retour
             </Button>
           </Link>
+          {isAgent && (
+            <Link href={`/tickets/${ticket.id}/print-label`}>
+              <Button variant="default" size="sm">
+                Imprimer étiquette
+              </Button>
+            </Link>
+          )}
         </div>
         <div className="mb-6">
           <h1 className="text-4xl font-bold tracking-tight">{ticket.title ?? 'Ticket'}</h1>
@@ -186,12 +212,6 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                 <CardTitle>Changer le statut</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Statut actuel</div>
-                  <Badge className={statutUI[formData.status]?.badge}>
-                    {statutLabels[formData.status]}
-                  </Badge>
-                </div>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(statutLabels).map(([value, label]) => {
                     const isCurrent = formData.status === value;
@@ -199,9 +219,14 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                     return (
                       <Button
                         key={value}
-                        variant={isCurrent ? 'default' : 'outline'}
-                        onClick={() => handleStatusChange(value)}
-                        disabled={isCurrent}
+                        variant="outline"
+                        className={isCurrent ? statutUI[value]?.btnActive : statutUI[value]?.btn}
+                        onClick={() => {
+                          if (!isCurrent) {
+                            handleStatusChange(value);
+                          }
+                        }}
+                        type="button"
                       >
                         {label}
                       </Button>
@@ -216,12 +241,6 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                 <CardTitle>Changer la priorité</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Priorité actuelle</div>
-                  <Badge className={priorityUI[formData.priority]?.badge}>
-                    {priorityLabels[formData.priority]}
-                  </Badge>
-                </div>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(priorityLabels).map(([value, label]) => {
                     const isCurrent = formData.priority === value;
@@ -229,9 +248,14 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                     return (
                       <Button
                         key={value}
-                        variant={isCurrent ? 'default' : 'outline'}
-                        onClick={() => handlePriorityChange(value)}
-                        disabled={isCurrent}
+                        variant="outline"
+                        className={isCurrent ? priorityUI[value]?.btnActive : priorityUI[value]?.btn}
+                        onClick={() => {
+                          if (!isCurrent) {
+                            handlePriorityChange(value);
+                          }
+                        }}
+                        type="button"
                       >
                         {label}
                       </Button>
@@ -279,38 +303,6 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                         onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                         rows={4}
                       />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="status">Statut</Label>
-                        <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Ouvert</SelectItem>
-                            <SelectItem value="in_progress">En cours</SelectItem>
-                            <SelectItem value="pending">En attente</SelectItem>
-                            <SelectItem value="resolved">Résolu</SelectItem>
-                            <SelectItem value="closed">Fermé</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="priority">Priorité</Label>
-                        <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Basse</SelectItem>
-                            <SelectItem value="medium">Moyenne</SelectItem>
-                            <SelectItem value="high">Haute</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -428,8 +420,23 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                   <>
                     <div className="text-sm text-muted-foreground">{ticket.message}</div>
 
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div>Créé le: <strong>{ticket.created_at ?? '-'}</strong></div>
+                    <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Référence:</span>{' '}
+                        <strong>#{ticket.id}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Créé le:</span>{' '}
+                        <strong>{formatDateTime(ticket.created_at)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Demandeur:</span>{' '}
+                        <strong>{ticket.user?.name ?? '-'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Agent assigné:</span>{' '}
+                        <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
+                      </div>
                     </div>
 
                     {ticket.category && (

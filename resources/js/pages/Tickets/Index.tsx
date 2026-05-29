@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import Heading from '@/components/heading';
@@ -28,14 +28,36 @@ type Ticket = {
   status: string | null;
   created_at: string | null;
   user?: { id: number; name: string } | null;
+  commande?: { id: number; nom: string } | null;
+};
+
+type LinkableCommande = {
+  id: number;
+  nom: string | null;
+  fournisseur: string | null;
+  command_number: string | null;
+  user_name: string | null;
+  user_email: string | null;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
 ]
 
-export default function Index({ tickets, currentStatus }: { tickets: Ticket[]; currentStatus?: string | null }) {
+export default function Index({
+  tickets,
+  currentStatus,
+  linkableCommandes,
+}: {
+  tickets: Ticket[];
+  currentStatus?: string | null;
+  linkableCommandes: LinkableCommande[];
+}) {
   const [query, setQuery] = useState('');
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linkTargetTicket, setLinkTargetTicket] = useState<Ticket | null>(null);
+  const [commandeSearch, setCommandeSearch] = useState('');
+  const [isLinking, setIsLinking] = useState(false);
 
   // Initialiser les filtres en fonction du currentStatus
   const getInitialFilters = () => {
@@ -78,6 +100,52 @@ export default function Index({ tickets, currentStatus }: { tickets: Ticket[]; c
     const matchesStatus = statusFilters[t.status as keyof typeof statusFilters] ?? true;
     return matchesSearch && matchesStatus;
   });
+
+  const filteredLinkableCommandes = useMemo(() => {
+    const search = commandeSearch.trim().toLowerCase();
+
+    if (!search) return linkableCommandes;
+
+    return linkableCommandes.filter((commande) => {
+      return (
+        String(commande.id).includes(search)
+        || (commande.nom ?? '').toLowerCase().includes(search)
+        || (commande.fournisseur ?? '').toLowerCase().includes(search)
+        || (commande.command_number ?? '').toLowerCase().includes(search)
+        || (commande.user_name ?? '').toLowerCase().includes(search)
+        || (commande.user_email ?? '').toLowerCase().includes(search)
+      );
+    });
+  }, [commandeSearch, linkableCommandes]);
+
+  const openLinkModal = (ticket: Ticket) => {
+    setLinkTargetTicket(ticket);
+    setCommandeSearch('');
+    setIsLinkModalOpen(true);
+  };
+
+  const closeLinkModal = () => {
+    setIsLinkModalOpen(false);
+    setLinkTargetTicket(null);
+    setCommandeSearch('');
+    setIsLinking(false);
+  };
+
+  const handleLinkCommande = (commandeId: number) => {
+    if (!linkTargetTicket) return;
+
+    setIsLinking(true);
+
+    router.patch(
+      `/tickets/${linkTargetTicket.id}/link-commande`,
+      { commande_id: commandeId },
+      {
+        preserveScroll: true,
+        onSuccess: () => closeLinkModal(),
+        onFinish: () => setIsLinking(false),
+      },
+    );
+  };
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -169,11 +237,26 @@ export default function Index({ tickets, currentStatus }: { tickets: Ticket[]; c
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.created_at ?? '-'}</td>
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                        <form action={`/tickets/${t.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer ce ticket ?')) e.preventDefault(); }}>
-                          <input type="hidden" name="_method" value="DELETE" />
-                          <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                          <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
-                        </form>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {t.commande ? (
+                            <Link href={`/commandes/${t.commande.id}`}>
+                              <Button type="button" variant="outline" size="sm">
+                                Commande liee #{t.commande.id}
+                              </Button>
+                            </Link>
+                          ) : (
+                            <>
+                              <Button type="button" variant="outline" size="sm" onClick={() => openLinkModal(t)}>
+                                Lier
+                              </Button>
+                              <Link href={`/commandes/create?ticket_id=${t.id}`}>
+                                <Button type="button" variant="default" size="sm">
+                                  Creer cmd
+                                </Button>
+                              </Link>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -187,6 +270,69 @@ export default function Index({ tickets, currentStatus }: { tickets: Ticket[]; c
             </div>
           </CardContent>
         </Card>
+
+        {isLinkModalOpen && linkTargetTicket && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeLinkModal}>
+            <div className="w-full max-w-2xl rounded-lg border bg-background shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="text-base font-semibold">
+                  Lier une commande au ticket #{linkTargetTicket.id}
+                </h3>
+                <Button type="button" variant="ghost" size="sm" onClick={closeLinkModal}>
+                  Fermer
+                </Button>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <Input
+                  placeholder="Rechercher commande (id, nom, fournisseur, numero, client, email)..."
+                  value={commandeSearch}
+                  onChange={(e) => setCommandeSearch(e.target.value)}
+                />
+
+                <div className="max-h-80 overflow-y-auto border rounded-md">
+                  {filteredLinkableCommandes.length > 0 ? (
+                    filteredLinkableCommandes.map((commande) => (
+                      <div key={commande.id} className="border-b last:border-b-0 p-3 flex items-start justify-between gap-3">
+                        <div className="text-sm">
+                          <div className="font-medium">Commande #{commande.id} - {commande.nom ?? '-'}</div>
+                          <div className="text-muted-foreground">
+                            Fournisseur: {commande.fournisseur ?? '-'} | N°: {commande.command_number ?? '-'}
+                          </div>
+                          <div className="text-muted-foreground">
+                            Client: {commande.user_name ?? '-'} {commande.user_email ? `(${commande.user_email})` : ''}
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isLinking}
+                          onClick={() => handleLinkCommande(commande.id)}
+                        >
+                          Lier
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      Aucune commande disponible a lier.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <p className="text-xs text-muted-foreground">
+                  Seules les commandes non liees sont affichees ici.
+                </p>
+                <Button type="button" variant="secondary" onClick={closeLinkModal}>
+                  Fermer
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

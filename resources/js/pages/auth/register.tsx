@@ -28,7 +28,7 @@ export default function Register() {
                         <div className="grid gap-6">
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="first_name">Prénom</Label>
+                                    <Label htmlFor="first_name">Prénom *</Label>
                                     <Input
                                         id="first_name"
                                         type="text"
@@ -46,7 +46,7 @@ export default function Register() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="last_name">Nom</Label>
+                                    <Label htmlFor="last_name">Nom *</Label>
                                     <Input
                                         id="last_name"
                                         type="text"
@@ -64,7 +64,7 @@ export default function Register() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Adresse email (optionnel)</Label>
+                                <Label htmlFor="email">Adresse email *</Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -77,7 +77,7 @@ export default function Register() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="phone">Téléphone (optionnel)</Label>
+                                <Label htmlFor="phone">Téléphone *</Label>
                                 <Input
                                     id="phone"
                                     type="text"
@@ -91,7 +91,7 @@ export default function Register() {
 
                             <div className="grid sm:grid-cols-3 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="address">Adresse (optionnel)</Label>
+                                    <Label htmlFor="address">Adresse </Label>
                                     <Input
                                         id="address"
                                         type="text"
@@ -104,7 +104,7 @@ export default function Register() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="postal_code">Code postal (optionnel)</Label>
+                                    <Label htmlFor="postal_code">Code postal </Label>
                                     <Input
                                         id="postal_code"
                                         type="text"
@@ -117,7 +117,7 @@ export default function Register() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="city">Ville (optionnel)</Label>
+                                    <Label htmlFor="city">Ville </Label>
                                     <Input
                                         id="city"
                                         type="text"
@@ -131,7 +131,7 @@ export default function Register() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="password">Mot de passe</Label>
+                                <Label htmlFor="password">Mot de passe *</Label>
                                 <Input
                                     id="password"
                                     type="password"
@@ -146,7 +146,7 @@ export default function Register() {
 
                             <div className="grid gap-2">
                                 <Label htmlFor="password_confirmation">
-                                    Confirmer le mot de passe
+                                    Confirmer le mot de passe *
                                 </Label>
                                 <Input
                                     id="password_confirmation"

@@ -73,38 +73,6 @@ export default function Edit({ ticket, categories, agents }: any) {
                 {errors.message && <div className="text-red-500">{errors.message}</div>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="status">Statut</Label>
-                  <Select value={data.status} onValueChange={(value) => setData('status', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">Ouvert</SelectItem>
-                      <SelectItem value="in_progress">En cours</SelectItem>
-                      <SelectItem value="pending">En attente</SelectItem>
-                      <SelectItem value="resolved">Résolu</SelectItem>
-                      <SelectItem value="closed">Fermé</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="priority">Priorité</Label>
-                  <Select value={data.priority} onValueChange={(value) => setData('priority', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Basse</SelectItem>
-                      <SelectItem value="medium">Moyenne</SelectItem>
-                      <SelectItem value="high">Haute</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div>
                 <Label htmlFor="category_id">Catégorie</Label>
                 <Select value={data.category_id.toString()} onValueChange={(value) => setData('category_id', value)}>

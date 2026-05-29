@@ -34,7 +34,7 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: "Créer un ticket", href: '/tickets/create' },
 ]
 
-export default function CreateTicket({ categories, isAdmin = false, users = [] }: { categories: Category[], isAdmin?: boolean, users?: User[] }) {
+export default function CreateTicket({ categories, isAgent = false, users = [] }: { categories: Category[], isAgent?: boolean, users?: User[] }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -49,7 +49,7 @@ export default function CreateTicket({ categories, isAdmin = false, users = [] }
     city: '',
   })
 
-  const { data, setData, post, processing, errors } = useForm({
+  const { data, setData, post, processing, errors, transform } = useForm({
     title: '',
     message: '',
     category_id: '',
@@ -62,6 +62,7 @@ export default function CreateTicket({ categories, isAdmin = false, users = [] }
     user_address: '',
     user_postal_code: '',
     user_city: '',
+    print_label: '0',
   })
 
   // Filtrer les utilisateurs en fonction de la recherche
@@ -74,13 +75,18 @@ export default function CreateTicket({ categories, isAdmin = false, users = [] }
     )
   }, [searchQuery, users])
 
-  const submit = (e: React.FormEvent) => {
+  const submit = (e: React.SyntheticEvent, printLabel = false) => {
     e.preventDefault()
-    if (selectedUser) {
-      setData('user_selection', 'existing')
-      setData('user_id', selectedUser.id.toString())
-    }
-    post('/tickets')
+    const useExistingUser = Boolean(selectedUser && data.user_selection !== 'new')
+    transform((current) => ({
+      ...current,
+      user_selection: useExistingUser ? 'existing' : current.user_selection,
+      user_id: useExistingUser ? selectedUser?.id.toString() ?? '' : current.user_id,
+      print_label: printLabel ? '1' : '0',
+    }))
+    post('/tickets', {
+      onFinish: () => transform((current) => current),
+    })
   }
 
   const handleCreateUser = () => {
@@ -126,9 +132,9 @@ export default function CreateTicket({ categories, isAdmin = false, users = [] }
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={submit} className="space-y-4">
+            <form onSubmit={(e) => submit(e, false)} className="space-y-4">
               {/* Section pour sélectionner/créer un utilisateur (agents uniquement) */}
-              {isAdmin && (
+              {isAgent && (
                 <div className="border-b pb-6 mb-6">
                   <h3 className="text-lg font-semibold mb-4">Demandeur du ticket</h3>
 
@@ -378,8 +384,16 @@ export default function CreateTicket({ categories, isAdmin = false, users = [] }
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit" disabled={processing || (isAdmin && !selectedUser)} variant="default">
+                <Button type="submit" disabled={processing || (isAgent && !selectedUser)} variant="default">
                   Créer
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={processing || (isAgent && !selectedUser)}
+                  onClick={(e) => submit(e, true)}
+                >
+                  Créer et imprimer
                 </Button>
                 <Button asChild variant="secondary">
                   <a href="/tickets">Annuler</a>
