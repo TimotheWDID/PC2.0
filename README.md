@@ -130,6 +130,41 @@ Workflow simple recommande:
 5. Tagger une version (ex: `v1.3.0`)
 6. Deployer cette version en production
 
+### 8.1 Commandes pour push les modifications (local -> Git)
+Cas recommande (branche feature):
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/mon-ajout
+
+# apres modifications
+git add .
+git commit -m "feat: description courte"
+git push -u origin feature/mon-ajout
+```
+
+Ensuite:
+1. Ouvrir une Pull Request `feature/mon-ajout` vers `main`
+2. Merger la PR
+3. Deployer la branche `main` en production
+
+Cas rapide (si vous poussez directement sur `main`):
+```bash
+git checkout main
+git pull origin main
+
+# apres modifications
+git add .
+git commit -m "fix: description courte"
+git push origin main
+```
+
+Verification que le push est bien parti:
+```bash
+git log -1 --oneline
+git status
+```
+
 Exemple:
 ```bash
 git checkout main
