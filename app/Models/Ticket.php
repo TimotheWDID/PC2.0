@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Category;
 use App\Models\Message;
 use App\Models\Label;
+use App\Models\TicketTimelineEvent;
 
 class Ticket extends Model
 {
@@ -53,6 +54,11 @@ class Ticket extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    public function timelineEvents(): HasMany
+    {
+        return $this->hasMany(TicketTimelineEvent::class);
     }
 
     public function labels(): BelongsToMany

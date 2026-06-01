@@ -6,12 +6,45 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Ticket;
 use App\Models\Commande;
+use App\Models\TicketTimelineEvent;
 use Coderflex\LaravelTicket\Models\Category;
 use Illuminate\Support\Facades\Auth;
 use App\Support\TicketLabelSettings;
+use App\Support\TicketTimelineTemplateSettings;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
+    private const TRACKED_TICKET_FIELDS = [
+        'title',
+        'message',
+        'status',
+        'priority',
+        'assignee_id',
+        'invoice_id',
+        'notify_by',
+        'contact_phone',
+        'contact_email',
+        'is_resolved',
+        'is_locked',
+    ];
+
+    private const TRACKED_FIELD_LABELS = [
+        'title' => 'Titre',
+        'message' => 'Description',
+        'status' => 'Statut',
+        'priority' => 'Priorite',
+        'assignee_id' => 'Agent assigne',
+        'invoice_id' => 'Numero de facture',
+        'notify_by' => 'Notification',
+        'contact_phone' => 'Telephone de contact',
+        'contact_email' => 'Email de contact',
+        'is_resolved' => 'Ticket resolu',
+        'is_locked' => 'Ticket verrouille',
+    ];
+
     private function authorizeTicketAccess(Ticket $ticket): void
     {
         $user = Auth::user();
@@ -27,6 +60,54 @@ class TicketController extends Controller
         if ((int) $ticket->user_id !== (int) $user->id) {
             abort(403, 'Acces non autorise.');
         }
+    }
+
+    private function formatTimelineValue(string $field, mixed $value): mixed
+    {
+        if ($field === 'is_resolved' || $field === 'is_locked') {
+            return (bool) $value;
+        }
+
+        if ($field === 'assignee_id') {
+            if (empty($value)) {
+                return null;
+            }
+
+            $assignee = \App\Models\User::find($value);
+
+            return $assignee ? $assignee->first_name . ' ' . $assignee->last_name : (string) $value;
+        }
+
+        return $value;
+    }
+
+    private function logTechnicianTimeline(Ticket $ticket, string $eventType, string $summary, array $details = []): void
+    {
+        $user = Auth::user();
+
+        if (!$user || !$user->agent) {
+            return;
+        }
+
+        TicketTimelineEvent::create([
+            'ticket_id' => $ticket->id,
+            'technician_id' => $user->id,
+            'event_type' => $eventType,
+            'summary' => $summary,
+            'details' => !empty($details) ? $details : null,
+            'happened_at' => now(),
+        ]);
+    }
+
+    private function ensureAgentOrAbort(): \App\Models\User
+    {
+        $user = Auth::user();
+
+        if (!$user || !$user->agent) {
+            abort(403, 'Acces reserve aux techniciens.');
+        }
+
+        return $user;
     }
     /**
      * Display a listing of the resource.
@@ -125,6 +206,17 @@ class TicketController extends Controller
             'ticket_id' => $ticket->id,
         ]);
 
+        $this->logTechnicianTimeline(
+            $ticket,
+            'commande_linked',
+            'Commande liee au ticket',
+            [
+                'commande_id' => $commande->id,
+                'commande_nom' => $commande->nom,
+                'command_number' => $commande->command_number,
+            ]
+        );
+
         return back()->with('success', 'Commande liee au ticket avec succes.');
     }
 
@@ -154,6 +246,23 @@ class TicketController extends Controller
             'categories' => $categories,
             'isAgent' => $isAgent,
             'users' => $users,
+        ]);
+    }
+
+    /**
+     * Public tablet (kiosk) form for creating tickets without authentication.
+     */
+    public function kioskCreate(Request $request)
+    {
+        $categories = Category::all()->map(fn($c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+        ]);
+
+        return Inertia::render('Tickets/KioskCreate', [
+            'categories' => $categories,
+            'success' => $request->boolean('success'),
+            'ticketId' => $request->query('ticket'),
         ]);
     }
 
@@ -236,6 +345,17 @@ class TicketController extends Controller
         $ticket->status = $request->input('status', 'open');
         $ticket->save();
 
+        $this->logTechnicianTimeline(
+            $ticket,
+            'ticket_created_by_technician',
+            'Ticket cree par un technicien',
+            [
+                'title' => $ticket->title,
+                'status' => $ticket->status,
+                'priority' => $ticket->priority,
+            ]
+        );
+
         if (!empty($data['category_id']) && method_exists($ticket, 'categories')) {
             try {
                 $ticket->categories()->attach($data['category_id']);
@@ -250,6 +370,80 @@ class TicketController extends Controller
 
         // Redirect to dashboard after creating a ticket
         return redirect()->route('dashboard');
+    }
+
+    /**
+     * Store a ticket from the public tablet (kiosk) flow.
+     */
+    public function kioskStore(Request $request)
+    {
+        $data = $request->validate([
+            'first_name' => 'required|string|max:100',
+            'last_name' => 'required|string|max:100',
+            'phone' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:255',
+            'title' => 'required|string|max:255',
+            'message' => 'required|string|max:3000',
+            'category_id' => 'nullable|integer|exists:categories,id',
+        ]);
+
+        if (empty($data['phone']) && empty($data['email'])) {
+            return back()->withErrors([
+                'phone' => 'Merci de renseigner au moins un telephone ou un email.',
+            ])->withInput();
+        }
+
+        $addressParts = [
+            trim((string) $request->input('address', '')),
+            trim((string) $request->input('postal_code', '')),
+            trim((string) $request->input('city', '')),
+        ];
+
+        $fullAddress = trim(implode(' ', array_filter($addressParts)));
+        $email = $data['email'] ?? null;
+
+        if (!empty($email)) {
+            $user = \App\Models\User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'first_name' => $data['first_name'],
+                    'last_name' => $data['last_name'],
+                    'password' => Hash::make(Str::random(32)),
+                    'phone' => $data['phone'] ?? null,
+                    'address' => $fullAddress !== '' ? $fullAddress : null,
+                    'default_notification_preference' => 'Email',
+                ]
+            );
+        } else {
+            $user = \App\Models\User::create([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'password' => Hash::make(Str::random(32)),
+                'phone' => $data['phone'] ?? null,
+                'address' => $fullAddress !== '' ? $fullAddress : null,
+                'email' => null,
+                'default_notification_preference' => !empty($data['phone']) ? 'SMS' : 'None',
+            ]);
+        }
+
+        $ticket = new Ticket();
+        $ticket->user_id = $user->id;
+        $ticket->title = $data['title'];
+        $ticket->message = $data['message'];
+        $ticket->priority = 'low';
+        $ticket->status = 'open';
+        $ticket->notify_by = !empty($email) ? 'Email' : (!empty($data['phone']) ? 'SMS' : 'None');
+        $ticket->contact_phone = $data['phone'] ?? null;
+        $ticket->contact_email = $email;
+        if (!empty($data['category_id'])) {
+            $ticket->category_id = $data['category_id'];
+        }
+        $ticket->save();
+
+        return redirect()->route('kiosk.tickets.create', [
+            'success' => 1,
+            'ticket' => $ticket->id,
+        ]);
     }
 
     /**
@@ -299,6 +493,7 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
         $ticket->load(['user', 'assignee', 'category']);
+        $viewer = Auth::user();
 
         $categories = Category::all()->map(fn($c) => [
             'id' => $c->id,
@@ -328,6 +523,46 @@ class TicketController extends Controller
                     'name' => $c->user->first_name . ' ' . $c->user->last_name,
                 ] : null,
             ]);
+
+        $timelineEvents = [];
+        if ($viewer && $viewer->agent) {
+            $timelineEvents = $ticket->timelineEvents()
+                ->withTrashed()
+                ->with([
+                    'technician:id,first_name,last_name,email',
+                    'removedBy:id,first_name,last_name,email',
+                    'restoredBy:id,first_name,last_name,email',
+                ])
+                ->orderByDesc('happened_at')
+                ->limit(150)
+                ->get()
+                ->map(fn($event) => [
+                    'id' => $event->id,
+                    'event_type' => $event->event_type,
+                    'summary' => $event->summary,
+                    'details' => $event->details,
+                    'happened_at' => $event->happened_at ? $event->happened_at->toDateTimeString() : null,
+                    'is_removed' => !is_null($event->deleted_at),
+                    'removed_at' => $event->removed_at ? $event->removed_at->toDateTimeString() : null,
+                    'removed_reason' => $event->removed_reason,
+                    'restored_at' => $event->restored_at ? $event->restored_at->toDateTimeString() : null,
+                    'technician' => $event->technician ? [
+                        'id' => $event->technician->id,
+                        'name' => $event->technician->first_name . ' ' . $event->technician->last_name,
+                        'email' => $event->technician->email,
+                    ] : null,
+                    'removed_by' => $event->removedBy ? [
+                        'id' => $event->removedBy->id,
+                        'name' => $event->removedBy->first_name . ' ' . $event->removedBy->last_name,
+                        'email' => $event->removedBy->email,
+                    ] : null,
+                    'restored_by' => $event->restoredBy ? [
+                        'id' => $event->restoredBy->id,
+                        'name' => $event->restoredBy->first_name . ' ' . $event->restoredBy->last_name,
+                        'email' => $event->restoredBy->email,
+                    ] : null,
+                ]);
+        }
 
         return Inertia::render('Tickets/Show', [
             'ticket' => [
@@ -371,6 +606,8 @@ class TicketController extends Controller
             'categories' => $categories,
             'agents' => $agents,
             'commandes' => $commandes,
+            'timelineEvents' => $timelineEvents,
+            'timelineTemplateSettings' => $viewer && $viewer->agent ? TicketTimelineTemplateSettings::load() : ['templates' => []],
         ]);
     }
 
@@ -420,6 +657,11 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
+        $originalValues = [];
+        foreach (self::TRACKED_TICKET_FIELDS as $field) {
+            $originalValues[$field] = $ticket->{$field};
+        }
+
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
@@ -460,6 +702,33 @@ class TicketController extends Controller
             }
         }
 
+        $changes = [];
+        foreach (self::TRACKED_TICKET_FIELDS as $field) {
+            if (!$ticket->wasChanged($field)) {
+                continue;
+            }
+
+            $changes[] = [
+                'field' => $field,
+                'label' => self::TRACKED_FIELD_LABELS[$field] ?? $field,
+                'before' => $this->formatTimelineValue($field, $originalValues[$field] ?? null),
+                'after' => $this->formatTimelineValue($field, $ticket->{$field}),
+            ];
+        }
+
+        if (!empty($changes)) {
+            $summary = count($changes) === 1
+                ? 'Mise a jour du ticket: ' . ($changes[0]['label'] ?? 'champ modifie')
+                : 'Mise a jour du ticket (' . count($changes) . ' changements)';
+
+            $this->logTechnicianTimeline(
+                $ticket,
+                'ticket_updated',
+                $summary,
+                ['changes' => $changes]
+            );
+        }
+
         return redirect()->route('tickets.show', $ticket->id);
     }
 
@@ -487,8 +756,21 @@ class TicketController extends Controller
             'status' => 'required|in:open,in_progress,pending,resolved,closed',
         ]);
 
+        $previousStatus = $ticket->status;
         $ticket->status = $data['status'];
         $ticket->save();
+
+        if ($previousStatus !== $ticket->status) {
+            $this->logTechnicianTimeline(
+                $ticket,
+                'status_changed',
+                'Statut du ticket modifie',
+                [
+                    'before' => $previousStatus,
+                    'after' => $ticket->status,
+                ]
+            );
+        }
 
         return back();
     }
@@ -505,9 +787,121 @@ class TicketController extends Controller
             'priority' => 'required|in:low,medium,high',
         ]);
 
+        $previousPriority = $ticket->priority;
         $ticket->priority = $data['priority'];
         $ticket->save();
 
+        if ($previousPriority !== $ticket->priority) {
+            $this->logTechnicianTimeline(
+                $ticket,
+                'priority_changed',
+                'Priorite du ticket modifiee',
+                [
+                    'before' => $previousPriority,
+                    'after' => $ticket->priority,
+                ]
+            );
+        }
+
         return back();
+    }
+
+    /**
+     * Store a manual timeline event created by a technician.
+     */
+    public function storeTimelineEvent(Request $request, string $id)
+    {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        $user = $this->ensureAgentOrAbort();
+
+        $data = $request->validate([
+            'event_type' => ['required', 'string', Rule::in(TicketTimelineTemplateSettings::allowedEventTypes())],
+            'summary' => 'required|string|max:500',
+            'details' => 'nullable|string|max:3000',
+            'happened_at' => 'nullable|date',
+            'prerequisites' => 'nullable|array|max:20',
+            'prerequisites.*.name' => 'required_with:prerequisites|string|max:160',
+            'prerequisites.*.met' => 'nullable|boolean',
+        ]);
+
+        $details = [];
+        if (!empty($data['details'])) {
+            $details['note'] = $data['details'];
+        }
+
+        if (!empty($data['prerequisites']) && is_array($data['prerequisites'])) {
+            $details['prerequisites'] = collect($data['prerequisites'])
+                ->filter(fn($p) => is_array($p) && !empty(trim((string) ($p['name'] ?? ''))))
+                ->map(fn($p) => [
+                    'name' => trim((string) ($p['name'] ?? '')),
+                    'met' => (bool) ($p['met'] ?? false),
+                ])
+                ->values()
+                ->all();
+        }
+
+        $details['source'] = 'manual';
+
+        TicketTimelineEvent::create([
+            'ticket_id' => $ticket->id,
+            'technician_id' => $user->id,
+            'event_type' => $data['event_type'],
+            'summary' => $data['summary'],
+            'details' => !empty($details) ? $details : null,
+            'happened_at' => $data['happened_at'] ?? now(),
+        ]);
+
+        return back()->with('success', 'Evenement ajoute au suivi du ticket.');
+    }
+
+    public function removeTimelineEvent(Request $request, string $id, string $event)
+    {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        $user = $this->ensureAgentOrAbort();
+
+        $data = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $timelineEvent = TicketTimelineEvent::where('ticket_id', $ticket->id)->findOrFail($event);
+
+        if ($timelineEvent->trashed()) {
+            return back()->withErrors(['event' => 'Cet evenement est deja retire.']);
+        }
+
+        $timelineEvent->removed_by_id = $user->id;
+        $timelineEvent->removed_reason = $data['reason'] ?? null;
+        $timelineEvent->removed_at = now();
+        $timelineEvent->save();
+        $timelineEvent->delete();
+
+        return back()->with('success', 'Evenement retire.');
+    }
+
+    public function restoreTimelineEvent(Request $request, string $id, string $event)
+    {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        $user = $this->ensureAgentOrAbort();
+
+        $timelineEvent = TicketTimelineEvent::withTrashed()
+            ->where('ticket_id', $ticket->id)
+            ->findOrFail($event);
+
+        if (!$timelineEvent->trashed()) {
+            return back()->withErrors(['event' => 'Cet evenement est deja actif.']);
+        }
+
+        $timelineEvent->restore();
+        $timelineEvent->restored_by_id = $user->id;
+        $timelineEvent->restored_at = now();
+        $timelineEvent->save();
+
+        return back()->with('success', 'Evenement restaure.');
     }
 }

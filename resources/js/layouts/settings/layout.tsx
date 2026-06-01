@@ -36,6 +36,11 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/ticket-label',
         icon: null,
     },
+    {
+        title: 'Modeles suivi tickets',
+        href: '/settings/ticket-timeline-templates',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

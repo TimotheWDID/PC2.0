@@ -4,6 +4,7 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Settings\TicketLabelController;
+use App\Http\Controllers\Settings\TicketTimelineTemplateController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -28,6 +29,11 @@ Route::middleware('auth')->group(function () {
         ->name('ticket-label.edit');
     Route::put('settings/ticket-label', [TicketLabelController::class, 'update'])
         ->name('ticket-label.update');
+
+    Route::get('settings/ticket-timeline-templates', [TicketTimelineTemplateController::class, 'edit'])
+        ->name('ticket-timeline-templates.edit');
+    Route::put('settings/ticket-timeline-templates', [TicketTimelineTemplateController::class, 'update'])
+        ->name('ticket-timeline-templates.update');
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
         ->name('two-factor.show');

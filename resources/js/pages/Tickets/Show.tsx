@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 
 // Fonction pour traduire les statuts en français
@@ -52,6 +53,45 @@ const formatDateTime = (value?: string | null): string => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const formatTimelineDetailValue = (value: unknown): string => {
+  if (typeof value === 'boolean') {
+    return value ? 'Oui' : 'Non';
+  }
+
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return String(value);
+};
+
+const builtInEventTypeLabels: Record<string, string> = {
+  ticket_created_by_technician: 'Creation',
+  ticket_updated: 'Modification',
+  status_changed: 'Statut',
+  priority_changed: 'Priorite',
+  internal_note_added: 'Note interne',
+  public_reply_added: 'Reponse',
+  commande_linked: 'Commande',
+  commande_created_direct: 'Commande creee',
+  commande_updated_direct: 'Commande modifiee',
+  commande_status_changed_direct: 'Statut commande',
+};
+
+const getTimelineAccent = (eventType: string) => {
+  if (eventType.startsWith('commande_')) {
+    return {
+      dot: 'bg-[#e6892e]',
+      badge: 'border-[#e6892e] text-[#b55f00] dark:text-[#ffb86b]',
+    };
+  }
+
+  return {
+    dot: 'bg-[#2a3ff5]',
+    badge: '',
+  };
 };
 
 const statutLabels: Record<string, string> = {
@@ -114,7 +154,7 @@ const priorityUI: Record<string, { badge: string; btn: string; btnActive: string
   },
 };
 
-export default function Show({ ticket, categories, agents, commandes }: any) {
+export default function Show({ ticket, categories, agents, commandes, timelineEvents = [], timelineTemplateSettings = { templates: [] } }: any) {
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
 
@@ -137,11 +177,69 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
 
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [internalNote, setInternalNote] = useState(ticket.user?.internal_note ?? '');
+  const [timelineSearch, setTimelineSearch] = useState('');
+  const [timelineTypeFilter, setTimelineTypeFilter] = useState('all');
+  const [timelineTechnicianFilter, setTimelineTechnicianFilter] = useState('all');
+  const [showRemovedEvents, setShowRemovedEvents] = useState(false);
+  const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
+  const [manualEventForm, setManualEventForm] = useState({
+    event_type: 'manual_note',
+    summary: '',
+    details: '',
+    happened_at: '',
+  });
+  const [manualPrerequisites, setManualPrerequisites] = useState<Array<{ name: string; met: boolean }>>([]);
+
+  const timelineTemplatesByType = useMemo(() => {
+    const map = new Map<string, { label: string; enabled: boolean; summary: string; details: string }>();
+
+    (timelineTemplateSettings?.templates ?? []).forEach((template: any) => {
+      if (!template?.eventType) {
+        return;
+      }
+
+      map.set(String(template.eventType), {
+        label: String(template.label ?? template.eventType),
+        enabled: Boolean(template.enabled),
+        summary: String(template.summary ?? ''),
+        details: String(template.details ?? ''),
+      });
+    });
+
+    return map;
+  }, [timelineTemplateSettings]);
+
+  const selectedTemplate = timelineTemplatesByType.get(manualEventForm.event_type);
+  const hasPrefillTemplate = Boolean(
+    selectedTemplate?.enabled &&
+    ((selectedTemplate.summary ?? '').trim() !== '' || (selectedTemplate.details ?? '').trim() !== ''),
+  );
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Tickets', href: '/tickets' },
     { title: ticket.title ?? 'Ticket', href: `/tickets/${ticket.id}` },
   ];
+
+  const manualEventOptions = useMemo(() => {
+    return Array.from(timelineTemplatesByType.entries()).map(([value, template]) => ({
+      value,
+      label: template.label || value,
+      enabled: template.enabled,
+    }));
+  }, [timelineTemplatesByType]);
+
+  const eventTypeLabels = useMemo(() => {
+    const dynamicLabels: Record<string, string> = {};
+
+    manualEventOptions.forEach((option) => {
+      dynamicLabels[option.value] = option.label;
+    });
+
+    return {
+      ...builtInEventTypeLabels,
+      ...dynamicLabels,
+    };
+  }, [manualEventOptions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,6 +273,137 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
       onSuccess: () => {
         setFormData({ ...formData, priority: newPriority });
       },
+    });
+  };
+
+  const timelineTechnicians = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+
+    timelineEvents.forEach((event: any) => {
+      if (!event.technician?.id) {
+        return;
+      }
+
+      map.set(String(event.technician.id), {
+        id: String(event.technician.id),
+        name: event.technician.name ?? 'Technicien',
+      });
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [timelineEvents]);
+
+  const filteredTimelineEvents = useMemo(() => {
+    const search = timelineSearch.trim().toLowerCase();
+
+    return timelineEvents.filter((event: any) => {
+      if (!showRemovedEvents && event.is_removed) {
+        return false;
+      }
+
+      if (timelineTypeFilter !== 'all' && event.event_type !== timelineTypeFilter) {
+        return false;
+      }
+
+      if (timelineTechnicianFilter !== 'all' && String(event.technician?.id ?? '') !== timelineTechnicianFilter) {
+        return false;
+      }
+
+      if (!search) {
+        return true;
+      }
+
+      const searchableText = [
+        event.summary,
+        event.technician?.name,
+        event.removed_by?.name,
+        event.details?.preview,
+        event.details?.note,
+        event.details?.changes?.map((change: any) => `${change.label ?? change.field} ${change.before ?? ''} ${change.after ?? ''}`).join(' '),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(search);
+    });
+  }, [timelineEvents, timelineSearch, timelineTypeFilter, timelineTechnicianFilter, showRemovedEvents]);
+
+  const handleCreateTimelineEvent = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const payload = {
+      ...manualEventForm,
+      prerequisites: manualPrerequisites.filter((prereq) => prereq.name.trim() !== ''),
+    };
+
+    router.post(`/tickets/${ticket.id}/timeline-events`, payload, {
+      preserveScroll: true,
+      onSuccess: () => {
+        setIsAddEventModalOpen(false);
+        setManualEventForm({
+          event_type: 'manual_note',
+          summary: '',
+          details: '',
+          happened_at: '',
+        });
+        setManualPrerequisites([]);
+      },
+    });
+  };
+
+  const applyPrefillTemplate = (eventType: string) => {
+    const template = timelineTemplatesByType.get(eventType);
+
+    if (!template || !template.enabled) {
+      return;
+    }
+
+    const summary = (template.summary ?? '').trim();
+    const details = (template.details ?? '').trim();
+
+    setManualEventForm((current) => ({
+      ...current,
+      summary: summary !== '' ? summary : current.summary,
+      details: details !== '' ? details : current.details,
+    }));
+
+    if (eventType === 'commande_modification_prerequis') {
+      setManualPrerequisites([
+        { name: 'fournisseur renseigne (si statut != new)', met: false },
+        { name: 'numero de commande renseigne (commande/reception/traite)', met: false },
+      ]);
+    }
+  };
+
+  const addManualPrerequisite = () => {
+    setManualPrerequisites((current) => [...current, { name: '', met: false }]);
+  };
+
+  const updateManualPrerequisite = (index: number, patch: Partial<{ name: string; met: boolean }>) => {
+    setManualPrerequisites((current) =>
+      current.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const removeManualPrerequisite = (index: number) => {
+    setManualPrerequisites((current) => current.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveTimelineEvent = (eventId: number) => {
+    const reason = window.prompt('Raison du retrait (optionnel):') ?? '';
+
+    router.delete(`/tickets/${ticket.id}/timeline-events/${eventId}`, {
+      preserveScroll: true,
+      data: { reason },
+    });
+  };
+
+  const handleRestoreTimelineEvent = (eventId: number) => {
+    router.post(`/tickets/${ticket.id}/timeline-events/${eventId}/restore`, {
+      _method: 'patch',
+    }, {
+      preserveScroll: true,
     });
   };
 
@@ -590,6 +819,303 @@ export default function Show({ ticket, categories, agents, commandes }: any) {
                           Créer
                         </Button>
                       </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {isAgent && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <History className="h-4 w-4" />
+                      Suivi techniciens
+                    </CardTitle>
+                    <Dialog
+                      open={isAddEventModalOpen}
+                      onOpenChange={(open) => {
+                        setIsAddEventModalOpen(open);
+
+                        if (open) {
+                          applyPrefillTemplate(manualEventForm.event_type);
+                        }
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Ajouter un evenement
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                          <DialogTitle>Ajouter un evenement de suivi</DialogTitle>
+                          <DialogDescription>
+                            Cet evenement sera visible dans la timeline du ticket avec votre nom et l&apos;heure.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreateTimelineEvent} className="space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Type d&apos;evenement</Label>
+                              {hasPrefillTemplate && (
+                                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  Pre-rempli actif
+                                </span>
+                              )}
+                            </div>
+                            <Select
+                              value={manualEventForm.event_type}
+                              onValueChange={(value) => {
+                                setManualEventForm((current) => ({ ...current, event_type: value }));
+                                applyPrefillTemplate(value);
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {manualEventOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      {option.enabled ? (
+                                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : null}
+                                      <span>{option.label}</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-summary">Resume</Label>
+                            <Input
+                              id="manual-summary"
+                              value={manualEventForm.summary}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, summary: e.target.value })}
+                              placeholder="Ex: Diagnostic realise, alimentation HS identifiee"
+                              maxLength={500}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-details">Details</Label>
+                            <Textarea
+                              id="manual-details"
+                              value={manualEventForm.details}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, details: e.target.value })}
+                              placeholder="Infos techniques, pieces changees, actions realisees..."
+                              rows={4}
+                              maxLength={3000}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-happened-at">Date et heure (optionnel)</Label>
+                            <Input
+                              id="manual-happened-at"
+                              type="datetime-local"
+                              value={manualEventForm.happened_at}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, happened_at: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Prerequis (optionnel)</Label>
+                              <Button type="button" variant="ghost" size="sm" onClick={addManualPrerequisite}>
+                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                Ajouter prerequis
+                              </Button>
+                            </div>
+
+                            {manualPrerequisites.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">Aucun prerequis ajoute.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {manualPrerequisites.map((prereq, index) => (
+                                  <div key={`manual-prereq-${index}`} className="flex items-center gap-2">
+                                    <Input
+                                      value={prereq.name}
+                                      onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })}
+                                      placeholder="Ex: Fournisseur renseigne"
+                                      maxLength={160}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant={prereq.met ? 'default' : 'outline'}
+                                      size="sm"
+                                      onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}
+                                    >
+                                      {prereq.met ? 'OK' : 'A verifier'}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive"
+                                      onClick={() => removeManualPrerequisite(index)}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>
+                              Annuler
+                            </Button>
+                            <Button type="submit">Ajouter</Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="mb-4 grid gap-2 md:grid-cols-3">
+                    <Input
+                      value={timelineSearch}
+                      onChange={(e) => setTimelineSearch(e.target.value)}
+                      placeholder="Rechercher dans le suivi..."
+                    />
+
+                    <Select value={timelineTypeFilter} onValueChange={setTimelineTypeFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Type d&apos;evenement" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les types</SelectItem>
+                        {Object.keys(eventTypeLabels).map((eventType) => (
+                          <SelectItem key={eventType} value={eventType}>{eventTypeLabels[eventType]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={timelineTechnicianFilter} onValueChange={setTimelineTechnicianFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Technicien" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les techniciens</SelectItem>
+                        {timelineTechnicians.map((technician) => (
+                          <SelectItem key={technician.id} value={technician.id}>{technician.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="mb-3 flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Afficher les evenements retires</Label>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowRemovedEvents((value) => !value)}>
+                      {showRemovedEvents ? 'Masquer retires' : 'Voir retires'}
+                    </Button>
+                  </div>
+
+                  {filteredTimelineEvents.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistree pour le moment.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredTimelineEvents.map((event: any) => (
+                        <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
+                          <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className={`text-sm font-medium ${event.is_removed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                                {event.summary}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {event.technician?.name ?? 'Technicien'}{' '}
+                                • {formatDateTime(event.happened_at)}
+                              </p>
+                              {event.is_removed && (
+                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                  {event.removed_by?.name ?? 'Technicien'} a retire un evenement le {formatDateTime(event.removed_at)}
+                                  {event.removed_reason ? ` - ${event.removed_reason}` : ''}
+                                </p>
+                              )}
+                              {!event.is_removed && event.restored_by?.name && (
+                                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                  Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {event.event_type && (
+                                <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${getTimelineAccent(event.event_type).badge}`}>
+                                  {eventTypeLabels[event.event_type] ?? event.event_type}
+                                </Badge>
+                              )}
+
+                              {!event.is_removed ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-destructive"
+                                  onClick={() => handleRemoveTimelineEvent(event.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                  Retirer
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2"
+                                  onClick={() => handleRestoreTimelineEvent(event.id)}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                  Restaurer
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {Array.isArray(event.details?.changes) && event.details.changes.length > 0 && (
+                            <div className="mt-2 space-y-1 rounded-md border bg-muted/30 p-2">
+                              {event.details.changes.map((change: any, index: number) => (
+                                <p key={`${event.id}-change-${index}`} className="text-xs text-muted-foreground">
+                                  <strong className="text-foreground">{change.label ?? change.field}:</strong>{' '}
+                                  {formatTimelineDetailValue(change.before)} → {formatTimelineDetailValue(change.after)}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          {event.details?.preview && (
+                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>
+                          )}
+
+                          {event.details?.note && (
+                            <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>
+                          )}
+
+                          {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
+                            <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
+                              <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
+                              <div className="mt-1 space-y-1">
+                                {event.details.prerequisites.map((prereq: any, index: number) => (
+                                  <p key={`${event.id}-prereq-${index}`} className="text-[11px] text-muted-foreground">
+                                    {prereq.met ? 'OK' : 'A verifier'} - {prereq.name}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </CardContent>

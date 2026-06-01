@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Message;
 use App\Models\Ticket;
+use App\Models\TicketTimelineEvent;
 use App\Notifications\TicketMessageNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +26,30 @@ class MessageController extends Controller
         if ((int) $ticket->user_id !== (int) $user->id) {
             abort(403, 'Acces non autorise.');
         }
+    }
+
+    private function logTechnicianMessageEvent(Ticket $ticket, Message $message): void
+    {
+        $user = Auth::user();
+
+        if (!$user || !$user->agent) {
+            return;
+        }
+
+        TicketTimelineEvent::create([
+            'ticket_id' => $ticket->id,
+            'technician_id' => $user->id,
+            'event_type' => $message->is_internal ? 'internal_note_added' : 'public_reply_added',
+            'summary' => $message->is_internal
+                ? 'Note interne ajoutee sur le ticket'
+                : 'Reponse publique ajoutee sur le ticket',
+            'details' => [
+                'message_id' => $message->id,
+                'is_internal' => $message->is_internal,
+                'preview' => mb_substr((string) $message->content, 0, 180),
+            ],
+            'happened_at' => now(),
+        ]);
     }
     /**
      * Get all messages for a specific ticket
@@ -81,6 +106,8 @@ class MessageController extends Controller
         ]);
 
         $message->load('author:id,first_name,last_name,email');
+
+        $this->logTechnicianMessageEvent($ticket, $message);
 
         // Envoyer une notification email si le message n'est pas interne
         if (!$message->is_internal && $ticket->user && $ticket->user->email) {
