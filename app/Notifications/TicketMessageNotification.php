@@ -13,6 +13,15 @@ class TicketMessageNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    private function getTicketKindLabel(): string
+    {
+        return match ($this->ticket->ticket_kind) {
+            'bug' => 'Bug',
+            'improvement' => 'Amelioration',
+            default => 'Support',
+        };
+    }
+
     public function __construct(
         public Ticket $ticket,
         public Message $message
@@ -31,12 +40,15 @@ class TicketMessageNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $kindLabel = $this->getTicketKindLabel();
+
         return (new MailMessage)
-            ->subject("Ticket #{$this->ticket->id}: {$this->ticket->title}")
+            ->subject("[{$kindLabel}] Ticket #{$this->ticket->id}: {$this->ticket->title}")
             ->markdown('emails.tickets.message', [
                 'user' => $notifiable,
                 'ticket' => $this->ticket,
                 'messageBody' => $this->message->content,
+                'ticketKindLabel' => $kindLabel,
             ]);
     }
 }

@@ -38,16 +38,27 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                 className="group/collapsible"
                             >
                                 <SidebarMenuItem>
-                                    <CollapsibleTrigger asChild>
+                                    <div className="flex items-center gap-1">
                                         <SidebarMenuButton
+                                            asChild
                                             tooltip={{ children: item.title }}
                                             isActive={isActive}
+                                            className="flex-1"
                                         >
-                                            {item.icon && <item.icon />}
-                                            <span>{item.title}</span>
-                                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                                            <Link href={item.href} prefetch>
+                                                {item.icon && <item.icon />}
+                                                <span>{item.title}</span>
+                                            </Link>
                                         </SidebarMenuButton>
-                                    </CollapsibleTrigger>
+                                        <CollapsibleTrigger asChild>
+                                            <SidebarMenuButton
+                                                tooltip={{ children: `Ouvrir ${item.title}` }}
+                                                className="w-8 shrink-0 justify-center px-0"
+                                            >
+                                                <ChevronRight className="transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                                            </SidebarMenuButton>
+                                        </CollapsibleTrigger>
+                                    </div>
                                     <CollapsibleContent>
                                         <SidebarMenuSub>
                                             {item.items.map((subItem) => {

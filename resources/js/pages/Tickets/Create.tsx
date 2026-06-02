@@ -34,7 +34,19 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: "Créer un ticket", href: '/tickets/create' },
 ]
 
-export default function CreateTicket({ categories, isAgent = false, users = [] }: { categories: Category[], isAgent?: boolean, users?: User[] }) {
+export default function CreateTicket({
+  categories,
+  isAgent = false,
+  users = [],
+  defaultTicketKind = 'standard',
+  specialOnly = false,
+}: {
+  categories: Category[];
+  isAgent?: boolean;
+  users?: User[];
+  defaultTicketKind?: 'standard' | 'bug' | 'improvement';
+  specialOnly?: boolean;
+}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -53,6 +65,8 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
     title: '',
     message: '',
     category_id: '',
+    ticket_kind: defaultTicketKind,
+    special_only: specialOnly ? '1' : '0',
     user_selection: 'existing',
     user_id: '',
     user_email: '',
@@ -64,6 +78,12 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
     user_city: '',
     print_label: '0',
   })
+
+  const isSpecialTicket = data.ticket_kind === 'bug' || data.ticket_kind === 'improvement'
+  const pageTitle = specialOnly ? 'Bug et amélioration' : 'Créer un ticket'
+  const pageDescription = specialOnly
+    ? 'Signalez un bug ou proposez une amélioration produit.'
+    : 'Remplissez le formulaire pour créer un nouveau ticket'
 
   // Filtrer les utilisateurs en fonction de la recherche
   const filteredUsers = useMemo(() => {
@@ -122,19 +142,19 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Créer un ticket" />
+      <Head title={pageTitle} />
       <div className="space-y-6">
-        <Heading title="Créer un ticket" description="Remplissez le formulaire pour créer un nouveau ticket" />
+        <Heading title={pageTitle} description={pageDescription} />
 
         <Card>
           <CardHeader>
-            <CardTitle>Nouveau ticket</CardTitle>
+            <CardTitle>{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={(e) => submit(e, false)} className="space-y-4">
               {/* Section pour sélectionner/créer un utilisateur (agents uniquement) */}
-              {isAgent && (
+              {isAgent && !specialOnly && (
                 <div className="border-b pb-6 mb-6">
                   <h3 className="text-lg font-semibold mb-4">Demandeur du ticket</h3>
 
@@ -324,10 +344,10 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
                               setSelectedUser(user)
                               setSearchQuery('')
                             }}
-                            className="w-full text-left p-3 hover:bg-gray-100 border-b last:border-b-0"
+                            className="w-full border-b p-3 text-left hover:bg-muted/50 last:border-b-0"
                           >
                             <p className="font-medium">{user.name}</p>
-                            <p className="text-sm text-gray-600">{user.email || 'Pas d\'email'}</p>
+                            <p className="text-sm text-muted-foreground">{user.email || 'Pas d\'email'}</p>
                           </button>
                         ))}
                       </div>
@@ -335,8 +355,8 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
 
                     {/* Message utilisateur introuvable */}
                     {searchQuery && !selectedUser && filteredUsers.length === 0 && (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                        <p className="text-sm">Aucun utilisateur trouvé. Cliquez sur "Créer" pour créer un nouvel utilisateur.</p>
+                      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+                        <p className="text-sm text-amber-900 dark:text-amber-200">Aucun utilisateur trouvé. Cliquez sur "Créer" pour créer un nouvel utilisateur.</p>
                       </div>
                     )}
                   </div>
@@ -353,6 +373,25 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
                 />
                 {errors.title && <div className="text-red-500">{errors.title}</div>}
               </div>
+
+              {specialOnly ? (
+                <div>
+                  <Label htmlFor="ticket_kind">Type de ticket spécial</Label>
+                  <select
+                    id="ticket_kind"
+                    name="ticket_kind"
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={data.ticket_kind}
+                    onChange={(e) => setData('ticket_kind', e.target.value as 'bug' | 'improvement')}
+                  >
+                    <option value="bug">Signaler un bug</option>
+                    <option value="improvement">Proposer une amélioration</option>
+                  </select>
+                  {errors.ticket_kind && <div className="text-red-500">{errors.ticket_kind}</div>}
+                </div>
+              ) : (
+                <input type="hidden" name="ticket_kind" value="standard" />
+              )}
 
               <div>
                 <Label htmlFor="message">Description</Label>
@@ -384,19 +423,19 @@ export default function CreateTicket({ categories, isAgent = false, users = [] }
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit" disabled={processing || (isAgent && !selectedUser)} variant="default">
-                  Créer
+                <Button type="submit" disabled={processing || (isAgent && !specialOnly && !selectedUser)} variant="default">
+                  {isSpecialTicket ? 'Créer le ticket spécial' : 'Créer'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={processing || (isAgent && !selectedUser)}
+                  disabled={processing || (isAgent && !specialOnly && !selectedUser)}
                   onClick={(e) => submit(e, true)}
                 >
                   Créer et imprimer
                 </Button>
                 <Button asChild variant="secondary">
-                  <a href="/tickets">Annuler</a>
+                  <a href={specialOnly ? '/tickets/bugs-improvements' : '/tickets'}>Annuler</a>
                 </Button>
               </div>
             </form>

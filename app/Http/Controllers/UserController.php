@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -55,12 +56,45 @@ class UserController extends Controller
     public function show($id)
     {
         $user = User::findOrFail($id);
-        return Inertia::render('Users/Edit', ['user' => $user]);
+
+        $tickets = Ticket::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'title', 'status', 'priority', 'created_at'])
+            ->map(function ($ticket) {
+                return [
+                    'id' => $ticket->id,
+                    'title' => $ticket->title,
+                    'status' => $ticket->status,
+                    'priority' => $ticket->priority,
+                    'created_at' => $ticket->created_at?->toDateTimeString(),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Users/Edit', [
+            'user' => $user,
+            'tickets' => $tickets,
+        ]);
     }
 
     public function edit($id)
     {
         $user = User::findOrFail($id);
+
+        $tickets = Ticket::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'title', 'status', 'priority', 'created_at'])
+            ->map(function ($ticket) {
+                return [
+                    'id' => $ticket->id,
+                    'title' => $ticket->title,
+                    'status' => $ticket->status,
+                    'priority' => $ticket->priority,
+                    'created_at' => $ticket->created_at?->toDateTimeString(),
+                ];
+            })
+            ->values();
+
         return Inertia::render('Users/Edit', [
             'user' => [
                 'id' => $user->id,
@@ -72,7 +106,8 @@ class UserController extends Controller
                 'internal_note' => $user->internal_note,
                 'hiboutik_id' => $user->hiboutik_id,
                 'default_notification_preference' => $user->default_notification_preference,
-            ]
+            ],
+            'tickets' => $tickets,
         ]);
     }
 

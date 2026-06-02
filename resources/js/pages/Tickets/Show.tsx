@@ -647,7 +647,14 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
                   </form>
                 ) : (
                   <>
-                    <div className="text-sm text-muted-foreground">{ticket.message}</div>
+                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
+                        Description du ticket
+                      </p>
+                      <p className="whitespace-pre-line text-base leading-relaxed text-foreground">
+                        {ticket.message || 'Aucune description fournie.'}
+                      </p>
+                    </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 text-sm">
                       <div>

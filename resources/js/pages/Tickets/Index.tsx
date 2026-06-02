@@ -22,9 +22,16 @@ const translateStatus = (status: string): string => {
   return translations[status] || status;
 };
 
+const translateTicketKind = (kind: string | null | undefined): string => {
+  if (kind === 'bug') return 'Bug';
+  if (kind === 'improvement') return 'Amelioration';
+  return 'Support';
+};
+
 type Ticket = {
   id: number;
   title: string | null;
+  ticket_kind?: 'standard' | 'bug' | 'improvement' | null;
   status: string | null;
   created_at: string | null;
   user?: { id: number; name: string } | null;
@@ -48,10 +55,16 @@ export default function Index({
   tickets,
   currentStatus,
   linkableCommandes,
+  showAllStatuses,
+  filteredUser,
+  specialOnly,
 }: {
   tickets: Ticket[];
   currentStatus?: string | null;
   linkableCommandes: LinkableCommande[];
+  showAllStatuses?: boolean;
+  filteredUser?: { id: number; name: string } | null;
+  specialOnly?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
@@ -71,6 +84,15 @@ export default function Index({
         closed: currentStatus === 'closed',
       };
     }
+    if (showAllStatuses) {
+      return {
+        open: true,
+        in_progress: true,
+        pending: true,
+        resolved: true,
+        closed: true,
+      };
+    }
     // Par défaut, masquer les résolus et fermés
     return {
       open: true,
@@ -85,6 +107,14 @@ export default function Index({
 
   // Traduction du statut pour l'affichage
   const statusTitle = currentStatus ? translateStatus(currentStatus) : 'Tous les tickets';
+  const clientScope = filteredUser
+    ? `Client: ${filteredUser.name || `#${filteredUser.id}`}`
+    : null;
+  const pageTitle = specialOnly ? 'Bug et amelioration' : 'Tickets';
+  const listTitle = specialOnly ? 'Liste des bugs et ameliorations' : 'Liste des tickets';
+  const baseDescription = specialOnly
+    ? `Liste des bugs et ameliorations - ${statusTitle}`
+    : `Liste des tickets - ${statusTitle}`;
 
   const toggleStatus = (status: keyof typeof statusFilters) => {
     setStatusFilters(prev => ({ ...prev, [status]: !prev[status] }));
@@ -149,18 +179,27 @@ export default function Index({
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Tickets" />
+      <Head title={pageTitle} />
       <div className="py-4 w-full">
-        <Heading title="Tickets" description={`Liste des tickets - ${statusTitle}`} />
+        <Heading
+          title={pageTitle}
+          description={clientScope ? `${baseDescription} - ${clientScope}` : baseDescription}
+        />
 
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <CardTitle>Liste des tickets</CardTitle>
+            <CardTitle>{listTitle}</CardTitle>
             <div className="flex items-center gap-2">
               <Input placeholder="Rechercher par ID, sujet ou demandeur" value={query} onChange={(e) => setQuery(e.target.value)} />
-              <Link href="/tickets/create">
-                <Button variant="default">Nouveau ticket</Button>
-              </Link>
+              {specialOnly ? (
+                <Link href="/tickets/bugs-improvements/create?ticket_kind=bug">
+                  <Button variant="default">Signaler un bug / Proposer une amélioration</Button>
+                </Link>
+              ) : (
+                <Link href="/tickets/create">
+                  <Button variant="default">Nouveau ticket</Button>
+                </Link>
+              )}
             </div>
           </CardHeader>
 
@@ -230,7 +269,14 @@ export default function Index({
                   filtered.map((t) => (
                     <tr key={t.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/tickets/${t.id}`}>
                       <td className="px-4 py-4 text-sm font-medium">{t.id}</td>
-                      <td className="px-4 py-4 text-sm font-medium">{t.title ?? '-'}</td>
+                      <td className="px-4 py-4 text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          <span>{t.title ?? '-'}</span>
+                          {t.ticket_kind && t.ticket_kind !== 'standard' && (
+                            <Badge variant="outline">{translateTicketKind(t.ticket_kind)}</Badge>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.user?.name ?? '-'}</td>
                       <td className="px-4 py-4">
                         <Badge variant={t.status === 'open' ? 'destructive' : t.status === 'in_progress' ? 'default' : t.status === 'pending' ? 'secondary' : 'outline'}>{translateStatus(t.status ?? '-')}</Badge>

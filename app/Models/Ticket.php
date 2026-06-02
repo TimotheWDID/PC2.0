@@ -20,6 +20,7 @@ class Ticket extends Model
         'invoice_id',
         'title',
         'message',
+        'ticket_kind',
         'priority',
         'status',
         'category_id',

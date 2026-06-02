@@ -8,6 +8,9 @@ Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->na
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
 Route::middleware('auth')->group(function () {
+    Route::get('tickets/bugs-improvements', [TicketController::class, 'specialIndex'])->name('tickets.special.index');
+    Route::get('tickets/bugs-improvements/create', [TicketController::class, 'specialCreate'])->name('tickets.special.create');
+
     Route::get('tickets/print-settings', [TicketController::class, 'printSettings'])->name('tickets.printSettings');
     Route::get('tickets/{ticket}/print-label', [TicketController::class, 'printLabel'])->name('tickets.printLabel');
 

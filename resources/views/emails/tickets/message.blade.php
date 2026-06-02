@@ -3,7 +3,7 @@
 
 Bonjour {{ $user->first_name }},
 
-Vous avez un nouveau message sur votre ticket.
+Vous avez un nouveau message sur votre ticket {{ strtolower($ticketKindLabel ?? 'Support') }}.
 
 @component('mail::panel')
 {!! nl2br(e($messageBody)) !!}

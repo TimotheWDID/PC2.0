@@ -12,11 +12,17 @@ use Illuminate\Support\Facades\Auth;
 use App\Support\TicketLabelSettings;
 use App\Support\TicketTimelineTemplateSettings;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
+    private const SPECIAL_TICKET_CATEGORIES = [
+        'bug' => 'Bug',
+        'improvement' => 'Amelioration',
+    ];
+
     private const TRACKED_TICKET_FIELDS = [
         'title',
         'message',
@@ -45,6 +51,65 @@ class TicketController extends Controller
         'is_locked' => 'Ticket verrouille',
     ];
 
+    private function supportsTicketKind(): bool
+    {
+        static $supports = null;
+
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $tableName = config('laravel_ticket.table_names.tickets', 'tickets');
+        $supports = Schema::hasColumn($tableName, 'ticket_kind');
+
+        return $supports;
+    }
+
+    private function getSpecialCategoryIds(): array
+    {
+        $names = array_values(self::SPECIAL_TICKET_CATEGORIES);
+
+        return Category::query()
+            ->whereIn('name', $names)
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+    }
+
+    private function getOrCreateSpecialCategoryId(string $ticketKind): ?int
+    {
+        $name = self::SPECIAL_TICKET_CATEGORIES[$ticketKind] ?? null;
+
+        if (!$name) {
+            return null;
+        }
+
+        $category = Category::query()->firstOrCreate(
+            ['name' => $name],
+            [
+                'slug' => Str::slug($name),
+                'is_visible' => true,
+            ]
+        );
+
+        return (int) $category->id;
+    }
+
+    private function inferTicketKindFromCategoryName(?string $categoryName): string
+    {
+        $normalized = Str::lower((string) $categoryName);
+
+        if ($normalized === Str::lower(self::SPECIAL_TICKET_CATEGORIES['bug'])) {
+            return 'bug';
+        }
+
+        if ($normalized === Str::lower(self::SPECIAL_TICKET_CATEGORIES['improvement'])) {
+            return 'improvement';
+        }
+
+        return 'standard';
+    }
+
     private function authorizeTicketAccess(Ticket $ticket): void
     {
         $user = Auth::user();
@@ -60,6 +125,25 @@ class TicketController extends Controller
         if ((int) $ticket->user_id !== (int) $user->id) {
             abort(403, 'Acces non autorise.');
         }
+    }
+
+    public function specialIndex(Request $request)
+    {
+        $request->merge([
+            'special_only' => 1,
+            'show_all' => 1,
+        ]);
+
+        return $this->index($request);
+    }
+
+    public function specialCreate(Request $request)
+    {
+        $request->merge([
+            'special_only' => 1,
+        ]);
+
+        return $this->create($request);
     }
 
     private function formatTimelineValue(string $field, mixed $value): mixed
@@ -114,8 +198,13 @@ class TicketController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Ticket::query()->with('user');
+        $query = Ticket::query()->with(['user', 'category']);
         $user = Auth::user();
+        $supportsTicketKind = $this->supportsTicketKind();
+        $specialCategoryIds = $this->getSpecialCategoryIds();
+        $selectedUserId = $request->integer('user_id');
+        $showAllStatuses = $request->boolean('show_all');
+        $specialOnly = $request->boolean('special_only');
 
         if (!$user) {
             abort(403, 'Acces non autorise.');
@@ -123,6 +212,30 @@ class TicketController extends Controller
 
         if (!$user->agent) {
             $query->where('user_id', $user->id);
+        } elseif (!empty($selectedUserId)) {
+            $query->where('user_id', $selectedUserId);
+        }
+
+        if ($specialOnly) {
+            if ($supportsTicketKind) {
+                $query->whereIn('ticket_kind', ['bug', 'improvement']);
+            } else {
+                if (!empty($specialCategoryIds)) {
+                    $query->whereIn('category_id', $specialCategoryIds);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            }
+        } else {
+            if ($supportsTicketKind) {
+                $query->where(function ($q) {
+                    $q->whereNull('ticket_kind')->orWhere('ticket_kind', 'standard');
+                });
+            } elseif (!empty($specialCategoryIds)) {
+                $query->where(function ($q) use ($specialCategoryIds) {
+                    $q->whereNull('category_id')->orWhereNotIn('category_id', $specialCategoryIds);
+                });
+            }
         }
 
         // Filter by status if provided
@@ -140,12 +253,15 @@ class TicketController extends Controller
             ->groupBy('ticket_id')
             ->map(fn($group) => $group->first());
 
-        $tickets = $rawTickets->map(function ($t) use ($linkedCommandes) {
+        $tickets = $rawTickets->map(function ($t) use ($linkedCommandes, $supportsTicketKind) {
             $commande = $linkedCommandes->get($t->id);
 
             return [
                 'id' => $t->id,
                 'title' => $t->title ?? null,
+                'ticket_kind' => $supportsTicketKind
+                    ? ($t->ticket_kind ?? 'standard')
+                    : $this->inferTicketKindFromCategoryName($t->category?->name),
                 'status' => $t->status ?? null,
                 'created_at' => $t->created_at ? $t->created_at->toDateTimeString() : null,
                 'user' => $t->user ? [
@@ -158,6 +274,17 @@ class TicketController extends Controller
                 ] : null,
             ];
         });
+
+        $filteredUser = null;
+        if (!empty($selectedUserId) && $user->agent) {
+            $selectedUser = \App\Models\User::find($selectedUserId);
+            if ($selectedUser) {
+                $filteredUser = [
+                    'id' => $selectedUser->id,
+                    'name' => trim(($selectedUser->first_name ?? '') . ' ' . ($selectedUser->last_name ?? '')),
+                ];
+            }
+        }
 
         $linkableCommandes = Commande::with('user:id,first_name,last_name,email')
             ->select('id', 'ticket_id', 'nom', 'fournisseur', 'command_number', 'user_id')
@@ -180,6 +307,10 @@ class TicketController extends Controller
             'tickets' => $tickets,
             'linkableCommandes' => $linkableCommandes,
             'currentStatus' => $request->status ?? null,
+            'showAllStatuses' => $showAllStatuses,
+            'filteredUser' => $filteredUser,
+            'specialOnly' => $specialOnly,
+            'ticketKindSupported' => $supportsTicketKind,
         ]);
     }
 
@@ -223,7 +354,7 @@ class TicketController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
         $categories = Category::all()->map(fn($c) => [
             'id' => $c->id,
@@ -242,10 +373,21 @@ class TicketController extends Controller
             ])->toArray();
         }
 
+        $supportsTicketKind = $this->supportsTicketKind();
+        $specialOnly = $request->boolean('special_only');
+        $requestedTicketKind = $request->query('ticket_kind', $specialOnly ? 'bug' : 'standard');
+        $allowedKinds = $specialOnly ? ['bug', 'improvement'] : ['standard'];
+        $defaultTicketKind = in_array($requestedTicketKind, $allowedKinds, true)
+            ? $requestedTicketKind
+            : ($specialOnly ? 'bug' : 'standard');
+
         return Inertia::render('Tickets/Create', [
             'categories' => $categories,
             'isAgent' => $isAgent,
             'users' => $users,
+            'defaultTicketKind' => $defaultTicketKind,
+            'specialOnly' => $specialOnly,
+            'ticketKindSupported' => $supportsTicketKind,
         ]);
     }
 
@@ -273,15 +415,19 @@ class TicketController extends Controller
     {
         $currentUser = Auth::user();
         $isAgent = $currentUser && $currentUser->agent;
+        $supportsTicketKind = $this->supportsTicketKind();
+        $specialOnly = $request->boolean('special_only');
+        $allowedTicketKinds = $specialOnly ? ['bug', 'improvement'] : ['standard'];
 
         $rules = [
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
             'category_id' => 'nullable|integer',
+            'ticket_kind' => ['nullable', Rule::in($allowedTicketKinds)],
         ];
 
-        // Si admin, il doit spécifier un utilisateur
-        if ($isAgent) {
+        // Sur les tickets standards, un agent peut choisir le demandeur.
+        if ($isAgent && !$specialOnly) {
             $rules['user_selection'] = 'required|in:existing,new';
             $rules['user_id'] = 'nullable|integer';
             $rules['user_email'] = 'nullable|email|max:255';
@@ -292,7 +438,10 @@ class TicketController extends Controller
         $ticket = new Ticket();
 
         // Déterminer l'user_id du ticket
-        if ($isAgent && $data['user_selection'] === 'new') {
+        if ($specialOnly) {
+            // Les tickets bug/amélioration appartiennent toujours à l'utilisateur connecté.
+            $ticket->user_id = Auth::id() ?? 1;
+        } elseif ($isAgent && ($data['user_selection'] ?? null) === 'new') {
             // Créer un nouvel utilisateur
             $address = $request->input('user_address', '');
             $postalCode = $request->input('user_postal_code', '');
@@ -331,7 +480,7 @@ class TicketController extends Controller
                 ]);
             }
             $ticket->user_id = $user->id;
-        } elseif ($isAgent && $data['user_selection'] === 'existing' && !empty($data['user_id'])) {
+        } elseif ($isAgent && ($data['user_selection'] ?? null) === 'existing' && !empty($data['user_id'])) {
             // Utiliser un utilisateur existant
             $ticket->user_id = $data['user_id'];
         } else {
@@ -341,6 +490,15 @@ class TicketController extends Controller
 
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
+        $ticketKind = $data['ticket_kind'] ?? ($specialOnly ? 'bug' : 'standard');
+        if ($supportsTicketKind) {
+            $ticket->ticket_kind = $ticketKind;
+        }
+
+        if ($specialOnly && !$supportsTicketKind) {
+            $ticket->category_id = $this->getOrCreateSpecialCategoryId($ticketKind);
+        }
+
         $ticket->priority = $request->input('priority', 'low');
         $ticket->status = $request->input('status', 'open');
         $ticket->save();
@@ -430,6 +588,7 @@ class TicketController extends Controller
         $ticket->user_id = $user->id;
         $ticket->title = $data['title'];
         $ticket->message = $data['message'];
+        $ticket->ticket_kind = 'standard';
         $ticket->priority = 'low';
         $ticket->status = 'open';
         $ticket->notify_by = !empty($email) ? 'Email' : (!empty($data['phone']) ? 'SMS' : 'None');
@@ -568,6 +727,7 @@ class TicketController extends Controller
             'ticket' => [
                 'id' => $ticket->id,
                 'title' => $ticket->title,
+                'ticket_kind' => $this->supportsTicketKind() ? ($ticket->ticket_kind ?? 'standard') : 'standard',
                 'message' => $ticket->message,
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,

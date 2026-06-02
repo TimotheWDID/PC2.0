@@ -13,7 +13,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, ShoppingCart } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, ShoppingCart, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -27,11 +27,6 @@ const mainNavItems: NavItem[] = [
         href: '/tickets',
         icon: Folder,
         items: [
-            {
-                title: 'Tous les tickets',
-                href: '/tickets',
-                icon: null,
-            },
             {
                 title: 'Ouverts',
                 href: '/tickets?status=open',
@@ -107,6 +102,23 @@ const mainNavItems: NavItem[] = [
         icon: Folder,
     },
     {
+        title: 'Bug et amélioration',
+        href: '/tickets/bugs-improvements',
+        icon: BookOpen,
+        items: [
+            {
+                title: 'Tous les tickets spéciaux',
+                href: '/tickets/bugs-improvements',
+                icon: null,
+            },
+            {
+                title: 'Signaler bug / amélioration',
+                href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+                icon: null,
+            },
+        ],
+    },
+    {
         title: 'Agents',
         href: '/agents',
         icon: Folder,
@@ -114,6 +126,11 @@ const mainNavItems: NavItem[] = [
 ];
 
 const footerNavItems: NavItem[] = [
+    {
+        title: 'Signaler bug / amélioration',
+        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+        icon: Wrench,
+    },
     {
         title: 'Statistiques',
         href: '#',

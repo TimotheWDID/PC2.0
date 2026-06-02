@@ -67,15 +67,19 @@ export default function Index({ users }: { users: User[] }) {
                 <tbody>
                   {filtered && filtered.length ? (
                     filtered.map((u) => (
-                      <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/users/${u.id}`}>
+                      <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/tickets?user_id=${u.id}&show_all=1`}>
                         <td className="px-4 py-4 text-sm font-medium">{u.id}</td>
                         <td className="px-4 py-4 text-sm font-medium">{u.name ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.email ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.phone ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.created_at ?? '-'}</td>
                         <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                          {isAdmin && (
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <Link href={`/tickets?user_id=${u.id}&show_all=1`}>
+                              <Button variant="secondary" size="sm">Voir les tickets</Button>
+                            </Link>
+                            {isAdmin && (
+                              <>
                               <Link href={`/users/${u.id}/edit`}>
                                 <Button variant="outline" size="sm">Modifier</Button>
                               </Link>
@@ -84,8 +88,9 @@ export default function Index({ users }: { users: User[] }) {
                                 <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
                                 <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
                               </form>
-                            </div>
-                          )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

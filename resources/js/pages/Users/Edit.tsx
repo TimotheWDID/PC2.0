@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import Heading from '@/components/heading';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import LogModal from '@/components/LogModal';
 import { Mail, MessageSquare } from 'lucide-react';
 
@@ -17,7 +18,36 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Modifier', href: '' },
 ];
 
-export default function Edit({ user }: any) {
+type UserTicket = {
+  id: number;
+  title: string | null;
+  status: string | null;
+  priority: string | null;
+  created_at: string | null;
+};
+
+const translateStatus = (status: string | null): string => {
+  const translations: Record<string, string> = {
+    open: 'Ouvert',
+    in_progress: 'En cours',
+    pending: 'En attente',
+    resolved: 'Résolu',
+    closed: 'Fermé',
+  };
+
+  if (!status) return '-';
+
+  return translations[status] || status;
+};
+
+const getStatusBadgeVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (status === 'open') return 'destructive';
+  if (status === 'in_progress') return 'default';
+  if (status === 'pending') return 'secondary';
+  return 'outline';
+};
+
+export default function Edit({ user, tickets = [] }: { user: any; tickets: UserTicket[] }) {
   const { auth } = usePage().props as any;
   const isAdmin = auth?.user?.agent?.is_admin;
 
@@ -263,6 +293,39 @@ export default function Edit({ user }: any) {
                     {sendingSms ? 'Envoi...' : 'Envoyer par SMS'}
                   </Button>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card id="tickets-client" className="mt-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Tickets du client</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tickets.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun ticket trouvé pour ce client.</p>
+            ) : (
+              <div className="space-y-3">
+                {tickets.map((ticket) => (
+                  <div key={ticket.id} className="rounded-lg border p-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Ticket #{ticket.id} - {ticket.title || 'Sans titre'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Créé le {ticket.created_at ? new Date(ticket.created_at).toLocaleString('fr-FR') : '-'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getStatusBadgeVariant(ticket.status)}>{translateStatus(ticket.status)}</Badge>
+                        {ticket.priority && <Badge variant="outline">Priorité: {ticket.priority}</Badge>}
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/tickets/${ticket.id}`}>Voir</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
