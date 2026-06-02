@@ -122,14 +122,14 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Discussion</CardTitle>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base sm:text-lg">Discussion</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
+      <CardContent className="pt-0">
+        <div className="space-y-3">
           {/* Messages Area */}
           <div
-            className="border rounded-lg p-4 h-96 overflow-y-auto bg-muted/10"
+            className="h-[42vh] max-h-[26rem] min-h-52 overflow-y-auto rounded-lg border bg-muted/10 p-3 sm:h-96 sm:p-4"
             ref={messagesContainerRef}
           >
             {isLoading && visibleMessages.length === 0 ? (
@@ -150,9 +150,9 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
                       key={message.id}
                       className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className={`max-w-[70%] ${isCurrentUser ? 'bg-primary/90 dark:bg-primary/30 text-primary-foreground' : 'bg-muted/80 dark:bg-muted/60'} rounded-lg p-3 space-y-2`}>
+                      <div className={`max-w-[88%] sm:max-w-[70%] ${isCurrentUser ? 'bg-primary/90 dark:bg-primary/30 text-primary-foreground' : 'bg-muted/80 dark:bg-muted/60'} space-y-2 rounded-lg p-2.5 sm:p-3`}>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="font-semibold text-sm">
+                          <div className="text-sm font-semibold">
                             {message.author.name}
                           </div>
                           <div className="flex items-center gap-1">
@@ -167,7 +167,7 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
                             )}
                           </div>
                         </div>
-                        <div className="text-sm whitespace-pre-wrap break-words">
+                        <div className="whitespace-pre-wrap break-words text-sm">
                           {message.content}
                         </div>
                         <div className={`text-xs ${isCurrentUser ? 'opacity-80' : 'text-muted-foreground'}`}>
@@ -193,7 +193,7 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
               placeholder="Tapez votre message..."
               className="resize-none"
-              rows={3}
+              rows={2}
               disabled={isSending}
             />
             {isAgent && (

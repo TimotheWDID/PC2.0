@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\User;
 use App\Models\Category;
+use App\Models\Device;
 use App\Models\Message;
 use App\Models\Label;
 use App\Models\TicketTimelineEvent;
@@ -17,6 +18,7 @@ class Ticket extends Model
     protected $fillable = [
         'uuid',
         'user_id',
+        'device_id',
         'invoice_id',
         'title',
         'message',
@@ -45,6 +47,11 @@ class Ticket extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class, 'device_id');
     }
 
     public function category(): BelongsTo

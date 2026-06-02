@@ -1,0 +1,1 @@
+import{j as s}from"./app-uC5Njlyb.js";function a({title:t,description:e}){return s.jsxs("div",{className:"mb-4 space-y-0.5 sm:mb-8",children:[s.jsx("h2",{className:"text-xl font-semibold tracking-tight",children:t}),e&&s.jsx("p",{className:"text-sm text-muted-foreground",children:e})]})}export{a as H};

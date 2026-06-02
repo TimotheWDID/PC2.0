@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Ticket;
 use App\Models\Commande;
+use App\Models\Device;
+use App\Models\DeviceEvent;
 use App\Models\TicketTimelineEvent;
 use Coderflex\LaravelTicket\Models\Category;
 use Illuminate\Support\Facades\Auth;
@@ -29,6 +31,7 @@ class TicketController extends Controller
         'status',
         'priority',
         'assignee_id',
+        'device_id',
         'invoice_id',
         'notify_by',
         'contact_phone',
@@ -43,6 +46,7 @@ class TicketController extends Controller
         'status' => 'Statut',
         'priority' => 'Priorite',
         'assignee_id' => 'Agent assigne',
+        'device_id' => 'Appareil',
         'invoice_id' => 'Numero de facture',
         'notify_by' => 'Notification',
         'contact_phone' => 'Telephone de contact',
@@ -162,6 +166,19 @@ class TicketController extends Controller
             return $assignee ? $assignee->first_name . ' ' . $assignee->last_name : (string) $value;
         }
 
+        if ($field === 'device_id') {
+            if (empty($value)) {
+                return null;
+            }
+
+            $device = Device::find($value);
+            if (!$device) {
+                return (string) $value;
+            }
+
+            return trim(($device->brand ?? '') . ' ' . ($device->model ?? '')) ?: ucfirst((string) $device->device_type);
+        }
+
         return $value;
     }
 
@@ -193,16 +210,37 @@ class TicketController extends Controller
 
         return $user;
     }
+
+    private function serializeDevice(?Device $device): ?array
+    {
+        if (!$device) {
+            return null;
+        }
+
+        return [
+            'id' => $device->id,
+            'device_type' => $device->device_type,
+            'brand' => $device->brand,
+            'model' => $device->model,
+            'serial_number' => $device->serial_number,
+            'asset_tag' => $device->asset_tag,
+            'purchase_date' => $device->purchase_date?->toDateString(),
+            'warranty_end_date' => $device->warranty_end_date?->toDateString(),
+            'status' => $device->status,
+            'display_name' => $device->display_name,
+        ];
+    }
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $query = Ticket::query()->with(['user', 'category']);
+        $query = Ticket::query()->with(['user', 'category', 'device']);
         $user = Auth::user();
         $supportsTicketKind = $this->supportsTicketKind();
         $specialCategoryIds = $this->getSpecialCategoryIds();
         $selectedUserId = $request->integer('user_id');
+        $selectedDeviceId = $request->integer('device_id');
         $showAllStatuses = $request->boolean('show_all');
         $specialOnly = $request->boolean('special_only');
 
@@ -243,7 +281,27 @@ class TicketController extends Controller
             $query->where('status', $request->status);
         }
 
+        if (!empty($selectedDeviceId)) {
+            $query->where('device_id', $selectedDeviceId);
+        }
+
+        $deviceQuery = trim((string) $request->query('device_query', ''));
+        if ($deviceQuery !== '') {
+            $query->whereHas('device', function ($q) use ($deviceQuery) {
+                $q->where('serial_number', 'like', '%' . $deviceQuery . '%')
+                    ->orWhere('asset_tag', 'like', '%' . $deviceQuery . '%')
+                    ->orWhere('brand', 'like', '%' . $deviceQuery . '%')
+                    ->orWhere('model', 'like', '%' . $deviceQuery . '%');
+            });
+        }
+
         $rawTickets = $query->get();
+
+        $userDeviceMap = Device::query()
+            ->whereIn('user_id', $rawTickets->pluck('user_id')->filter()->unique()->values())
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('user_id');
 
         $linkedCommandes = Commande::select('id', 'ticket_id', 'nom')
             ->whereNotNull('ticket_id')
@@ -253,8 +311,9 @@ class TicketController extends Controller
             ->groupBy('ticket_id')
             ->map(fn($group) => $group->first());
 
-        $tickets = $rawTickets->map(function ($t) use ($linkedCommandes, $supportsTicketKind) {
+        $tickets = $rawTickets->map(function ($t) use ($linkedCommandes, $supportsTicketKind, $userDeviceMap) {
             $commande = $linkedCommandes->get($t->id);
+            $userDevices = $userDeviceMap->get($t->user_id, collect());
 
             return [
                 'id' => $t->id,
@@ -268,6 +327,18 @@ class TicketController extends Controller
                     'id' => $t->user->id,
                     'name' => $t->user->first_name . ' ' . $t->user->last_name,
                 ] : null,
+                'device' => $t->device ? [
+                    'id' => $t->device->id,
+                    'display_name' => $t->device->display_name,
+                    'serial_number' => $t->device->serial_number,
+                    'asset_tag' => $t->device->asset_tag,
+                ] : null,
+                'available_devices' => $userDevices->map(fn(Device $device) => [
+                    'id' => $device->id,
+                    'display_name' => $device->display_name,
+                    'serial_number' => $device->serial_number,
+                    'asset_tag' => $device->asset_tag,
+                ])->values(),
                 'commande' => $commande ? [
                     'id' => $commande->id,
                     'nom' => $commande->nom,
@@ -308,6 +379,8 @@ class TicketController extends Controller
             'linkableCommandes' => $linkableCommandes,
             'currentStatus' => $request->status ?? null,
             'showAllStatuses' => $showAllStatuses,
+            'deviceQuery' => $deviceQuery,
+            'selectedDeviceId' => !empty($selectedDeviceId) ? $selectedDeviceId : null,
             'filteredUser' => $filteredUser,
             'specialOnly' => $specialOnly,
             'ticketKindSupported' => $supportsTicketKind,
@@ -351,6 +424,103 @@ class TicketController extends Controller
         return back()->with('success', 'Commande liee au ticket avec succes.');
     }
 
+    public function attachDevice(Request $request, Ticket $ticket)
+    {
+        $this->authorizeTicketAccess($ticket);
+
+        $validated = $request->validate([
+            'device_id' => 'nullable|integer|exists:devices,id',
+        ]);
+
+        $previousDeviceId = $ticket->device_id;
+        $nextDeviceId = $validated['device_id'] ?? null;
+
+        if ($nextDeviceId) {
+            $device = Device::query()
+                ->where('id', $nextDeviceId)
+                ->where('user_id', $ticket->user_id)
+                ->first();
+
+            if (!$device) {
+                return back()->withErrors([
+                    'device_id' => 'Cet appareil ne correspond pas au client du ticket.',
+                ]);
+            }
+
+            $ticket->device_id = $device->id;
+            $ticket->save();
+
+            if ((int) $previousDeviceId !== (int) $ticket->device_id) {
+                $this->logTechnicianTimeline(
+                    $ticket,
+                    'device_attached',
+                    'Appareil lie au ticket',
+                    [
+                        'device_id' => $device->id,
+                        'device_name' => $device->display_name,
+                    ]
+                );
+            }
+
+            return back()->with('success', 'Appareil lie au ticket.');
+        }
+
+        $ticket->device_id = null;
+        $ticket->save();
+
+        if (!is_null($previousDeviceId)) {
+            $this->logTechnicianTimeline(
+                $ticket,
+                'device_detached',
+                'Appareil retire du ticket'
+            );
+        }
+
+        return back()->with('success', 'Appareil retire du ticket.');
+    }
+
+    public function createAndAttachDevice(Request $request, Ticket $ticket)
+    {
+        $this->authorizeTicketAccess($ticket);
+
+        $data = $request->validate([
+            'device_type' => 'required|in:computer,phone,tablet,other',
+            'brand' => 'nullable|string|max:120',
+            'model' => 'required|string|max:120',
+            'serial_number' => 'nullable|string|max:120|unique:devices,serial_number',
+            'asset_tag' => 'nullable|string|max:120|unique:devices,asset_tag',
+            'purchase_date' => 'nullable|date',
+            'warranty_end_date' => 'nullable|date|after_or_equal:purchase_date',
+        ]);
+
+        $device = Device::create([
+            'user_id' => $ticket->user_id,
+            'device_type' => $data['device_type'],
+            'brand' => $data['brand'] ?? null,
+            'model' => $data['model'],
+            'serial_number' => $data['serial_number'] ?? null,
+            'asset_tag' => $data['asset_tag'] ?? null,
+            'purchase_date' => $data['purchase_date'] ?? null,
+            'warranty_end_date' => $data['warranty_end_date'] ?? null,
+            'status' => 'active',
+        ]);
+
+        $ticket->device_id = $device->id;
+        $ticket->save();
+
+        $this->logTechnicianTimeline(
+            $ticket,
+            'device_attached',
+            'Nouvel appareil cree et lie au ticket',
+            [
+                'device_id' => $device->id,
+                'device_name' => $device->display_name,
+            ]
+        );
+
+        return back()->with('success', 'Appareil cree et lie au ticket.');
+    }
+
     /**
      * Show the form for creating a new resource.
      */
@@ -366,11 +536,25 @@ class TicketController extends Controller
 
         $users = [];
         if ($isAgent) {
-            $users = \App\Models\User::whereDoesntHave('agent')->get()->map(fn($u) => [
-                'id' => $u->id,
-                'name' => $u->first_name . ' ' . $u->last_name,
-                'email' => $u->email,
-            ])->toArray();
+            $users = \App\Models\User::whereDoesntHave('agent')
+                ->with('devices')
+                ->get()
+                ->map(fn($u) => [
+                    'id' => $u->id,
+                    'name' => $u->first_name . ' ' . $u->last_name,
+                    'email' => $u->email,
+                    'devices' => $u->devices->map(fn(Device $device) => $this->serializeDevice($device))->values(),
+                ])->toArray();
+        }
+
+        $currentUserDevices = [];
+        if ($currentUser && !$isAgent) {
+            $currentUserDevices = Device::query()
+                ->where('user_id', $currentUser->id)
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn(Device $device) => $this->serializeDevice($device))
+                ->values();
         }
 
         $supportsTicketKind = $this->supportsTicketKind();
@@ -385,6 +569,7 @@ class TicketController extends Controller
             'categories' => $categories,
             'isAgent' => $isAgent,
             'users' => $users,
+            'currentUserDevices' => $currentUserDevices,
             'defaultTicketKind' => $defaultTicketKind,
             'specialOnly' => $specialOnly,
             'ticketKindSupported' => $supportsTicketKind,
@@ -424,6 +609,15 @@ class TicketController extends Controller
             'message' => 'nullable|string',
             'category_id' => 'nullable|integer',
             'ticket_kind' => ['nullable', Rule::in($allowedTicketKinds)],
+            'device_id' => 'nullable|integer|exists:devices,id',
+            'quick_add_device' => 'nullable|boolean',
+            'quick_device_type' => 'nullable|in:computer,phone,tablet,other',
+            'quick_device_brand' => 'nullable|string|max:120',
+            'quick_device_model' => 'nullable|string|max:120',
+            'quick_device_serial_number' => 'nullable|string|max:120|unique:devices,serial_number',
+            'quick_device_asset_tag' => 'nullable|string|max:120|unique:devices,asset_tag',
+            'quick_device_purchase_date' => 'nullable|date',
+            'quick_device_warranty_end_date' => 'nullable|date|after_or_equal:quick_device_purchase_date',
         ];
 
         // Sur les tickets standards, un agent peut choisir le demandeur.
@@ -488,6 +682,28 @@ class TicketController extends Controller
             $ticket->user_id = Auth::id() ?? 1;
         }
 
+        if (!empty($data['device_id'])) {
+            $device = Device::query()
+                ->where('id', $data['device_id'])
+                ->where('user_id', $ticket->user_id)
+                ->first();
+
+            if (!$device) {
+                return back()->withErrors([
+                    'device_id' => 'Cet appareil ne correspond pas au client du ticket.',
+                ])->withInput();
+            }
+
+            $ticket->device_id = $device->id;
+        }
+
+        $shouldQuickCreateDevice = $request->boolean('quick_add_device');
+        if ($shouldQuickCreateDevice) {
+            $request->validate([
+                'quick_device_model' => 'required|string|max:120',
+            ]);
+        }
+
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
         $ticketKind = $data['ticket_kind'] ?? ($specialOnly ? 'bug' : 'standard');
@@ -502,6 +718,35 @@ class TicketController extends Controller
         $ticket->priority = $request->input('priority', 'low');
         $ticket->status = $request->input('status', 'open');
         $ticket->save();
+
+        if ($shouldQuickCreateDevice) {
+            $quickDevice = Device::create([
+                'user_id' => $ticket->user_id,
+                'device_type' => (string) ($request->input('quick_device_type') ?: 'computer'),
+                'brand' => $request->input('quick_device_brand'),
+                'model' => (string) $request->input('quick_device_model'),
+                'serial_number' => $request->input('quick_device_serial_number'),
+                'asset_tag' => $request->input('quick_device_asset_tag'),
+                'purchase_date' => $request->input('quick_device_purchase_date'),
+                'warranty_end_date' => $request->input('quick_device_warranty_end_date'),
+                'status' => 'active',
+            ]);
+
+            if (empty($ticket->device_id)) {
+                $ticket->device_id = $quickDevice->id;
+                $ticket->save();
+            }
+
+            $this->logTechnicianTimeline(
+                $ticket,
+                'device_attached',
+                'Appareil ajoute et lie au ticket',
+                [
+                    'device_id' => $quickDevice->id,
+                    'device_name' => $quickDevice->display_name,
+                ]
+            );
+        }
 
         $this->logTechnicianTimeline(
             $ticket,
@@ -651,7 +896,7 @@ class TicketController extends Controller
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
-        $ticket->load(['user', 'assignee', 'category']);
+        $ticket->load(['user.devices', 'assignee', 'category', 'device']);
         $viewer = Auth::user();
 
         $categories = Category::all()->map(fn($c) => [
@@ -723,6 +968,28 @@ class TicketController extends Controller
                 ]);
         }
 
+        $deviceEvents = [];
+        if ($ticket->device_id) {
+            $deviceEvents = DeviceEvent::query()
+                ->with(['technician:id,first_name,last_name'])
+                ->where('device_id', $ticket->device_id)
+                ->orderByDesc('happened_at')
+                ->limit(100)
+                ->get()
+                ->map(fn($event) => [
+                    'id' => $event->id,
+                    'event_type' => $event->event_type,
+                    'summary' => $event->summary,
+                    'details' => $event->details,
+                    'happened_at' => $event->happened_at?->toDateTimeString(),
+                    'ticket_id' => $event->ticket_id,
+                    'technician' => $event->technician ? [
+                        'id' => $event->technician->id,
+                        'name' => trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? '')),
+                    ] : null,
+                ]);
+        }
+
         return Inertia::render('Tickets/Show', [
             'ticket' => [
                 'id' => $ticket->id,
@@ -762,11 +1029,14 @@ class TicketController extends Controller
                     'id' => $ticket->category->id,
                     'name' => $ticket->category->name,
                 ] : null,
+                'device' => $this->serializeDevice($ticket->device),
             ],
             'categories' => $categories,
             'agents' => $agents,
             'commandes' => $commandes,
+            'userDevices' => $ticket->user ? $ticket->user->devices->map(fn(Device $device) => $this->serializeDevice($device))->values() : [],
             'timelineEvents' => $timelineEvents,
+            'deviceEvents' => $deviceEvents,
             'timelineTemplateSettings' => $viewer && $viewer->agent ? TicketTimelineTemplateSettings::load() : ['templates' => []],
         ]);
     }
@@ -778,6 +1048,7 @@ class TicketController extends Controller
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
+        $ticket->load('user.devices');
         $categories = Category::all()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
@@ -797,6 +1068,7 @@ class TicketController extends Controller
                 'priority' => $ticket->priority,
                 'category_id' => $ticket->category_id,
                 'assignee_id' => $ticket->assignee_id,
+                'device_id' => $ticket->device_id,
                 'invoice_id' => $ticket->invoice_id,
                 'notify_by' => $ticket->notify_by,
                 'contact_phone' => $ticket->contact_phone,
@@ -806,6 +1078,7 @@ class TicketController extends Controller
             ],
             'categories' => $categories,
             'agents' => $agents,
+            'userDevices' => $ticket->user ? $ticket->user->devices->map(fn(Device $device) => $this->serializeDevice($device))->values() : [],
         ]);
     }
 
@@ -827,6 +1100,7 @@ class TicketController extends Controller
             'message' => 'nullable|string',
             'category_id' => 'nullable|integer',
             'assignee_id' => 'nullable|integer',
+            'device_id' => 'nullable|integer|exists:devices,id',
             'invoice_id' => 'nullable|string|max:255',
             'notify_by' => 'nullable|in:SMS,Email,None',
             'contact_phone' => 'nullable|string|max:255',
@@ -840,6 +1114,7 @@ class TicketController extends Controller
         $ticket->priority = $request->input('priority', $ticket->priority);
         $ticket->status = $request->input('status', $ticket->status);
         $ticket->assignee_id = $data['assignee_id'] ?? null;
+        $ticket->device_id = $data['device_id'] ?? null;
         $ticket->invoice_id = $data['invoice_id'] ?? null;
         $ticket->notify_by = $data['notify_by'] ?? 'None';
         $ticket->contact_phone = $data['contact_phone'] ?? null;
@@ -850,6 +1125,19 @@ class TicketController extends Controller
         // Si assignee_id est 0 (Aucun), le mettre à null
         if ($ticket->assignee_id == 0) {
             $ticket->assignee_id = null;
+        }
+
+        if (!empty($ticket->device_id)) {
+            $device = Device::query()
+                ->where('id', $ticket->device_id)
+                ->where('user_id', $ticket->user_id)
+                ->first();
+
+            if (!$device) {
+                return back()->withErrors([
+                    'device_id' => 'Cet appareil ne correspond pas au client du ticket.',
+                ])->withInput();
+            }
         }
 
         $ticket->save();
@@ -1014,6 +1302,51 @@ class TicketController extends Controller
         ]);
 
         return back()->with('success', 'Evenement ajoute au suivi du ticket.');
+    }
+
+    public function storeDeviceEvent(Request $request, string $id)
+    {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        $user = $this->ensureAgentOrAbort();
+
+        if (!$ticket->device_id) {
+            return back()->withErrors([
+                'device' => 'Aucun appareil n\'est associe a ce ticket.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'event_type' => 'required|in:battery_replaced,screen_replaced,storage_upgraded,diagnostic,maintenance,note',
+            'summary' => 'required|string|max:500',
+            'details' => 'nullable|string|max:3000',
+            'happened_at' => 'nullable|date',
+        ]);
+
+        $deviceEvent = DeviceEvent::create([
+            'device_id' => $ticket->device_id,
+            'ticket_id' => $ticket->id,
+            'technician_id' => $user->id,
+            'event_type' => $data['event_type'],
+            'summary' => $data['summary'],
+            'details' => !empty($data['details']) ? ['note' => $data['details']] : null,
+            'happened_at' => $data['happened_at'] ?? now(),
+        ]);
+
+        $this->logTechnicianTimeline(
+            $ticket,
+            'device_event_added',
+            'Intervention enregistree sur appareil',
+            [
+                'device_event_id' => $deviceEvent->id,
+                'event_type' => $deviceEvent->event_type,
+                'summary' => $deviceEvent->summary,
+                'happened_at' => $deviceEvent->happened_at?->toDateTimeString(),
+            ]
+        );
+
+        return back()->with('success', 'Intervention appareil ajoutee.');
     }
 
     public function removeTimelineEvent(Request $request, string $id, string $event)

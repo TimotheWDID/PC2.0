@@ -27,6 +27,12 @@ type User = {
   id: number
   name: string
   email: string
+  devices?: Device[]
+}
+
+type Device = {
+  id: number
+  display_name: string
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,12 +44,14 @@ export default function CreateTicket({
   categories,
   isAgent = false,
   users = [],
+  currentUserDevices = [],
   defaultTicketKind = 'standard',
   specialOnly = false,
 }: {
   categories: Category[];
   isAgent?: boolean;
   users?: User[];
+  currentUserDevices?: Device[];
   defaultTicketKind?: 'standard' | 'bug' | 'improvement';
   specialOnly?: boolean;
 }) {
@@ -76,6 +84,15 @@ export default function CreateTicket({
     user_address: '',
     user_postal_code: '',
     user_city: '',
+    device_id: '',
+    quick_add_device: false,
+    quick_device_type: 'computer',
+    quick_device_brand: '',
+    quick_device_model: '',
+    quick_device_serial_number: '',
+    quick_device_asset_tag: '',
+    quick_device_purchase_date: '',
+    quick_device_warranty_end_date: '',
     print_label: '0',
   })
 
@@ -316,6 +333,7 @@ export default function CreateTicket({
                           onClick={() => {
                             setSelectedUser(null)
                             setSearchQuery('')
+                            setData('device_id', '')
                             setNewUserData({
                               first_name: '',
                               last_name: '',
@@ -343,6 +361,7 @@ export default function CreateTicket({
                             onClick={() => {
                               setSelectedUser(user)
                               setSearchQuery('')
+                              setData('device_id', '')
                             }}
                             className="w-full border-b p-3 text-left hover:bg-muted/50 last:border-b-0"
                           >
@@ -421,6 +440,117 @@ export default function CreateTicket({
                   ))}
                 </select>
               </div>
+
+              {!specialOnly && (
+                <div className="space-y-4 rounded-md border p-3">
+                  <div>
+                    <Label htmlFor="device_id">Appareil lié (optionnel)</Label>
+                    <select
+                      id="device_id"
+                      name="device_id"
+                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={data.device_id}
+                      onChange={(e) => setData('device_id', e.target.value)}
+                    >
+                      <option value="">-- Aucun appareil --</option>
+                      {(isAgent ? (selectedUser?.devices ?? []) : currentUserDevices).map((device) => (
+                        <option key={device.id} value={device.id}>{device.display_name}</option>
+                      ))}
+                    </select>
+                    {errors.device_id && <div className="text-red-500">{errors.device_id}</div>}
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={data.quick_add_device}
+                      onChange={(e) => setData('quick_add_device', e.target.checked)}
+                    />
+                    Ajouter rapidement un nouvel appareil pour ce ticket
+                  </label>
+
+                  {data.quick_add_device && (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <Label htmlFor="quick_device_type">Type appareil</Label>
+                        <select
+                          id="quick_device_type"
+                          className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={data.quick_device_type}
+                          onChange={(e) => setData('quick_device_type', e.target.value)}
+                        >
+                          <option value="computer">Ordinateur</option>
+                          <option value="phone">Telephone</option>
+                          <option value="tablet">Tablette</option>
+                          <option value="other">Autre</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_brand">Marque</Label>
+                        <Input
+                          id="quick_device_brand"
+                          value={data.quick_device_brand}
+                          onChange={(e) => setData('quick_device_brand', e.target.value)}
+                          placeholder="Dell, Apple..."
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_model">Modele *</Label>
+                        <Input
+                          id="quick_device_model"
+                          value={data.quick_device_model}
+                          onChange={(e) => setData('quick_device_model', e.target.value)}
+                          placeholder="Latitude, iPhone..."
+                        />
+                        {errors.quick_device_model && <div className="text-red-500">{errors.quick_device_model}</div>}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_serial_number">Numero de serie</Label>
+                        <Input
+                          id="quick_device_serial_number"
+                          value={data.quick_device_serial_number}
+                          onChange={(e) => setData('quick_device_serial_number', e.target.value)}
+                        />
+                        {errors.quick_device_serial_number && <div className="text-red-500">{errors.quick_device_serial_number}</div>}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_asset_tag">Numero de suivi</Label>
+                        <Input
+                          id="quick_device_asset_tag"
+                          value={data.quick_device_asset_tag}
+                          onChange={(e) => setData('quick_device_asset_tag', e.target.value)}
+                        />
+                        {errors.quick_device_asset_tag && <div className="text-red-500">{errors.quick_device_asset_tag}</div>}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_purchase_date">Date d'achat</Label>
+                        <Input
+                          id="quick_device_purchase_date"
+                          type="date"
+                          value={data.quick_device_purchase_date}
+                          onChange={(e) => setData('quick_device_purchase_date', e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="quick_device_warranty_end_date">Fin de garantie</Label>
+                        <Input
+                          id="quick_device_warranty_end_date"
+                          type="date"
+                          value={data.quick_device_warranty_end_date}
+                          onChange={(e) => setData('quick_device_warranty_end_date', e.target.value)}
+                        />
+                        {errors.quick_device_warranty_end_date && <div className="text-red-500">{errors.quick_device_warranty_end_date}</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex space-x-2">
                 <Button type="submit" disabled={processing || (isAgent && !specialOnly && !selectedUser)} variant="default">

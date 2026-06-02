@@ -89,7 +89,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Commandes" />
-      <div className="py-4 w-full">
+      <div className="py-2 sm:py-4 w-full">
         <Heading title="Commandes" description="Gestion des commandes" />
 
         <Card className="mb-4">
@@ -97,7 +97,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
             <CardTitle>Filtres</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4">
               <Input
                 placeholder="Rechercher..."
                 value={search}
@@ -121,28 +121,68 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                 <option value="traité">Traité</option>
               </select>
               <div className="flex gap-2">
-                <Button onClick={handleFilter}>Filtrer</Button>
-                <Button variant="outline" onClick={handleReset}>Réinitialiser</Button>
+                <Button onClick={handleFilter} className="flex-1 md:flex-none">Filtrer</Button>
+                <Button variant="outline" onClick={handleReset} className="flex-1 md:flex-none">Réinitialiser</Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Liste des commandes ({commandes.total})</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <Link href="/commandes/create-bulk">
-                <Button variant="outline">Commande groupée</Button>
+                <Button variant="outline" className="w-full sm:w-auto">Commande groupée</Button>
               </Link>
               <Link href="/commandes/create">
-                <Button>Nouvelle commande</Button>
+                <Button className="w-full sm:w-auto">Nouvelle commande</Button>
               </Link>
             </div>
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="space-y-2 p-3 sm:hidden">
+              {commandes.data && commandes.data.length > 0 ? (
+                commandes.data.map((commande) => (
+                  <div key={commande.id} className="rounded-md border p-3 transition-colors hover:bg-muted/40">
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <p className="line-clamp-2 text-sm font-semibold">#{commande.id} - {commande.nom}</p>
+                      <Badge className={statutColors[commande.statut]}>{statutLabels[commande.statut]}</Badge>
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p>N° commande: {commande.command_number || '-'}</p>
+                      <p>Fournisseur: {commande.fournisseur || '-'}</p>
+                      <p>
+                        Utilisateur: {commande.user
+                          ? (commande.user.name || `${commande.user.first_name ?? ''} ${commande.user.last_name ?? ''}`.trim() || commande.user.email)
+                          : '-'}
+                      </p>
+                      <p>Date: {new Date(commande.created_at).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Link href={`/commandes/${commande.id}/edit`}>
+                        <Button size="sm" variant="secondary">Ouvrir</Button>
+                      </Link>
+                      {commande.ticket ? (
+                        <Link href={`/tickets/${commande.ticket.id}`} className="text-xs text-blue-600 hover:underline">
+                          Ticket #{commande.ticket.id}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Pas de ticket</span>
+                      )}
+                      <Link href={`/commandes/${commande.id}`}>
+                        <Button size="sm" variant="outline">Voir</Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border px-4 py-8 text-center text-sm text-muted-foreground">Aucune commande trouvée</div>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full">
                 <thead className="bg-muted/50 border-b">
                   <tr>

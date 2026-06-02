@@ -102,6 +102,11 @@ const mainNavItems: NavItem[] = [
         icon: Folder,
     },
     {
+        title: 'Parc appareils',
+        href: '/devices',
+        icon: Folder,
+    },
+    {
         title: 'Bug et amélioration',
         href: '/tickets/bugs-improvements',
         icon: BookOpen,

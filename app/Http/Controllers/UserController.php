@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Device;
 use App\Models\User;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
@@ -9,6 +10,32 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    private function serializeDevice(Device $device): array
+    {
+        return [
+            'id' => $device->id,
+            'device_type' => $device->device_type,
+            'brand' => $device->brand,
+            'model' => $device->model,
+            'serial_number' => $device->serial_number,
+            'asset_tag' => $device->asset_tag,
+            'purchase_date' => $device->purchase_date?->toDateString(),
+            'warranty_start_date' => $device->warranty_start_date?->toDateString(),
+            'warranty_end_date' => $device->warranty_end_date?->toDateString(),
+            'vendor_name' => $device->vendor_name,
+            'status' => $device->status,
+            'imei' => $device->imei,
+            'sim_number' => $device->sim_number,
+            'phone_number' => $device->phone_number,
+            'os_name' => $device->os_name,
+            'ram_gb' => $device->ram_gb,
+            'storage_gb' => $device->storage_gb,
+            'cpu' => $device->cpu,
+            'notes' => $device->notes,
+            'display_name' => $device->display_name,
+        ];
+    }
+
     public function index()
     {
         $users = User::orderBy('id', 'desc')->get()->map(function ($u) {
@@ -59,7 +86,8 @@ class UserController extends Controller
 
         $tickets = Ticket::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->get(['id', 'title', 'status', 'priority', 'created_at'])
+            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
+            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
             ->map(function ($ticket) {
                 return [
                     'id' => $ticket->id,
@@ -67,13 +95,22 @@ class UserController extends Controller
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
                     'created_at' => $ticket->created_at?->toDateTimeString(),
+                    'device' => $ticket->device ? [
+                        'id' => $ticket->device->id,
+                        'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
+                        'serial_number' => $ticket->device->serial_number,
+                        'asset_tag' => $ticket->device->asset_tag,
+                    ] : null,
                 ];
             })
             ->values();
 
+        $devices = $user->devices()->orderByDesc('id')->get()->map(fn(Device $device) => $this->serializeDevice($device))->values();
+
         return Inertia::render('Users/Edit', [
             'user' => $user,
             'tickets' => $tickets,
+            'devices' => $devices,
         ]);
     }
 
@@ -83,7 +120,8 @@ class UserController extends Controller
 
         $tickets = Ticket::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->get(['id', 'title', 'status', 'priority', 'created_at'])
+            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
+            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
             ->map(function ($ticket) {
                 return [
                     'id' => $ticket->id,
@@ -91,9 +129,17 @@ class UserController extends Controller
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
                     'created_at' => $ticket->created_at?->toDateTimeString(),
+                    'device' => $ticket->device ? [
+                        'id' => $ticket->device->id,
+                        'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
+                        'serial_number' => $ticket->device->serial_number,
+                        'asset_tag' => $ticket->device->asset_tag,
+                    ] : null,
                 ];
             })
             ->values();
+
+        $devices = $user->devices()->orderByDesc('id')->get()->map(fn(Device $device) => $this->serializeDevice($device))->values();
 
         return Inertia::render('Users/Edit', [
             'user' => [
@@ -108,6 +154,7 @@ class UserController extends Controller
                 'default_notification_preference' => $user->default_notification_preference,
             ],
             'tickets' => $tickets,
+            'devices' => $devices,
         ]);
     }
 

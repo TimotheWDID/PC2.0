@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function Edit({ ticket, categories, agents }: any) {
+export default function Edit({ ticket, categories, agents, userDevices = [] }: any) {
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Tickets', href: '/tickets' },
     { title: ticket.title ?? 'Modifier', href: `/tickets/${ticket.id}/edit` },
@@ -22,6 +22,7 @@ export default function Edit({ ticket, categories, agents }: any) {
     status: string;
     priority: string;
     assignee_id: string;
+    device_id: string;
     invoice_id: string;
     notify_by: string;
     contact_phone: string;
@@ -35,6 +36,7 @@ export default function Edit({ ticket, categories, agents }: any) {
     status: ticket.status || 'open',
     priority: ticket.priority || 'low',
     assignee_id: ticket.assignee_id || '',
+    device_id: ticket.device_id || '',
     invoice_id: ticket.invoice_id || '',
     notify_by: ticket.notify_by || 'None',
     contact_phone: ticket.contact_phone || '',
@@ -101,6 +103,22 @@ export default function Edit({ ticket, categories, agents }: any) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="device_id">Appareil lié</Label>
+                <Select value={data.device_id ? data.device_id.toString() : '0'} onValueChange={(value) => setData('device_id', value === '0' ? '' : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="-- Sélectionner --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Aucun</SelectItem>
+                    {userDevices && userDevices.map((device: any) => (
+                      <SelectItem key={device.id} value={device.id.toString()}>{device.display_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.device_id && <div className="text-red-500">{errors.device_id}</div>}
               </div>
 
               <div>

@@ -78,6 +78,7 @@ const builtInEventTypeLabels: Record<string, string> = {
   commande_created_direct: 'Commande creee',
   commande_updated_direct: 'Commande modifiee',
   commande_status_changed_direct: 'Statut commande',
+  device_event_added: 'Intervention appareil',
 };
 
 const getTimelineAccent = (eventType: string) => {
@@ -154,7 +155,7 @@ const priorityUI: Record<string, { badge: string; btn: string; btnActive: string
   },
 };
 
-export default function Show({ ticket, categories, agents, commandes, timelineEvents = [], timelineTemplateSettings = { templates: [] } }: any) {
+export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], timelineTemplateSettings = { templates: [] } }: any) {
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
 
@@ -167,6 +168,7 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
     priority: ticket.priority ?? 'low',
     category_id: ticket.category?.id ?? '',
     assignee_id: ticket.assignee?.id ?? '',
+    device_id: ticket.device?.id ?? '',
     invoice_id: ticket.invoice_id ?? '',
     notify_by: ticket.notify_by ?? 'None',
     contact_phone: ticket.contact_phone ?? '',
@@ -189,6 +191,25 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
     happened_at: '',
   });
   const [manualPrerequisites, setManualPrerequisites] = useState<Array<{ name: string; met: boolean }>>([]);
+  const [deviceEventForm, setDeviceEventForm] = useState({
+    event_type: 'maintenance',
+    summary: '',
+    details: '',
+    happened_at: '',
+  });
+  const [isDeviceActionModalOpen, setIsDeviceActionModalOpen] = useState(false);
+  const [deviceIdToAttach, setDeviceIdToAttach] = useState(ticket.device?.id ? String(ticket.device.id) : '');
+  const [isAttachingDevice, setIsAttachingDevice] = useState(false);
+  const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    device_type: 'computer',
+    brand: '',
+    model: '',
+    serial_number: '',
+    asset_tag: '',
+    purchase_date: '',
+    warranty_end_date: '',
+  });
 
   const timelineTemplatesByType = useMemo(() => {
     const map = new Map<string, { label: string; enabled: boolean; summary: string; details: string }>();
@@ -274,6 +295,67 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
         setFormData({ ...formData, priority: newPriority });
       },
     });
+  };
+
+  const handleCreateDeviceEvent = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.post(`/tickets/${ticket.id}/device-events`, deviceEventForm, {
+      preserveScroll: true,
+      onSuccess: () => {
+        setDeviceEventForm({
+          event_type: 'maintenance',
+          summary: '',
+          details: '',
+          happened_at: '',
+        });
+      },
+    });
+  };
+
+  const openDeviceActionModal = () => {
+    setDeviceIdToAttach(ticket.device?.id ? String(ticket.device.id) : '');
+    setNewDeviceForm({
+      device_type: 'computer',
+      brand: '',
+      model: '',
+      serial_number: '',
+      asset_tag: '',
+      purchase_date: '',
+      warranty_end_date: '',
+    });
+    setIsDeviceActionModalOpen(true);
+  };
+
+  const closeDeviceActionModal = () => {
+    setIsDeviceActionModalOpen(false);
+    setIsAttachingDevice(false);
+    setIsCreatingDevice(false);
+  };
+
+  const handleAttachDeviceFromActions = () => {
+    setIsAttachingDevice(true);
+    router.patch(
+      `/tickets/${ticket.id}/attach-device`,
+      { device_id: deviceIdToAttach || null },
+      {
+        preserveScroll: true,
+        onSuccess: () => closeDeviceActionModal(),
+        onFinish: () => setIsAttachingDevice(false),
+      },
+    );
+  };
+
+  const handleCreateDeviceFromActions = () => {
+    setIsCreatingDevice(true);
+    router.post(
+      `/tickets/${ticket.id}/create-device`,
+      newDeviceForm,
+      {
+        preserveScroll: true,
+        onSuccess: () => closeDeviceActionModal(),
+        onFinish: () => setIsCreatingDevice(false),
+      },
+    );
   };
 
   const timelineTechnicians = useMemo(() => {
@@ -410,46 +492,36 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={ticket.title ?? 'Ticket'} />
-      <div className="py-4 w-full">
-        <div className="mb-4 flex items-center gap-2">
+      <div className="py-2 sm:py-4 w-full">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Link href="/tickets">
             <Button variant="outline" size="sm">
               ← Retour
             </Button>
           </Link>
-          {isAgent && (
-            <Link href={`/tickets/${ticket.id}/print-label`}>
-              <Button variant="default" size="sm">
-                Imprimer étiquette
-              </Button>
-            </Link>
-          )}
         </div>
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold tracking-tight">{ticket.title ?? 'Ticket'}</h1>
+        <div className="mb-4 space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">{ticket.title ?? 'Ticket'}</h1>
           {ticket.priority && (
-            <p className="text-lg text-muted-foreground mt-2">
+            <p className="text-sm text-muted-foreground sm:text-lg">
               Priorité: {translatePriority(ticket.priority)}
             </p>
           )}
-        </div>
 
-        {isAgent && (
-          <div className="grid gap-4 md:grid-cols-2 mb-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Changer le statut</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
+          {isAgent ? (
+            <div className="grid gap-2 text-xs lg:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-md border bg-muted/30 px-2 py-2">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Statut rapide</p>
+                <div className="flex flex-wrap gap-1.5">
                   {Object.entries(statutLabels).map(([value, label]) => {
                     const isCurrent = formData.status === value;
 
                     return (
                       <Button
-                        key={value}
+                        key={`quick-status-${value}`}
                         variant="outline"
-                        className={isCurrent ? statutUI[value]?.btnActive : statutUI[value]?.btn}
+                        size="sm"
+                        className={`h-7 px-2 text-[11px] ${isCurrent ? statutUI[value]?.btnActive : statutUI[value]?.btn}`}
                         onClick={() => {
                           if (!isCurrent) {
                             handleStatusChange(value);
@@ -462,23 +534,20 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Changer la priorité</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
+              <div className="rounded-md border bg-muted/30 px-2 py-2">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Priorite rapide</p>
+                <div className="flex flex-wrap gap-1.5">
                   {Object.entries(priorityLabels).map(([value, label]) => {
                     const isCurrent = formData.priority === value;
 
                     return (
                       <Button
-                        key={value}
+                        key={`quick-priority-${value}`}
                         variant="outline"
-                        className={isCurrent ? priorityUI[value]?.btnActive : priorityUI[value]?.btn}
+                        size="sm"
+                        className={`h-7 px-2 text-[11px] ${isCurrent ? priorityUI[value]?.btnActive : priorityUI[value]?.btn}`}
                         onClick={() => {
                           if (!isCurrent) {
                             handlePriorityChange(value);
@@ -491,349 +560,59 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Ticket Details */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Détails du ticket</CardTitle>
-                  {isAgent && !isEditing && (
-                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-                      Modifier
+              <div className="rounded-md border bg-muted/30 px-2 py-2">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actions ticket</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setIsEditing(true)}>
+                    Modifier ticket
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setIsAddEventModalOpen(true)}>
+                    Ajouter evenement
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={openDeviceActionModal}>
+                    Appareil
+                  </Button>
+                  <Link href={`/tickets/${ticket.id}/print-label`}>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]">
+                      Imprimer etiquette
                     </Button>
-                  )}
+                  </Link>
                 </div>
-              </CardHeader>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-2 text-xs sm:grid-cols-2 sm:text-sm lg:grid-cols-4">
+              <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="text-muted-foreground">Ticket:</span>{' '}
+                <strong>#{ticket.id}</strong>
+              </div>
+              <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="text-muted-foreground">Statut:</span>{' '}
+                <Badge className={statutUI[formData.status]?.badge ?? 'bg-muted text-foreground'}>{translateStatus(formData.status)}</Badge>
+              </div>
+              <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="text-muted-foreground">Créé le:</span>{' '}
+                <strong>{formatDateTime(ticket.created_at)}</strong>
+              </div>
+              <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="text-muted-foreground">Assigné:</span>{' '}
+                <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
+              </div>
+            </div>
+          )}
+        </div>
 
-              <CardContent className="space-y-4">
-                {isAgent && isEditing ? (
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Titre</Label>
-                      <Input
-                        id="title"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        required
-                      />
-                    </div>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <div className="order-1 xl:order-2">
+            <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+          </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="message">Message</Label>
-                      <Textarea
-                        id="message"
-                        value={formData.message}
-                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Catégorie</Label>
-                      <Select value={formData.category_id.toString()} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories?.map((cat: any) => (
-                            <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="assignee">Agent assigné</Label>
-                      <Select value={formData.assignee_id.toString()} onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Aucun</SelectItem>
-                          {agents?.map((agent: any) => (
-                            <SelectItem key={agent.id} value={agent.id.toString()}>{agent.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="invoice_id">Numéro de facture</Label>
-                      <Input
-                        id="invoice_id"
-                        value={formData.invoice_id}
-                        onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="contact_email">Email de contact</Label>
-                        <Input
-                          id="contact_email"
-                          type="email"
-                          value={formData.contact_email}
-                          onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                          placeholder="Optionnel"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="contact_phone">Téléphone de contact</Label>
-                        <Input
-                          id="contact_phone"
-                          type="tel"
-                          value={formData.contact_phone}
-                          onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                          placeholder="Optionnel"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="notify_by">Méthode de notification</Label>
-                      <Select value={formData.notify_by} onValueChange={(value) => setFormData({ ...formData, notify_by: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="None">Aucune</SelectItem>
-                          <SelectItem value="Email">Email</SelectItem>
-                          <SelectItem value="SMS">SMS</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="is_resolved"
-                          checked={formData.is_resolved}
-                          onChange={(e) => setFormData({ ...formData, is_resolved: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="is_locked"
-                          checked={formData.is_locked}
-                          onChange={(e) => setFormData({ ...formData, is_locked: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button type="submit">
-                        <Save className="mr-2 h-4 w-4" />
-                        Enregistrer
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                        Annuler
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
-                        Description du ticket
-                      </p>
-                      <p className="whitespace-pre-line text-base leading-relaxed text-foreground">
-                        {ticket.message || 'Aucune description fournie.'}
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Référence:</span>{' '}
-                        <strong>#{ticket.id}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Créé le:</span>{' '}
-                        <strong>{formatDateTime(ticket.created_at)}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Demandeur:</span>{' '}
-                        <strong>{ticket.user?.name ?? '-'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Agent assigné:</span>{' '}
-                        <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
-                      </div>
-                    </div>
-
-                    {ticket.category && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Catégorie:</span>
-                        <strong>{ticket.category.name}</strong>
-                      </div>
-                    )}
-
-                    {isAgent && (
-                      <div className="pt-4 border-t">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowMoreInfo(!showMoreInfo)}
-                          className="text-sm font-semibold -ml-2"
-                        >
-                          {showMoreInfo ? '− Masquer les informations' : '+ Montrer plus'}
-                        </Button>
-
-                        {showMoreInfo && (
-                          <div className="space-y-3 mt-3">
-                            {ticket.invoice_id && (
-                              <div className="text-sm">
-                                <span className="text-muted-foreground">Numéro de facture:</span>{' '}
-                                <strong>{ticket.invoice_id}</strong>
-                              </div>
-                            )}
-
-                            {ticket.contact_email && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Contact:</span>
-                                <a href={`mailto:${ticket.contact_email}`} className="text-primary hover:underline">
-                                  {ticket.contact_email}
-                                </a>
-                              </div>
-                            )}
-
-                            {ticket.contact_phone && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Téléphone:</span>
-                                <a href={`tel:${ticket.contact_phone}`} className="text-primary hover:underline">
-                                  {ticket.contact_phone}
-                                </a>
-                              </div>
-                            )}
-
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Notification:</span>{' '}
-                              <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
-                            </div>
-
-                            <div className="flex gap-4 text-sm">
-                              <div className="flex items-center gap-2">
-                                {ticket.is_resolved ? (
-                                  <Badge variant="default" className="bg-green-600">Résolu</Badge>
-                                ) : (
-                                  <Badge variant="secondary">Non résolu</Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {ticket.is_locked ? (
-                                  <Badge variant="destructive">Verrouillé</Badge>
-                                ) : (
-                                  <Badge variant="outline">Non verrouillé</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Commandes Section - Only for agents */}
+          {/* Ticket Details */}
+          <div className="order-2 flex flex-col gap-3 xl:order-1">
             {isAgent && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <ShoppingCart className="h-4 w-4" />
-                      Commandes liées
-                    </CardTitle>
-                    <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
-                      <Button size="sm" variant="outline">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Nouvelle
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  {commandes && commandes.length > 0 ? (
-                    <div className="space-y-2">
-                      {commandes.map((commande: any) => (
-                        <div
-                          key={commande.id}
-                          className="flex items-center justify-between p-2 border rounded hover:bg-muted/50 transition-colors text-sm"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-medium truncate">{commande.nom}</span>
-                              <Badge className={
-                                commande.statut === 'traité' ? 'bg-gray-500 text-xs' :
-                                commande.statut === 'réceptionner' ? 'bg-green-500 text-xs' :
-                                commande.statut === 'commandé' ? 'bg-purple-500 text-xs' :
-                                commande.statut === 'panier' ? 'bg-yellow-500 text-xs' :
-                                'bg-blue-500 text-xs'
-                              }>
-                                {commande.statut === 'new' ? 'Nouveau' :
-                                 commande.statut === 'panier' ? 'Panier' :
-                                 commande.statut === 'commandé' ? 'Commandé' :
-                                 commande.statut === 'réceptionner' ? 'Réceptionné' :
-                                 'Traité'}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              <span className="font-mono">{commande.command_number}</span>
-                              {' • '}
-                              <span>{commande.fournisseur}</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-1 ml-2">
-                            <Link href={`/commandes/${commande.id}`}>
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                                Voir
-                              </Button>
-                            </Link>
-                            <Link href={`/commandes/${commande.id}/edit`}>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                            </Link>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground">
-                      <ShoppingCart className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                      <p className="text-xs">Aucune commande</p>
-                      <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
-                        <Button variant="ghost" size="sm" className="mt-2 text-xs">
-                          <Plus className="h-3 w-3 mr-1" />
-                          Créer
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {isAgent && (
-              <Card>
+              <Card className="order-2 xl:hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -1032,7 +811,745 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
                   {filteredTimelineEvents.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Aucune action technicien enregistree pour le moment.</div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem]">
+                      {filteredTimelineEvents.map((event: any) => (
+                        <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
+                          <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className={`text-sm font-medium ${event.is_removed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                                {event.summary}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {event.technician?.name ?? 'Technicien'}{' '}
+                                • {formatDateTime(event.happened_at)}
+                              </p>
+                              {event.is_removed && (
+                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                  {event.removed_by?.name ?? 'Technicien'} a retire un evenement le {formatDateTime(event.removed_at)}
+                                  {event.removed_reason ? ` - ${event.removed_reason}` : ''}
+                                </p>
+                              )}
+                              {!event.is_removed && event.restored_by?.name && (
+                                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                  Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {event.event_type && (
+                                <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${getTimelineAccent(event.event_type).badge}`}>
+                                  {eventTypeLabels[event.event_type] ?? event.event_type}
+                                </Badge>
+                              )}
+
+                              {!event.is_removed ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-destructive"
+                                  onClick={() => handleRemoveTimelineEvent(event.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                  Retirer
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2"
+                                  onClick={() => handleRestoreTimelineEvent(event.id)}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                  Restaurer
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {Array.isArray(event.details?.changes) && event.details.changes.length > 0 && (
+                            <div className="mt-2 space-y-1 rounded-md border bg-muted/30 p-2">
+                              {event.details.changes.map((change: any, index: number) => (
+                                <p key={`${event.id}-change-${index}`} className="text-xs text-muted-foreground">
+                                  <strong className="text-foreground">{change.label ?? change.field}:</strong>{' '}
+                                  {formatTimelineDetailValue(change.before)} → {formatTimelineDetailValue(change.after)}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          {event.details?.preview && (
+                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>
+                          )}
+
+                          {event.details?.note && (
+                            <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>
+                          )}
+
+                          {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
+                            <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
+                              <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
+                              <div className="mt-1 space-y-1">
+                                {event.details.prerequisites.map((prereq: any, index: number) => (
+                                  <p key={`${event.id}-prereq-${index}`} className="text-[11px] text-muted-foreground">
+                                    {prereq.met ? 'OK' : 'A verifier'} - {prereq.name}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="order-3 xl:order-1">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base sm:text-lg">Détails du ticket</CardTitle>
+                  {isAgent && !isEditing && (
+                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                      Modifier
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-3 pt-0">
+                {isAgent && isEditing ? (
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Titre</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="message">Message</Label>
+                      <Textarea
+                        id="message"
+                        value={formData.message}
+                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                        rows={4}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Catégorie</Label>
+                      <Select value={formData.category_id.toString()} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une catégorie" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories?.map((cat: any) => (
+                            <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="assignee">Agent assigné</Label>
+                      <Select value={formData.assignee_id.toString()} onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Aucun</SelectItem>
+                          {agents?.map((agent: any) => (
+                            <SelectItem key={agent.id} value={agent.id.toString()}>{agent.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="device">Appareil lié</Label>
+                      <Select value={formData.device_id ? formData.device_id.toString() : '0'} onValueChange={(value) => setFormData({ ...formData, device_id: value === '0' ? '' : value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un appareil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Aucun</SelectItem>
+                          {userDevices?.map((device: any) => (
+                            <SelectItem key={device.id} value={device.id.toString()}>{device.display_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="invoice_id">Numéro de facture</Label>
+                      <Input
+                        id="invoice_id"
+                        value={formData.invoice_id}
+                        onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
+                        placeholder="Optionnel"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="contact_email">Email de contact</Label>
+                        <Input
+                          id="contact_email"
+                          type="email"
+                          value={formData.contact_email}
+                          onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                          placeholder="Optionnel"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="contact_phone">Téléphone de contact</Label>
+                        <Input
+                          id="contact_phone"
+                          type="tel"
+                          value={formData.contact_phone}
+                          onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                          placeholder="Optionnel"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="notify_by">Méthode de notification</Label>
+                      <Select value={formData.notify_by} onValueChange={(value) => setFormData({ ...formData, notify_by: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="None">Aucune</SelectItem>
+                          <SelectItem value="Email">Email</SelectItem>
+                          <SelectItem value="SMS">SMS</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="is_resolved"
+                          checked={formData.is_resolved}
+                          onChange={(e) => setFormData({ ...formData, is_resolved: e.target.checked })}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="is_locked"
+                          checked={formData.is_locked}
+                          onChange={(e) => setFormData({ ...formData, is_locked: e.target.checked })}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button type="submit">
+                        <Save className="mr-2 h-4 w-4" />
+                        Enregistrer
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                        Annuler
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-3 sm:p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
+                        Description du ticket
+                      </p>
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-foreground sm:text-base">
+                        {ticket.message || 'Aucune description fournie.'}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Référence:</span>{' '}
+                        <strong>#{ticket.id}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Créé le:</span>{' '}
+                        <strong>{formatDateTime(ticket.created_at)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Demandeur:</span>{' '}
+                        <strong>{ticket.user?.name ?? '-'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Agent assigné:</span>{' '}
+                        <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Appareil:</span>{' '}
+                        <strong>{ticket.device?.display_name ?? 'Aucun appareil lié'}</strong>
+                      </div>
+                    </div>
+
+                    {ticket.category && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Catégorie:</span>
+                        <strong>{ticket.category.name}</strong>
+                      </div>
+                    )}
+
+                    {isAgent && (
+                      <div className="pt-4 border-t">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowMoreInfo(!showMoreInfo)}
+                          className="-ml-2 text-xs font-semibold sm:text-sm"
+                        >
+                          {showMoreInfo ? '− Masquer les informations' : '+ Montrer plus'}
+                        </Button>
+
+                        {showMoreInfo && (
+                          <div className="space-y-3 mt-3">
+                            {ticket.invoice_id && (
+                              <div className="text-sm">
+                                <span className="text-muted-foreground">Numéro de facture:</span>{' '}
+                                <strong>{ticket.invoice_id}</strong>
+                              </div>
+                            )}
+
+                            {ticket.contact_email && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Contact:</span>
+                                <a href={`mailto:${ticket.contact_email}`} className="text-primary hover:underline">
+                                  {ticket.contact_email}
+                                </a>
+                              </div>
+                            )}
+
+                            {ticket.contact_phone && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Téléphone:</span>
+                                <a href={`tel:${ticket.contact_phone}`} className="text-primary hover:underline">
+                                  {ticket.contact_phone}
+                                </a>
+                              </div>
+                            )}
+
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Notification:</span>{' '}
+                              <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
+                            </div>
+
+                            <div className="flex gap-4 text-sm">
+                              <div className="flex items-center gap-2">
+                                {ticket.is_resolved ? (
+                                  <Badge variant="default" className="bg-green-600">Résolu</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Non résolu</Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {ticket.is_locked ? (
+                                  <Badge variant="destructive">Verrouillé</Badge>
+                                ) : (
+                                  <Badge variant="outline">Non verrouillé</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {ticket.device && (
+              <Card className="order-4 xl:order-2">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <History className="h-4 w-4" />
+                      Suivi appareil
+                    </CardTitle>
+                    <Badge variant="outline">{ticket.device.display_name}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  {isAgent && (
+                    <form onSubmit={handleCreateDeviceEvent} className="space-y-3 rounded-md border p-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Type d'intervention</Label>
+                          <Select value={deviceEventForm.event_type} onValueChange={(value) => setDeviceEventForm({ ...deviceEventForm, event_type: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="maintenance">Maintenance</SelectItem>
+                              <SelectItem value="diagnostic">Diagnostic</SelectItem>
+                              <SelectItem value="battery_replaced">Batterie remplacée</SelectItem>
+                              <SelectItem value="screen_replaced">Ecran remplacé</SelectItem>
+                              <SelectItem value="storage_upgraded">Stockage amélioré</SelectItem>
+                              <SelectItem value="note">Note technique</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Date</Label>
+                          <Input type="datetime-local" value={deviceEventForm.happened_at} onChange={(e) => setDeviceEventForm({ ...deviceEventForm, happened_at: e.target.value })} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Résumé</Label>
+                        <Input
+                          value={deviceEventForm.summary}
+                          onChange={(e) => setDeviceEventForm({ ...deviceEventForm, summary: e.target.value })}
+                          placeholder="Ex: Batterie remplacée"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Détails</Label>
+                        <Textarea
+                          value={deviceEventForm.details}
+                          onChange={(e) => setDeviceEventForm({ ...deviceEventForm, details: e.target.value })}
+                          rows={3}
+                          placeholder="Pièce utilisée, tests, observations..."
+                        />
+                      </div>
+
+                      <Button type="submit" size="sm">Ajouter au suivi appareil</Button>
+                    </form>
+                  )}
+
+                  {deviceEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune intervention enregistrée sur cet appareil.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {deviceEvents.map((event: any) => (
+                        <div key={event.id} className="rounded-md border p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium">{event.summary}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{event.event_type}</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDateTime(event.happened_at)}</span>
+                            </div>
+                          </div>
+                          {event.details?.note && (
+                            <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>
+                          )}
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {event.ticket_id ? `Ticket #${event.ticket_id}` : 'Hors ticket'}
+                            {event.technician?.name ? ` - ${event.technician.name}` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Commandes Section - Only for agents */}
+            {isAgent && (
+              <Card className="order-4 xl:order-2">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShoppingCart className="h-4 w-4" />
+                      Commandes liées
+                    </CardTitle>
+                    <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
+                      <Button size="sm" variant="outline">
+                        <Plus className="h-3 w-3 mr-1" />
+                        Nouvelle
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {commandes && commandes.length > 0 ? (
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {commandes.map((commande: any) => (
+                        <div
+                          key={commande.id}
+                          className="flex items-center justify-between p-2 border rounded hover:bg-muted/50 transition-colors text-sm"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-medium truncate">{commande.nom}</span>
+                              <Badge className={
+                                commande.statut === 'traité' ? 'bg-gray-500 text-xs' :
+                                commande.statut === 'réceptionner' ? 'bg-green-500 text-xs' :
+                                commande.statut === 'commandé' ? 'bg-purple-500 text-xs' :
+                                commande.statut === 'panier' ? 'bg-yellow-500 text-xs' :
+                                'bg-blue-500 text-xs'
+                              }>
+                                {commande.statut === 'new' ? 'Nouveau' :
+                                 commande.statut === 'panier' ? 'Panier' :
+                                 commande.statut === 'commandé' ? 'Commandé' :
+                                 commande.statut === 'réceptionner' ? 'Réceptionné' :
+                                 'Traité'}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              <span className="font-mono">{commande.command_number}</span>
+                              {' • '}
+                              <span>{commande.fournisseur}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <Link href={`/commandes/${commande.id}`}>
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                                Voir
+                              </Button>
+                            </Link>
+                            <Link href={`/commandes/${commande.id}/edit`}>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <ShoppingCart className="h-8 w-8 mx-auto mb-1 opacity-50" />
+                      <p className="text-xs">Aucune commande</p>
+                      <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
+                        <Button variant="ghost" size="sm" className="mt-2 text-xs">
+                          <Plus className="h-3 w-3 mr-1" />
+                          Créer
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {isAgent && (
+              <Card className="hidden xl:block xl:order-3">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <History className="h-4 w-4" />
+                      Suivi techniciens
+                    </CardTitle>
+                    <Dialog
+                      open={isAddEventModalOpen}
+                      onOpenChange={(open) => {
+                        setIsAddEventModalOpen(open);
+
+                        if (open) {
+                          applyPrefillTemplate(manualEventForm.event_type);
+                        }
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Ajouter un evenement
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                          <DialogTitle>Ajouter un evenement de suivi</DialogTitle>
+                          <DialogDescription>
+                            Cet evenement sera visible dans la timeline du ticket avec votre nom et l&apos;heure.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreateTimelineEvent} className="space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Type d&apos;evenement</Label>
+                              {hasPrefillTemplate && (
+                                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  Pre-rempli actif
+                                </span>
+                              )}
+                            </div>
+                            <Select
+                              value={manualEventForm.event_type}
+                              onValueChange={(value) => {
+                                setManualEventForm((current) => ({ ...current, event_type: value }));
+                                applyPrefillTemplate(value);
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {manualEventOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      {option.enabled ? (
+                                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : null}
+                                      <span>{option.label}</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-summary">Resume</Label>
+                            <Input
+                              id="manual-summary"
+                              value={manualEventForm.summary}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, summary: e.target.value })}
+                              placeholder="Ex: Diagnostic realise, alimentation HS identifiee"
+                              maxLength={500}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-details">Details</Label>
+                            <Textarea
+                              id="manual-details"
+                              value={manualEventForm.details}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, details: e.target.value })}
+                              placeholder="Infos techniques, pieces changees, actions realisees..."
+                              rows={4}
+                              maxLength={3000}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="manual-happened-at">Date et heure (optionnel)</Label>
+                            <Input
+                              id="manual-happened-at"
+                              type="datetime-local"
+                              value={manualEventForm.happened_at}
+                              onChange={(e) => setManualEventForm({ ...manualEventForm, happened_at: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Prerequis (optionnel)</Label>
+                              <Button type="button" variant="ghost" size="sm" onClick={addManualPrerequisite}>
+                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                Ajouter prerequis
+                              </Button>
+                            </div>
+
+                            {manualPrerequisites.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">Aucun prerequis ajoute.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {manualPrerequisites.map((prereq, index) => (
+                                  <div key={`manual-prereq-${index}`} className="flex items-center gap-2">
+                                    <Input
+                                      value={prereq.name}
+                                      onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })}
+                                      placeholder="Ex: Fournisseur renseigne"
+                                      maxLength={160}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant={prereq.met ? 'default' : 'outline'}
+                                      size="sm"
+                                      onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}
+                                    >
+                                      {prereq.met ? 'OK' : 'A verifier'}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive"
+                                      onClick={() => removeManualPrerequisite(index)}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>
+                              Annuler
+                            </Button>
+                            <Button type="submit">Ajouter</Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="mb-4 grid gap-2 md:grid-cols-3">
+                    <Input
+                      value={timelineSearch}
+                      onChange={(e) => setTimelineSearch(e.target.value)}
+                      placeholder="Rechercher dans le suivi..."
+                    />
+
+                    <Select value={timelineTypeFilter} onValueChange={setTimelineTypeFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Type d&apos;evenement" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les types</SelectItem>
+                        {Object.keys(eventTypeLabels).map((eventType) => (
+                          <SelectItem key={eventType} value={eventType}>{eventTypeLabels[eventType]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={timelineTechnicianFilter} onValueChange={setTimelineTechnicianFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Technicien" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les techniciens</SelectItem>
+                        {timelineTechnicians.map((technician) => (
+                          <SelectItem key={technician.id} value={technician.id}>{technician.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="mb-3 flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Afficher les evenements retires</Label>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowRemovedEvents((value) => !value)}>
+                      {showRemovedEvents ? 'Masquer retires' : 'Voir retires'}
+                    </Button>
+                  </div>
+
+                  {filteredTimelineEvents.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistree pour le moment.</div>
+                  ) : (
+                    <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem]">
                       {filteredTimelineEvents.map((event: any) => (
                         <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
                           <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
@@ -1131,13 +1648,10 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
 
 
           </div>
-
-          {/* Chat Component */}
-          <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
         </div>
 
         {/* User and Assignee Information - Side by side */}
-        <div className="grid gap-4 md:grid-cols-2 mt-6">
+        <div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2">
           {/* User Information */}
           {ticket.user && (
             <Card>
@@ -1267,6 +1781,84 @@ export default function Show({ ticket, categories, agents, commandes, timelineEv
             </Card>
           )}
         </div>
+
+        {isDeviceActionModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeDeviceActionModal}>
+            <div className="w-full max-w-2xl rounded-lg border bg-background shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="text-base font-semibold">Appareil du ticket #{ticket.id}</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={closeDeviceActionModal}>
+                  Fermer
+                </Button>
+              </div>
+
+              <div className="space-y-4 p-4">
+                <div className="space-y-2 rounded-md border p-3">
+                  <p className="text-sm font-medium">Lier un appareil existant</p>
+                  <select
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={deviceIdToAttach}
+                    onChange={(e) => setDeviceIdToAttach(e.target.value)}
+                  >
+                    <option value="">-- Aucun appareil --</option>
+                    {userDevices?.map((device: any) => (
+                      <option key={device.id} value={device.id}>{device.display_name}</option>
+                    ))}
+                  </select>
+                  <Button type="button" size="sm" onClick={handleAttachDeviceFromActions} disabled={isAttachingDevice}>
+                    {isAttachingDevice ? 'En cours...' : 'Enregistrer'}
+                  </Button>
+                </div>
+
+                <div className="space-y-2 rounded-md border p-3">
+                  <p className="text-sm font-medium">Creer puis lier un appareil</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Type</Label>
+                      <select
+                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={newDeviceForm.device_type}
+                        onChange={(e) => setNewDeviceForm({ ...newDeviceForm, device_type: e.target.value })}
+                      >
+                        <option value="computer">Ordinateur</option>
+                        <option value="phone">Telephone</option>
+                        <option value="tablet">Tablette</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Marque</Label>
+                      <Input value={newDeviceForm.brand} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, brand: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Modele *</Label>
+                      <Input value={newDeviceForm.model} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, model: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Numero de serie</Label>
+                      <Input value={newDeviceForm.serial_number} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, serial_number: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Numero de suivi</Label>
+                      <Input value={newDeviceForm.asset_tag} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, asset_tag: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Date d'achat</Label>
+                      <Input type="date" value={newDeviceForm.purchase_date} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, purchase_date: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Fin de garantie</Label>
+                      <Input type="date" value={newDeviceForm.warranty_end_date} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, warranty_end_date: e.target.value })} />
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" onClick={handleCreateDeviceFromActions} disabled={isCreatingDevice || !newDeviceForm.model.trim()}>
+                    {isCreatingDevice ? 'Creation...' : 'Creer et lier'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

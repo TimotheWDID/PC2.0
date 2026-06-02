@@ -24,11 +24,14 @@ Route::middleware('auth')->group(function () {
 
     // Add a manual timeline event to a ticket
     Route::post('tickets/{ticket}/timeline-events', [TicketController::class, 'storeTimelineEvent'])->name('tickets.timelineEvents.store');
+    Route::post('tickets/{ticket}/device-events', [TicketController::class, 'storeDeviceEvent'])->name('tickets.deviceEvents.store');
     Route::delete('tickets/{ticket}/timeline-events/{event}', [TicketController::class, 'removeTimelineEvent'])->name('tickets.timelineEvents.remove');
     Route::patch('tickets/{ticket}/timeline-events/{event}/restore', [TicketController::class, 'restoreTimelineEvent'])->name('tickets.timelineEvents.restore');
 
     // Link an existing commande to a ticket
     Route::patch('tickets/{ticket}/link-commande', [TicketController::class, 'linkCommande'])->name('tickets.linkCommande');
+    Route::patch('tickets/{ticket}/attach-device', [TicketController::class, 'attachDevice'])->name('tickets.attachDevice');
+    Route::post('tickets/{ticket}/create-device', [TicketController::class, 'createAndAttachDevice'])->name('tickets.createDevice');
 
     // Chat/Messages routes for tickets
     Route::get('tickets/{ticket}/messages', [MessageController::class, 'index'])->name('tickets.messages.index');

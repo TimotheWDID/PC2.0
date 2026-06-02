@@ -24,6 +24,26 @@ type UserTicket = {
   status: string | null;
   priority: string | null;
   created_at: string | null;
+  device?: {
+    id: number;
+    name: string;
+    serial_number: string | null;
+    asset_tag: string | null;
+  } | null;
+};
+
+type Device = {
+  id: number;
+  device_type: string;
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  asset_tag: string | null;
+  purchase_date: string | null;
+  warranty_end_date: string | null;
+  status: string;
+  notes: string | null;
+  display_name: string;
 };
 
 const translateStatus = (status: string | null): string => {
@@ -47,12 +67,13 @@ const getStatusBadgeVariant = (status: string | null): 'default' | 'secondary' |
   return 'outline';
 };
 
-export default function Edit({ user, tickets = [] }: { user: any; tickets: UserTicket[] }) {
+export default function Edit({ user, tickets = [], devices = [] }: { user: any; tickets: UserTicket[]; devices: Device[] }) {
   const { auth } = usePage().props as any;
   const isAdmin = auth?.user?.agent?.is_admin;
 
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendingSms, setSendingSms] = useState(false);
+  const [editingDeviceId, setEditingDeviceId] = useState<number | null>(null);
 
   const { data, setData, put, processing, errors } = useForm({
     first_name: user?.first_name ?? '',
@@ -66,6 +87,70 @@ export default function Edit({ user, tickets = [] }: { user: any; tickets: UserT
     password: '',
     password_confirmation: '',
   });
+
+  const { data: deviceData, setData: setDeviceData, post: postDevice, patch: patchDevice, processing: processingDevice, errors: deviceErrors, reset: resetDevice } = useForm({
+    device_type: 'computer',
+    brand: '',
+    model: '',
+    serial_number: '',
+    asset_tag: '',
+    purchase_date: '',
+    warranty_end_date: '',
+    status: 'active',
+    notes: '',
+  });
+
+  const submitDevice = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (editingDeviceId) {
+      patchDevice(`/users/${user?.id}/devices/${editingDeviceId}`, {
+        onSuccess: () => {
+          setEditingDeviceId(null);
+          resetDevice();
+          setDeviceData('device_type', 'computer');
+          setDeviceData('status', 'active');
+        },
+      });
+      return;
+    }
+
+    postDevice(`/users/${user?.id}/devices`, {
+      onSuccess: () => {
+        resetDevice();
+        setDeviceData('device_type', 'computer');
+        setDeviceData('status', 'active');
+      },
+    });
+  };
+
+  const startEditDevice = (device: Device) => {
+    setEditingDeviceId(device.id);
+    setDeviceData('device_type', device.device_type || 'computer');
+    setDeviceData('brand', device.brand || '');
+    setDeviceData('model', device.model || '');
+    setDeviceData('serial_number', device.serial_number || '');
+    setDeviceData('asset_tag', device.asset_tag || '');
+    setDeviceData('purchase_date', device.purchase_date || '');
+    setDeviceData('warranty_end_date', device.warranty_end_date || '');
+    setDeviceData('status', device.status || 'active');
+    setDeviceData('notes', device.notes || '');
+  };
+
+  const cancelEditDevice = () => {
+    setEditingDeviceId(null);
+    resetDevice();
+    setDeviceData('device_type', 'computer');
+    setDeviceData('status', 'active');
+  };
+
+  const deleteDevice = (deviceId: number) => {
+    if (!confirm('Supprimer cet appareil ?')) {
+      return;
+    }
+
+    router.delete(`/users/${user?.id}/devices/${deviceId}`);
+  };
 
   const sendPasswordEmail = () => {
     setSendingEmail(true);
@@ -300,6 +385,130 @@ export default function Edit({ user, tickets = [] }: { user: any; tickets: UserT
 
         <Card id="tickets-client" className="mt-6 scroll-mt-24">
           <CardHeader>
+            <CardTitle>Appareils du client</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submitDevice} className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  {editingDeviceId ? `Modification appareil #${editingDeviceId}` : 'Nouvel appareil'}
+                </p>
+                {editingDeviceId && (
+                  <Button type="button" variant="outline" size="sm" onClick={cancelEditDevice}>
+                    Annuler modif
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Type</Label>
+                  <Select value={deviceData.device_type} onValueChange={(value) => setDeviceData('device_type', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="computer">Ordinateur</SelectItem>
+                      <SelectItem value="phone">Telephone</SelectItem>
+                      <SelectItem value="tablet">Tablette</SelectItem>
+                      <SelectItem value="other">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Statut</Label>
+                  <Select value={deviceData.status} onValueChange={(value) => setDeviceData('status', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Actif</SelectItem>
+                      <SelectItem value="in_repair">En reparation</SelectItem>
+                      <SelectItem value="archived">Archive</SelectItem>
+                      <SelectItem value="lost">Perdu</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Marque</Label>
+                  <Input value={deviceData.brand} onChange={(e) => setDeviceData('brand', e.target.value)} placeholder="Dell, Apple..." />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Modele *</Label>
+                  <Input value={deviceData.model} onChange={(e) => setDeviceData('model', e.target.value)} placeholder="Latitude, iPhone..." />
+                  {deviceErrors.model && <p className="text-sm text-red-500">{deviceErrors.model}</p>}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Numero de serie</Label>
+                  <Input value={deviceData.serial_number} onChange={(e) => setDeviceData('serial_number', e.target.value)} />
+                  {deviceErrors.serial_number && <p className="text-sm text-red-500">{deviceErrors.serial_number}</p>}
+                </div>
+                <div className="grid gap-2">
+                  <Label>Numero de suivi interne</Label>
+                  <Input value={deviceData.asset_tag} onChange={(e) => setDeviceData('asset_tag', e.target.value)} />
+                  {deviceErrors.asset_tag && <p className="text-sm text-red-500">{deviceErrors.asset_tag}</p>}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Date d'achat</Label>
+                  <Input type="date" value={deviceData.purchase_date} onChange={(e) => setDeviceData('purchase_date', e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Fin de garantie</Label>
+                  <Input type="date" value={deviceData.warranty_end_date} onChange={(e) => setDeviceData('warranty_end_date', e.target.value)} />
+                  {deviceErrors.warranty_end_date && <p className="text-sm text-red-500">{deviceErrors.warranty_end_date}</p>}
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Notes</Label>
+                <Textarea value={deviceData.notes} onChange={(e) => setDeviceData('notes', e.target.value)} rows={3} />
+              </div>
+
+              <Button type="submit" disabled={processingDevice}>
+                {processingDevice ? (editingDeviceId ? 'Mise a jour...' : 'Ajout...') : (editingDeviceId ? 'Mettre a jour l\'appareil' : 'Ajouter l\'appareil')}
+              </Button>
+            </form>
+
+            <div className="mt-4 space-y-3">
+              {devices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucun appareil enregistre pour ce client.</p>
+              ) : devices.map((device) => (
+                <div key={device.id} className="rounded-lg border p-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{device.display_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Type: {device.device_type} | Statut: {device.status}
+                        {device.warranty_end_date ? ` | Garantie: ${new Date(device.warranty_end_date).toLocaleDateString('fr-FR')}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => startEditDevice(device)}>
+                        Modifier
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => deleteDevice(device.id)}>
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card id="tickets-client" className="mt-6 scroll-mt-24">
+          <CardHeader>
             <CardTitle>Tickets du client</CardTitle>
           </CardHeader>
           <CardContent>
@@ -319,6 +528,7 @@ export default function Edit({ user, tickets = [] }: { user: any; tickets: UserT
                       <div className="flex items-center gap-2">
                         <Badge variant={getStatusBadgeVariant(ticket.status)}>{translateStatus(ticket.status)}</Badge>
                         {ticket.priority && <Badge variant="outline">Priorité: {ticket.priority}</Badge>}
+                        {ticket.device && <Badge variant="outline">Appareil: {ticket.device.name}</Badge>}
                         <Button asChild size="sm" variant="outline">
                           <Link href={`/tickets/${ticket.id}`}>Voir</Link>
                         </Button>

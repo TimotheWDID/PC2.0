@@ -35,24 +35,60 @@ export default function Index({ users }: { users: User[] }) {
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Utilisateurs" />
-      <div className="py-4 w-full">
+      <div className="py-2 sm:py-4 w-full">
         <Heading title="Utilisateurs" description="Liste et gestion des utilisateurs" />
 
         <Card>
-          <CardHeader className="flex items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Liste des utilisateurs</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input placeholder="Rechercher" value={query} onChange={(e) => setQuery(e.target.value)} />
               {isAdmin && (
                 <Link href="/users/create">
-                  <Button variant="default">Nouveau</Button>
+                  <Button variant="default" className="w-full sm:w-auto">Nouveau</Button>
                 </Link>
               )}
             </div>
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="space-y-2 p-3 sm:hidden">
+              {filtered && filtered.length ? (
+                filtered.map((u) => (
+                  <div key={u.id} className="rounded-md border p-3">
+                    <Link href={`/tickets?user_id=${u.id}&show_all=1`} className="block">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">#{u.id} - {u.name ?? '-'}</p>
+                        <span className="text-xs text-muted-foreground">{u.created_at ?? '-'}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{u.email ?? '-'}</p>
+                      <p className="text-xs text-muted-foreground">{u.phone ?? '-'}</p>
+                    </Link>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Link href={`/tickets?user_id=${u.id}&show_all=1`}>
+                        <Button variant="secondary" size="sm">Tickets</Button>
+                      </Link>
+                      {isAdmin && (
+                        <>
+                          <Link href={`/users/${u.id}/edit`}>
+                            <Button variant="outline" size="sm">Modifier</Button>
+                          </Link>
+                          <form action={`/users/${u.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet utilisateur ?')) e.preventDefault(); }}>
+                            <input type="hidden" name="_method" value="DELETE" />
+                            <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
+                            <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
+                          </form>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border px-4 py-8 text-center text-sm text-muted-foreground">Aucun utilisateur trouvé.</div>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full">
                 <thead className="bg-muted/50 border-b">
                   <tr>
