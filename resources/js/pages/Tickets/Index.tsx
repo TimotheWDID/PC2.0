@@ -277,9 +277,9 @@ export default function Index({
     setSelfAssigningTicketId(ticketId);
     setSelfAssignError(null);
 
-    router.patch(
+    router.post(
       `/tickets/${ticketId}/self-assign`,
-      {},
+      { _method: 'patch' },
       {
         preserveScroll: true,
         onError: (errors) => {
