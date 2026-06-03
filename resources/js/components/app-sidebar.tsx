@@ -156,7 +156,7 @@ export function AppSidebar() {
                                 onClick={togglePreviewMode}
                             >
                                 {preview.nonAgent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                {preview.nonAgent ? 'Quitter aperçu non-agent' : 'Aperçu non-agent'}
+                                {preview.nonAgent ? 'Quitter l’aperçu' : 'Aperçu'}
                             </Button>
                         )}
                         <NavFooter items={footerNavItems} className="mt-auto" />
@@ -178,7 +178,7 @@ export function AppSidebar() {
                                 onClick={togglePreviewMode}
                             >
                                 {preview.nonAgent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                {preview.nonAgent ? 'Quitter aperçu non-agent' : 'Aperçu non-agent'}
+                                {preview.nonAgent ? 'Quitter l’aperçu' : 'Aperçu'}
                             </Button>
                         )}
                         <NavFooter items={nonAgentFooterNavItems} className="mt-auto" />

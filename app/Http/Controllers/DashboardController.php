@@ -234,11 +234,12 @@ class DashboardController extends Controller
                 ->merge(
                     (clone $agentTickets)
                         ->whereIn('status', ['open', 'in_progress'])
-                        ->having('messages_count', '<=', 1)
                         ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_low_info_hours']))
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
+                        ->filter(fn (Ticket $ticket) => ($ticket->messages_count ?? 0) <= 1)
+                        ->take($insightConfig['max_items_per_rule'])
                         ->map(function (Ticket $ticket) {
                             return $this->makeInsight([
                                 'kind' => 'ticket',
@@ -358,6 +359,12 @@ class DashboardController extends Controller
                 ->get()
                 ->map(fn (Ticket $ticket) => $this->serializeTicket($ticket));
 
+            $assignedTickets = (clone $agentTickets)
+                ->orderByDesc('updated_at')
+                ->limit($insightConfig['recent_tickets_limit'])
+                ->get()
+                ->map(fn (Ticket $ticket) => $this->serializeTicket($ticket));
+
             return Inertia::render('dashboard', [
                 'mode' => 'agent',
                 'summary' => [
@@ -371,6 +378,7 @@ class DashboardController extends Controller
                     'attention_count' => $actionItems->count(),
                 ],
                 'actionItems' => $actionItems,
+                'assignedTickets' => $assignedTickets,
                 'recentTickets' => $recentTickets,
                 'quickActions' => [
                     [
@@ -432,11 +440,12 @@ class DashboardController extends Controller
                 ->merge(
                     (clone $userTicketsQuery)
                         ->whereIn('status', ['open', 'in_progress'])
-                        ->having('messages_count', '<=', 1)
                         ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_low_info_hours']))
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
+                        ->filter(fn (Ticket $ticket) => ($ticket->messages_count ?? 0) <= 1)
+                        ->take($insightConfig['max_items_per_rule'])
                         ->map(function (Ticket $ticket) {
                             return $this->makeInsight([
                                 'kind' => 'ticket',

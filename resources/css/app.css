@@ -157,15 +157,27 @@
         }
 
         .desktop-premium [data-slot='card'] {
-            @apply border-border/70 shadow-md;
+            @apply border-border/60 overflow-hidden shadow-md;
         }
 
         .desktop-premium [data-slot='card-header'] {
-            @apply border-b border-border/60 bg-muted/20;
+            @apply bg-transparent;
         }
 
         .desktop-premium [data-slot='card-title'] {
-            @apply tracking-tight;
+            @apply relative inline-flex items-center gap-2 pl-3 tracking-tight;
+        }
+
+        .desktop-premium [data-slot='card-title']::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.35rem;
+            bottom: 0.35rem;
+            width: 0.25rem;
+            border-radius: 9999px;
+            background: linear-gradient(180deg, color-mix(in oklab, var(--color-primary) 60%, white), var(--color-primary));
+            box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 18%, transparent);
         }
 
         .desktop-premium table tbody tr {
