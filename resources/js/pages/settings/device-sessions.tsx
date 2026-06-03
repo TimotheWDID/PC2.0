@@ -2,6 +2,7 @@ import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatDateTimeFr } from '@/lib/datetime';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -65,7 +66,7 @@ export default function DeviceSessions({ sessions, status }: DeviceSessionsProps
                                     <p className="text-sm font-medium">{session.ip_address}</p>
                                     <p className="mt-1 break-words text-xs text-muted-foreground">{session.user_agent}</p>
                                     <p className="mt-2 text-xs text-muted-foreground">
-                                        Derniere activite: {new Date(session.last_active_at).toLocaleString('fr-FR')}
+                                        Derniere activite: {formatDateTimeFr(session.last_active_at, { timeZone: 'Europe/Paris' })}
                                     </p>
                                 </div>
                             ))

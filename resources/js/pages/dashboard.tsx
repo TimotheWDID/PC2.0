@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Ticket, ArrowUpDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -242,7 +243,7 @@ export default function Dashboard({ stats, openTickets, userTickets, userStats }
                                                         <td className="py-3 pr-4">{t.id}</td>
                                                         <td className="py-3 pr-4">{t.title ?? '-'}</td>
                                                         <td className="py-3 pr-4"><Badge variant={t.status === 'open' ? 'destructive' : t.status === 'in_progress' ? 'default' : t.status === 'pending' ? 'secondary' : 'outline'}>{translateStatus(t.status ?? '-')}</Badge></td>
-                                                        <td className="py-3 pr-4">{t.created_at ?? '-'}</td>
+                                                        <td className="py-3 pr-4">{formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -378,7 +379,7 @@ export default function Dashboard({ stats, openTickets, userTickets, userStats }
                                                             {translateStatus(t.status ?? '-')}
                                                         </Badge>
                                                     </td>
-                                                    <td className="py-3 pr-4">{t.created_at ?? '-'}</td>
+                                                    <td className="py-3 pr-4">{formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

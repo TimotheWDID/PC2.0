@@ -16,6 +16,7 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { useState } from 'react';
+import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
 type User = {
   id: number;
@@ -217,12 +218,11 @@ export default function Show({ commande }: { commande: Commande }) {
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Créée le</div>
                 <div className="text-lg">
-                  {new Date(commande.created_at).toLocaleDateString('fr-FR', {
+                  {formatDateFr(commande.created_at, {
+                    timeZone: 'Europe/Paris',
                     day: '2-digit',
-                    month: 'long',
+                    month: '2-digit',
                     year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
                   })}
                 </div>
               </div>
@@ -230,12 +230,9 @@ export default function Show({ commande }: { commande: Commande }) {
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Dernière modification</div>
                 <div className="text-lg">
-                  {new Date(commande.updated_at).toLocaleDateString('fr-FR', {
-                    day: '2-digit',
+                  {formatDateTimeFr(commande.updated_at, {
+                    timeZone: 'Europe/Paris',
                     month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
                   })}
                 </div>
               </div>

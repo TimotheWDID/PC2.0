@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
+import { parseBackendDate } from '@/lib/datetime';
 
 /**
  * ========================================
@@ -44,7 +45,7 @@ type TicketLabel = {
   id: number;                  // Numéro du ticket
   title: string | null;        // Titre/Sujet du ticket
   message: string | null;      // Message/Description du ticket
-  created_at: string | null;   // Date/heure de création (format: "d/m/Y H:i")
+  created_at: string | null;   // Date/heure de creation (format backend: "Y-m-d H:i:s" ou ISO)
   priority: string | null;     // Priorité: low, medium, high
   status: string | null;       // Statut: open, in_progress, pending, resolved, closed
   user?: {                      // Infos du client
@@ -195,19 +196,30 @@ export default function PrintLabel({
     return msg.substring(0, 100);  // 100 = limite de caractères
   }, [ticket.message]);
 
-  // Date d'création extraite (avant l'espace): "12/02/2026"
-  // Format reçu du backend: "12/02/2026 14:30" → on récupère la première partie
+  // Date de creation formatee depuis l'horodatage ticket
   const createdAtDate = useMemo(() => {
-    if (!ticket.created_at) return '';
-    const parts = ticket.created_at.split(' ');
-    return parts[0] ?? '';
+    const parsed = parseBackendDate(ticket.created_at);
+    if (!parsed) return '';
+
+    return parsed.toLocaleDateString('fr-FR', {
+      timeZone: 'Europe/Paris',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }, [ticket.created_at]);
 
-  // Heure de création extraite (après l'espace): "14:30"
+  // Heure de creation formatee depuis l'horodatage ticket
   const createdAtTime = useMemo(() => {
-    if (!ticket.created_at) return '';
-    const parts = ticket.created_at.split(' ');
-    return parts[1] ?? '';
+    const parsed = parseBackendDate(ticket.created_at);
+    if (!parsed) return '';
+
+    return parsed.toLocaleTimeString('fr-FR', {
+      timeZone: 'Europe/Paris',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
   }, [ticket.created_at]);
 
   // ==========================================

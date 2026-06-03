@@ -6,6 +6,7 @@ import Heading from '@/components/heading';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 type User = {
   id: number;
@@ -64,7 +65,7 @@ export default function Index({ users }: { users: User[] }) {
                     <Link href={`/tickets?user_id=${u.id}&show_all=1`} className="block">
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold">#{u.id} - {u.name ?? '-'}</p>
-                        <span className="text-xs text-muted-foreground">{u.created_at ?? '-'}</span>
+                        <span className="text-xs text-muted-foreground">{formatDateTimeFr(u.created_at, { timeZone: 'Europe/Paris' })}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{u.email ?? '-'}</p>
                       <p className="text-xs text-muted-foreground">{u.phone ?? '-'}</p>
@@ -113,7 +114,7 @@ export default function Index({ users }: { users: User[] }) {
                         <td className="px-4 py-4 text-sm font-medium">{u.name ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.email ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.phone ?? '-'}</td>
-                        <td className="px-4 py-4 text-sm text-muted-foreground">{u.created_at ?? '-'}</td>
+                        <td className="px-4 py-4 text-sm text-muted-foreground">{formatDateTimeFr(u.created_at, { timeZone: 'Europe/Paris' })}</td>
                         <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <Link href={`/tickets?user_id=${u.id}&show_all=1`}>

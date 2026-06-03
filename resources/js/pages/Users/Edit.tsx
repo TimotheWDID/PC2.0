@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import LogModal from '@/components/LogModal';
 import { Mail, MessageSquare } from 'lucide-react';
+import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Utilisateurs', href: '/users' },
@@ -489,7 +490,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                       <p className="text-sm font-medium">{device.display_name}</p>
                       <p className="text-xs text-muted-foreground">
                         Type: {device.device_type} | Statut: {device.status}
-                        {device.warranty_end_date ? ` | Garantie: ${new Date(device.warranty_end_date).toLocaleDateString('fr-FR')}` : ''}
+                        {device.warranty_end_date ? ` | Garantie: ${formatDateFr(device.warranty_end_date, { timeZone: 'Europe/Paris' })}` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -522,7 +523,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                       <div>
                         <p className="text-sm font-medium">Ticket #{ticket.id} - {ticket.title || 'Sans titre'}</p>
                         <p className="text-xs text-muted-foreground">
-                          Créé le {ticket.created_at ? new Date(ticket.created_at).toLocaleString('fr-FR') : '-'}
+                          Créé le {formatDateTimeFr(ticket.created_at, { timeZone: 'Europe/Paris' })}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

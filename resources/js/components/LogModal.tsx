@@ -8,6 +8,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { History } from 'lucide-react';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 interface LogModalProps {
   subjectType: string;
@@ -71,7 +72,7 @@ export default function LogModal({
                 <div className="flex justify-between items-start mb-2">
                   <div className="font-medium">{log.description}</div>
                   <div className="text-sm text-muted-foreground">
-                    {new Date(log.created_at).toLocaleString('fr-FR')}
+                    {formatDateTimeFr(log.created_at, { timeZone: 'Europe/Paris' })}
                   </div>
                 </div>
                 {log.properties && (

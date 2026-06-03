@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { formatDateFr } from '@/lib/datetime';
 
 type User = {
   id: number;
@@ -158,7 +159,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                           ? (commande.user.name || `${commande.user.first_name ?? ''} ${commande.user.last_name ?? ''}`.trim() || commande.user.email)
                           : '-'}
                       </p>
-                      <p>Date: {new Date(commande.created_at).toLocaleDateString('fr-FR')}</p>
+                      <p>Date: {formatDateFr(commande.created_at, { timeZone: 'Europe/Paris' })}</p>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       <Link href={`/commandes/${commande.id}/edit`}>
@@ -227,7 +228,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                           </Badge>
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {new Date(commande.created_at).toLocaleDateString('fr-FR')}
+                          {formatDateFr(commande.created_at, { timeZone: 'Europe/Paris' })}
                         </td>
                         <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-2">

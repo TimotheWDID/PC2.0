@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -374,7 +375,7 @@ export default function Index({
                       <p>Demandeur: {t.user?.name ?? '-'}</p>
                       <p>Agent attitre: {t.assignee?.name ?? '-'}</p>
                       <p>Appareil: {t.device?.display_name ?? '-'}</p>
-                      <p>Créé le: {t.created_at ?? '-'}</p>
+                      <p>Créé le: {formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {!t.assignee && isAgent && (
@@ -467,7 +468,7 @@ export default function Index({
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">{t.created_at ?? '-'}</td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">{formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</td>
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap items-center gap-2">
                           {t.commande ? (

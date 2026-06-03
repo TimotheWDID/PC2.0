@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -37,22 +38,7 @@ const translatePriority = (priority: string): string => {
 };
 
 const formatDateTime = (value?: string | null): string => {
-  if (!value) {
-    return '-';
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDateTimeFr(value, { timeZone: 'Europe/Paris' });
 };
 
 const formatTimelineDetailValue = (value: unknown): string => {

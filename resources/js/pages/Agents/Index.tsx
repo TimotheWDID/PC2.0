@@ -6,6 +6,7 @@ import Heading from '@/components/heading';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 type Agent = {
   id: number;
@@ -58,7 +59,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                   <div key={a.id} className="rounded-md border p-3">
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold">#{a.id} - {a.user_name ?? '-'}</p>
-                      <span className="text-xs text-muted-foreground">{a.created_at ?? '-'}</span>
+                      <span className="text-xs text-muted-foreground">{formatDateTimeFr(a.created_at, { timeZone: 'Europe/Paris' })}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">Spécialité: {(a.specialities && a.specialities.length > 0) ? a.specialities.join(', ') : '-'}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -103,7 +104,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                         <td className="px-4 py-3 text-sm">{a.id}</td>
                         <td className="px-4 py-3 text-sm">{a.user_name ?? '-'}</td>
                         <td className="px-4 py-3 text-sm">{(a.specialities && a.specialities.length > 0) ? a.specialities.join(', ') : '-'}</td>
-                        <td className="px-4 py-3 text-sm">{a.created_at ?? '-'}</td>
+                        <td className="px-4 py-3 text-sm">{formatDateTimeFr(a.created_at, { timeZone: 'Europe/Paris' })}</td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-2">
                             <Link href={`/agents/${a.id}`}><Button variant="outline" size="sm">Voir</Button></Link>

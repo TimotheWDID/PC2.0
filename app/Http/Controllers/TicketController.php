@@ -890,7 +890,7 @@ class TicketController extends Controller
                 'id' => $ticket->id,
                 'title' => $ticket->title ?? null,
                 'message' => $ticket->message ?? null,
-                'created_at' => $ticket->created_at ? $ticket->created_at->format('d/m/Y H:i') : null,
+                'created_at' => $ticket->created_at ? $ticket->created_at->toDateTimeString() : null,
                 'priority' => $ticket->priority ?? null,
                 'status' => $ticket->status ?? null,
                 'user' => $ticket->user ? [

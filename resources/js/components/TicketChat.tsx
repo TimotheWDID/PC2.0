@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Send, Loader2, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { formatDateTimeFr } from '@/lib/datetime';
 
 interface Author {
   id: number;
@@ -110,14 +111,7 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
   const visibleMessages = isAgent ? messages : messages.filter((m) => !m.is_internal);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeFr(dateString, { timeZone: 'Europe/Paris' });
   };
 
   return (
