@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { formatDateFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 type User = {
   id: number;
@@ -75,6 +77,19 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
   const [search, setSearch] = useState(filters?.search || '');
   const [statut, setStatut] = useState(filters?.statut || '');
   const [fournisseur, setFournisseur] = useState(filters?.fournisseur || '');
+
+  const { sortedItems: sortedCommandes, sortState, requestSort } = useSortableData(commandes.data ?? [], {
+    id: (commande) => commande.id,
+    nom: (commande) => commande.nom ?? '',
+    command_number: (commande) => commande.command_number ?? '',
+    fournisseur: (commande) => commande.fournisseur ?? '',
+    user: (commande) => commande.user
+      ? (commande.user.name || `${commande.user.first_name ?? ''} ${commande.user.last_name ?? ''}`.trim() || commande.user.email)
+      : '',
+    ticket: (commande) => commande.ticket?.id ?? 0,
+    statut: (commande) => commande.statut ?? '',
+    created_at: (commande) => commande.created_at ?? '',
+  });
 
   const handleFilter = () => {
     router.get('/commandes', { search, statut, fournisseur }, { preserveState: true });
@@ -187,20 +202,20 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
               <table className="w-full">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">ID</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">N° Commande</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Fournisseur</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Utilisateur</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Ticket</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
+                    <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Nom" sortKey="nom" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="N° Commande" sortKey="command_number" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Fournisseur" sortKey="fournisseur" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Utilisateur" sortKey="user" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Ticket" sortKey="ticket" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Statut" sortKey="statut" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Date" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
                     <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {commandes.data && commandes.data.length > 0 ? (
-                    commandes.data.map((commande) => (
+                  {sortedCommandes && sortedCommandes.length > 0 ? (
+                    sortedCommandes.map((commande) => (
                       <tr
                         key={commande.id}
                         onClick={() => router.get(`/commandes/${commande.id}/edit`)}
@@ -283,6 +298,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav fabHref="/commandes/create" fabLabel="Nouvelle commande" />
     </AppLayout>
   );
 }

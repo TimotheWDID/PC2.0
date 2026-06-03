@@ -12,6 +12,8 @@ type Props = {
   ticketId?: number | string | null
 }
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 export default function KioskCreate({ categories, success = false, ticketId = null }: Props) {
   const [isDark, setIsDark] = useState(false)
 

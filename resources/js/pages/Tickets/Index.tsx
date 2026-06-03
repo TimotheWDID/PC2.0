@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { formatDateTimeFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -172,6 +174,16 @@ export default function Index({
       (t.device?.asset_tag ?? '').toLowerCase().includes(deviceSearch.toLowerCase());
     const matchesStatus = statusFilters[t.status as keyof typeof statusFilters] ?? true;
     return matchesSearch && matchesStatus && matchesDeviceSearch;
+  });
+
+  const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
+    id: (t) => t.id,
+    title: (t) => t.title ?? '',
+    user: (t) => t.user?.name ?? '',
+    device: (t) => t.device?.display_name ?? '',
+    status: (t) => t.status ?? '',
+    assignee: (t) => t.assignee?.name ?? '',
+    created_at: (t) => t.created_at ?? '',
   });
 
   const filteredLinkableCommandes = useMemo(() => {
@@ -440,19 +452,19 @@ export default function Index({
               <table className="w-full">
           <thead className="bg-muted/50 border-b">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">ID</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Sujet</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Demandeur</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Appareil</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Statut</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Agent attitre</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Créé le</th>
+              <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Sujet" sortKey="title" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Demandeur" sortKey="user" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Appareil" sortKey="device" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Statut" sortKey="status" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Agent attitre" sortKey="assignee" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Créé le" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
-                {filtered && filtered.length ? (
-                  filtered.map((t) => (
+                {sortedFiltered && sortedFiltered.length ? (
+                  sortedFiltered.map((t) => (
                     <tr key={t.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/tickets/${t.id}`}>
                       <td className="px-4 py-4 text-sm font-medium">{t.id}</td>
                       <td className="px-4 py-4 text-sm font-medium">
@@ -667,6 +679,7 @@ export default function Index({
           </div>
         )}
       </div>
+      <MobileNativeNav fabHref="/tickets/create" fabLabel="Nouveau ticket" />
     </AppLayout>
   );
 }

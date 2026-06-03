@@ -58,7 +58,7 @@ export default function Profile({
                                         <Input
                                             id="first_name"
                                             className="mt-1 block w-full"
-                                            defaultValue={auth.user.first_name ?? ''}
+                                            defaultValue={String((auth.user as any).first_name ?? '')}
                                             name="first_name"
                                             required
                                             autoComplete="given-name"
@@ -75,7 +75,7 @@ export default function Profile({
                                         <Input
                                             id="last_name"
                                             className="mt-1 block w-full"
-                                            defaultValue={auth.user.last_name ?? ''}
+                                            defaultValue={String((auth.user as any).last_name ?? '')}
                                             name="last_name"
                                             required
                                             autoComplete="family-name"
@@ -95,7 +95,7 @@ export default function Profile({
                                         id="email"
                                         type="email"
                                         className="mt-1 block w-full"
-                                        defaultValue={auth.user.email}
+                                        defaultValue={String((auth.user as any).email ?? '')}
                                         name="email"
                                         required
                                         autoComplete="username"
@@ -114,7 +114,7 @@ export default function Profile({
                                         <Input
                                             id="phone"
                                             className="mt-1 block w-full"
-                                            defaultValue={auth.user.phone ?? ''}
+                                            defaultValue={String((auth.user as any).phone ?? '')}
                                             name="phone"
                                             autoComplete="tel"
                                             placeholder="Numéro de téléphone"
@@ -130,7 +130,7 @@ export default function Profile({
                                         <Input
                                             id="address"
                                             className="mt-1 block w-full"
-                                            defaultValue={auth.user.address ?? ''}
+                                            defaultValue={String((auth.user as any).address ?? '')}
                                             name="address"
                                             autoComplete="street-address"
                                             placeholder="Adresse"

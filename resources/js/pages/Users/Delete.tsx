@@ -6,6 +6,8 @@ import Heading from '@/components/heading';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Utilisateurs', href: '/users' },
   { title: 'Supprimer', href: '' },
@@ -32,6 +34,7 @@ export default function Delete({ user }: any) {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

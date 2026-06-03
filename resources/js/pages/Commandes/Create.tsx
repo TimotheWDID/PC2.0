@@ -28,6 +28,8 @@ type Ticket = {
   } | null;
 };
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Commandes', href: '/commandes' },
   { title: 'Créer une commande', href: '/commandes/create' },
@@ -392,6 +394,7 @@ export default function Create({
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

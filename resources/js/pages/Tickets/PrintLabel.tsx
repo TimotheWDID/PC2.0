@@ -106,6 +106,8 @@ const defaultLabelSettings: LabelSettings = {
   showQr: true,
 };
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 export default function PrintLabel({
   ticket,
   labelSettings: labelSettingsProp,
@@ -233,7 +235,7 @@ export default function PrintLabel({
   useEffect(() => {
     if (!ticket.qr_payload) return;
     QRCode.toDataURL(ticket.qr_payload, { width: 120, margin: 0 })
-      .then((url) => setQrDataUrl(url))
+      .then((url: string) => setQrDataUrl(url))
       .catch(() => setQrDataUrl(''));
   }, [ticket.qr_payload]);
 

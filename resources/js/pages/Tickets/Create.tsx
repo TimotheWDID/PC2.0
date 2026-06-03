@@ -36,6 +36,8 @@ type Device = {
   display_name: string
 }
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
   { title: "Créer un ticket", href: '/tickets/create' },
@@ -579,6 +581,7 @@ export default function CreateTicket({
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   )
 }

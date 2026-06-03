@@ -17,6 +17,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { useState } from 'react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
 
 type User = {
   id: number;
@@ -137,7 +138,7 @@ export default function Show({ commande }: { commande: Commande }) {
   return (
     <AppLayout breadcrumbs={breadcrumbs(commande.id)}>
       <Head title={`Commande #${commande.id}`} />
-      <div className="space-y-6">
+      <div className="space-y-6 pb-24 lg:pb-0">
         <div className="flex items-center justify-between">
           <Heading title={`Commande #${commande.id}`} description={`N° ${commande.command_number}`} />
           <div className="flex gap-2">
@@ -328,12 +329,14 @@ export default function Show({ commande }: { commande: Commande }) {
                 onClick={handleStatusChange}
                 disabled={statusSubmitting}
               >
-                {statusSubmitting ? 'Mise a jour...' : 'Valider le changement'}
+                {statusSubmitting ? 'Mise à jour...' : 'Valider le changement'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
+
+      <MobileNativeNav fabHref="/commandes/create" fabLabel="Nouvelle commande" />
     </AppLayout>
   );
 }

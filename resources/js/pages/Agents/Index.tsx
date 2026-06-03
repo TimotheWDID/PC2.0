@@ -7,6 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDateTimeFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 type Agent = {
   id: number;
@@ -32,6 +34,13 @@ export default function Index({ agents }: { agents: Agent[] }) {
     (a.created_at ?? '').toLowerCase().includes(query.toLowerCase()) ||
     String(a.id).includes(query)
   ) ?? [];
+
+  const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
+    id: (a) => a.id,
+    name: (a) => a.user_name ?? '',
+    specialities: (a) => (a.specialities ?? []).join(' '),
+    created_at: (a) => a.created_at ?? '',
+  });
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -90,16 +99,16 @@ export default function Index({ agents }: { agents: Agent[] }) {
               <table className="w-full table-auto">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">ID</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Nom</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Spécialité</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Créé le</th>
+                    <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Nom" sortKey="name" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Spécialité" sortKey="specialities" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Créé le" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered && filtered.length ? (
-                    filtered.map((a) => (
+                  {sortedFiltered && sortedFiltered.length ? (
+                    sortedFiltered.map((a) => (
                       <tr key={a.id} className="border-b last:border-0">
                         <td className="px-4 py-3 text-sm">{a.id}</td>
                         <td className="px-4 py-3 text-sm">{a.user_name ?? '-'}</td>
@@ -133,6 +142,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav fabHref="/agents/create" fabLabel="Nouvel agent" />
     </AppLayout>
   );
 }

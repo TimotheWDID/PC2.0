@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 export default function Edit({ ticket, categories, agents, userDevices = [] }: any) {
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Tickets', href: '/tickets' },
@@ -184,6 +186,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

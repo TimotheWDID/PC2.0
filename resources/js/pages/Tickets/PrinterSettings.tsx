@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type BreadcrumbItem } from '@/types';
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
   { title: 'Imprimante tickets', href: '/tickets/print-settings' },
@@ -87,6 +89,7 @@ export default function PrinterSettings() {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

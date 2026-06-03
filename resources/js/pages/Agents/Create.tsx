@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import InputError from '@/components/input-error';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 type User = {
   id: number;
@@ -38,6 +40,12 @@ export default function Create({ users }: { users: User[] }) {
   const filtered = users?.filter((u) =>
     (u.name ?? '').toLowerCase().includes(query.toLowerCase()) || (u.email ?? '').toLowerCase().includes(query.toLowerCase()) || String(u.id).includes(query)
   ) ?? [];
+
+  const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
+    id: (u) => u.id,
+    name: (u) => u.name ?? '',
+    email: (u) => u.email ?? '',
+  });
 
   const passwordInput = useRef<HTMLInputElement>(null);
 
@@ -64,15 +72,15 @@ export default function Create({ users }: { users: User[] }) {
               <table className="w-full table-auto">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Nom</th>
-                    <th>Email</th>
+                    <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="text-left" />
+                    <SortableTh label="Nom" sortKey="name" sortState={sortState} onSort={requestSort} className="text-left" />
+                    <SortableTh label="Email" sortKey="email" sortState={sortState} onSort={requestSort} className="text-left" />
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered && filtered.length ? (
-                    filtered.map((u) => (
+                  {sortedFiltered && sortedFiltered.length ? (
+                    sortedFiltered.map((u) => (
                       <tr key={u.id} className="border-t">
                         <td className="py-3 pr-4">{u.id}</td>
                         <td className="py-3 pr-4">{u.name ?? '-'}</td>
@@ -135,6 +143,7 @@ export default function Create({ users }: { users: User[] }) {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

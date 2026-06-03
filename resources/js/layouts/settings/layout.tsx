@@ -49,6 +49,11 @@ const agentAdminNavItems: NavItem[] = [
         href: '/settings/ticket-timeline-templates',
         icon: null,
     },
+    {
+        title: 'Regles dashboard',
+        href: '/settings/dashboard-insights',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

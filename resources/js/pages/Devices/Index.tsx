@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 type DeviceRow = {
   id: number;
@@ -59,6 +61,14 @@ export default function DevicesIndex({
   const [status, setStatus] = React.useState(filters.status ?? 'all');
   const [type, setType] = React.useState(filters.type ?? 'all');
   const [sort, setSort] = React.useState(filters.sort ?? 'updated_desc');
+
+  const { sortedItems: sortedDevices, sortState, requestSort } = useSortableData(devices, {
+    device: (device) => device.display_name ?? '',
+    client: (device) => device.user?.name ?? '',
+    type: (device) => typeLabels[device.device_type] || device.device_type,
+    status: (device) => statusLabels[device.status] || device.status,
+    tickets: (device) => device.tickets_count,
+  });
 
   const applyFilters = (next?: Partial<{ q: string; status: string; type: string; sort: string }>) => {
     const payload = {
@@ -190,11 +200,11 @@ export default function DevicesIndex({
               <table className="w-full">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Appareil</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Client</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Type</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Tickets</th>
+                    <SortableTh label="Appareil" sortKey="device" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Client" sortKey="client" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Type" sortKey="type" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Statut" sortKey="status" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
+                    <SortableTh label="Tickets" sortKey="tickets" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold" />
                     <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -205,7 +215,7 @@ export default function DevicesIndex({
                         Aucun appareil trouve.
                       </td>
                     </tr>
-                  ) : devices.map((device) => (
+                  ) : sortedDevices.map((device) => (
                     <tr key={device.id} className="border-b last:border-0">
                       <td className="px-4 py-3 text-sm">
                         <div className="font-medium">{device.display_name}</div>
@@ -265,6 +275,7 @@ export default function DevicesIndex({
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

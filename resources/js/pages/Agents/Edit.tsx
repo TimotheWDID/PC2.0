@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import LogModal from '@/components/LogModal';
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Agents', href: '/agents' },
   { title: 'Modifier', href: '' },
@@ -17,7 +19,12 @@ export default function Edit({ agent, specialities, agentSpecialityIds }: any) {
   const [selected, setSelected] = useState<number[]>(agentSpecialityIds ?? []);
   const [isAdmin, setIsAdmin] = useState(!!agent?.is_admin);
 
-  const { data, setData, put, processing, errors } = useForm({
+  type AgentEditForm = {
+    speciality_ids: number[];
+    is_admin: boolean;
+  };
+
+  const { data, setData, put, processing, errors } = useForm<AgentEditForm>({
     speciality_ids: agentSpecialityIds ?? [],
     is_admin: !!agent?.is_admin,
   });
@@ -91,6 +98,7 @@ export default function Edit({ agent, specialities, agentSpecialityIds }: any) {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

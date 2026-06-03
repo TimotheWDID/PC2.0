@@ -7,6 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDateTimeFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
+import { SortableTh, useSortableData } from '@/components/sortable-table';
 
 type User = {
   id: number;
@@ -37,6 +39,14 @@ export default function Index({ users }: { users: User[] }) {
     (u.created_at ?? '').toLowerCase().includes(query.toLowerCase()) ||
     String(u.id).includes(query)
   ) ?? [];
+
+  const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
+    id: (u) => u.id,
+    name: (u) => u.name ?? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim(),
+    email: (u) => u.email ?? '',
+    phone: (u) => u.phone ?? '',
+    created_at: (u) => u.created_at ?? '',
+  });
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -98,17 +108,17 @@ export default function Index({ users }: { users: User[] }) {
               <table className="w-full">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">ID</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Nom</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Téléphone</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Créé le</th>
+                    <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Nom" sortKey="name" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Email" sortKey="email" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Téléphone" sortKey="phone" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <SortableTh label="Créé le" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered && filtered.length ? (
-                    filtered.map((u) => (
+                  {sortedFiltered && sortedFiltered.length ? (
+                    sortedFiltered.map((u) => (
                       <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/tickets?user_id=${u.id}&show_all=1`}>
                         <td className="px-4 py-4 text-sm font-medium">{u.id}</td>
                         <td className="px-4 py-4 text-sm font-medium">{u.name ?? '-'}</td>
@@ -147,6 +157,7 @@ export default function Index({ users }: { users: User[] }) {
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav fabHref="/users/create" fabLabel="Nouvel utilisateur" />
     </AppLayout>
   );
 }

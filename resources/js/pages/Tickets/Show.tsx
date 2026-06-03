@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
+import MobileNativeNav from '@/components/mobile-native-nav';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -478,7 +479,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={ticket.title ?? 'Ticket'} />
-      <div className="py-2 sm:py-4 w-full">
+      <div className="w-full py-2 pb-24 sm:py-4 lg:pb-0">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Link href="/tickets">
             <Button variant="outline" size="sm">
@@ -788,14 +789,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                   </div>
 
                   <div className="mb-3 flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Afficher les evenements retires</Label>
+                    <Label className="text-xs text-muted-foreground">Afficher les événements retirés</Label>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setShowRemovedEvents((value) => !value)}>
-                      {showRemovedEvents ? 'Masquer retires' : 'Voir retires'}
+                      {showRemovedEvents ? 'Masquer les retirés' : 'Voir les retirés'}
                     </Button>
                   </div>
 
                   {filteredTimelineEvents.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistree pour le moment.</div>
+                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistrée pour le moment.</div>
                   ) : (
                     <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem]">
                       {filteredTimelineEvents.map((event: any) => (
@@ -812,7 +813,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                               </p>
                               {event.is_removed && (
                                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                                  {event.removed_by?.name ?? 'Technicien'} a retire un evenement le {formatDateTime(event.removed_at)}
+                                  {event.removed_by?.name ?? 'Technicien'} a retiré un événement le {formatDateTime(event.removed_at)}
                                   {event.removed_reason ? ` - ${event.removed_reason}` : ''}
                                 </p>
                               )}
@@ -1797,7 +1798,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 </div>
 
                 <div className="space-y-2 rounded-md border p-3">
-                  <p className="text-sm font-medium">Creer puis lier un appareil</p>
+                  <p className="text-sm font-medium">Créer puis lier un appareil</p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
                       <Label>Type</Label>
@@ -1807,7 +1808,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         onChange={(e) => setNewDeviceForm({ ...newDeviceForm, device_type: e.target.value })}
                       >
                         <option value="computer">Ordinateur</option>
-                        <option value="phone">Telephone</option>
+                        <option value="phone">Téléphone</option>
                         <option value="tablet">Tablette</option>
                         <option value="other">Autre</option>
                       </select>
@@ -1817,11 +1818,11 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <Input value={newDeviceForm.brand} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, brand: e.target.value })} />
                     </div>
                     <div>
-                      <Label>Modele *</Label>
+                      <Label>Modèle *</Label>
                       <Input value={newDeviceForm.model} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, model: e.target.value })} />
                     </div>
                     <div>
-                      <Label>Numero de serie</Label>
+                      <Label>Numéro de série</Label>
                       <Input value={newDeviceForm.serial_number} onChange={(e) => setNewDeviceForm({ ...newDeviceForm, serial_number: e.target.value })} />
                     </div>
                     <div>
@@ -1846,6 +1847,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           </div>
         )}
       </div>
+      <MobileNativeNav fabHref="/tickets/create" fabLabel="Nouveau ticket" />
     </AppLayout>
   );
 }

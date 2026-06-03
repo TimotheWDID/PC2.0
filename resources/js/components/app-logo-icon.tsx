@@ -1,4 +1,4 @@
-export default function AppLogoIcon(props: React.SVGAttributes<SVGElement>) {
+export default function AppLogoIcon(props: React.ImgHTMLAttributes<HTMLImageElement>) {
     const logoSrc = "/images/LogoBold.svg";
 
     return (

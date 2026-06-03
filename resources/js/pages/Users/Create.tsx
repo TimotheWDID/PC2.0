@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Utilisateurs', href: '/users' },
   { title: 'Créer un utilisateur', href: '/users/create' },
@@ -137,6 +139,7 @@ export default function Create() {
           </Card>
         </form>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

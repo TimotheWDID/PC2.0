@@ -40,6 +40,8 @@ type Commande = {
   statut: string;
 };
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs = (commandeId: number): BreadcrumbItem[] => [
   { title: 'Commandes', href: '/commandes' },
   { title: `Commande #${commandeId}`, href: `/commandes/${commandeId}` },
@@ -508,6 +510,7 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
           </CardContent>
         </Card>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

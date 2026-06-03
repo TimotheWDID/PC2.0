@@ -30,6 +30,8 @@ type CommandeItem = {
   invoice_id: string;
 };
 
+import MobileNativeNav from '@/components/mobile-native-nav';
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Commandes', href: '/commandes' },
   { title: 'Créer des commandes groupées', href: '/commandes/create-bulk' },
@@ -393,6 +395,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
           </div>
         </form>
       </div>
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }

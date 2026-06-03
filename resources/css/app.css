@@ -149,3 +149,35 @@
         @apply bg-background text-foreground;
     }
 }
+
+@layer components {
+    @media (min-width: 1024px) {
+        .desktop-premium {
+            @apply space-y-1;
+        }
+
+        .desktop-premium [data-slot='card'] {
+            @apply border-border/70 shadow-md;
+        }
+
+        .desktop-premium [data-slot='card-header'] {
+            @apply border-b border-border/60 bg-muted/20;
+        }
+
+        .desktop-premium [data-slot='card-title'] {
+            @apply tracking-tight;
+        }
+
+        .desktop-premium table tbody tr {
+            @apply transition-colors;
+        }
+
+        .desktop-premium table tbody tr:hover {
+            @apply bg-muted/40;
+        }
+
+        .desktop-premium form {
+            @apply space-y-5;
+        }
+    }
+}

@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import LogModal from '@/components/LogModal';
+import MobileNativeNav from '@/components/mobile-native-nav';
 import { Mail, MessageSquare } from 'lucide-react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
@@ -47,6 +48,31 @@ type Device = {
   display_name: string;
 };
 
+type UserEditForm = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  internal_note: string;
+  hiboutik_id: string;
+  default_notification_preference: string;
+  password: string;
+  password_confirmation: string;
+};
+
+type DeviceEditForm = {
+  device_type: string;
+  brand: string;
+  model: string;
+  serial_number: string;
+  asset_tag: string;
+  purchase_date: string;
+  warranty_end_date: string;
+  status: string;
+  notes: string;
+};
+
 const translateStatus = (status: string | null): string => {
   const translations: Record<string, string> = {
     open: 'Ouvert',
@@ -76,7 +102,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
   const [sendingSms, setSendingSms] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<number | null>(null);
 
-  const { data, setData, put, processing, errors } = useForm({
+  const { data, setData, put, processing, errors } = useForm<UserEditForm>({
     first_name: user?.first_name ?? '',
     last_name: user?.last_name ?? '',
     email: user?.email ?? '',
@@ -89,7 +115,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
     password_confirmation: '',
   });
 
-  const { data: deviceData, setData: setDeviceData, post: postDevice, patch: patchDevice, processing: processingDevice, errors: deviceErrors, reset: resetDevice } = useForm({
+  const { data: deviceData, setData: setDeviceData, post: postDevice, patch: patchDevice, processing: processingDevice, errors: deviceErrors, reset: resetDevice } = useForm<DeviceEditForm>({
     device_type: 'computer',
     brand: '',
     model: '',
@@ -170,11 +196,11 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Éditer un utilisateur" />
-      <div className="py-4 w-full">
+      <div className="w-full space-y-4 py-4 pb-24 lg:pb-0">
         <Heading title="Modifier utilisateur" description={`Modifier l'utilisateur #${user?.id}`} />
 
-        <Card>
-          <CardHeader>
+        <Card className="border-border/70 shadow-sm lg:shadow-md/10">
+          <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">
             <div className="flex items-center justify-between">
               <CardTitle>Modifier</CardTitle>
               <LogModal
@@ -338,14 +364,15 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                   </>
                 )}
 
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={processing}>
+                <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:gap-2 lg:mt-6 lg:justify-end lg:border-t lg:pt-6">
+                  <Button type="submit" disabled={processing} className="w-full sm:w-auto lg:min-w-[10rem]">
                     {processing ? 'Enregistrement...' : 'Enregistrer'}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => router.visit('/users')}
+                    className="w-full sm:w-auto lg:min-w-[10rem]"
                   >
                     Annuler
                   </Button>
@@ -384,8 +411,8 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
           </CardContent>
         </Card>
 
-        <Card id="tickets-client" className="mt-6 scroll-mt-24">
-          <CardHeader>
+        <Card id="tickets-client" className="scroll-mt-24 border-border/70 shadow-sm lg:shadow-md/10">
+          <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">
             <CardTitle>Appareils du client</CardTitle>
           </CardHeader>
           <CardContent>
@@ -410,7 +437,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="computer">Ordinateur</SelectItem>
-                      <SelectItem value="phone">Telephone</SelectItem>
+                      <SelectItem value="phone">Téléphone</SelectItem>
                       <SelectItem value="tablet">Tablette</SelectItem>
                       <SelectItem value="other">Autre</SelectItem>
                     </SelectContent>
@@ -476,13 +503,13 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
               </div>
 
               <Button type="submit" disabled={processingDevice}>
-                {processingDevice ? (editingDeviceId ? 'Mise a jour...' : 'Ajout...') : (editingDeviceId ? 'Mettre a jour l\'appareil' : 'Ajouter l\'appareil')}
+                {processingDevice ? (editingDeviceId ? 'Mise à jour...' : 'Ajout...') : (editingDeviceId ? 'Mettre à jour l\'appareil' : 'Ajouter l\'appareil')}
               </Button>
             </form>
 
             <div className="mt-4 space-y-3">
               {devices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucun appareil enregistre pour ce client.</p>
+                <p className="text-sm text-muted-foreground">Aucun appareil enregistré pour ce client.</p>
               ) : devices.map((device) => (
                 <div key={device.id} className="rounded-lg border p-3">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -508,8 +535,8 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
           </CardContent>
         </Card>
 
-        <Card id="tickets-client" className="mt-6 scroll-mt-24">
-          <CardHeader>
+        <Card id="tickets-client" className="scroll-mt-24 border-border/70 shadow-sm lg:shadow-md/10">
+          <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">
             <CardTitle>Tickets du client</CardTitle>
           </CardHeader>
           <CardContent>
@@ -542,6 +569,8 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
           </CardContent>
         </Card>
       </div>
+
+      <MobileNativeNav showFab={false} />
     </AppLayout>
   );
 }
