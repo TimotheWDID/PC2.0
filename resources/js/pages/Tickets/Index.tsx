@@ -277,11 +277,16 @@ export default function Index({
     setSelfAssigningTicketId(ticketId);
     setSelfAssignError(null);
 
+    const csrfToken = document
+      .querySelector('meta[name="csrf-token"]')
+      ?.getAttribute('content');
+
     router.post(
       `/tickets/${ticketId}/self-assign`,
       { _method: 'patch' },
       {
         preserveScroll: true,
+        headers: csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {},
         onError: (errors) => {
           setSelfAssignError((errors as Record<string, string | undefined>).assignee_id ?? 'Impossible de prendre en charge ce ticket.');
         },
