@@ -252,6 +252,18 @@ A adapter dans `.env` en prod:
 - `MAIL_*` (SMTP/Mailgun)
 - `QUEUE_CONNECTION` (ex: database, redis)
 - `CACHE_STORE` (ex: database, redis)
+- `SESSION_DRIVER=database` (ou `file` si vous ne voulez pas de sessions en BDD)
+- `SESSION_SECURE_COOKIE=true` (obligatoire en HTTPS)
+- `SESSION_SAME_SITE=lax`
+- `SESSION_DOMAIN=votre-domaine` (ou `.votre-domaine` si sous-domaines)
+
+Points anti-erreur 419:
+- Si `SESSION_DRIVER=database`, verifier que la table `sessions` existe (`php artisan migrate --force`).
+- Apres modification du `.env`, executer:
+```bash
+php artisan optimize:clear
+php artisan config:cache
+```
 
 Bonnes pratiques:
 - Ne jamais versionner `.env`.
