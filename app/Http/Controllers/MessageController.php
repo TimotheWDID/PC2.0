@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\Auth;
 
 class MessageController extends Controller
 {
+    private function isAgentContext(): bool
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $user->agent) {
+            return false;
+        }
+
+        $previewAsNonAgent = (bool) request()->session()->get('preview_as_non_agent', false);
+
+        return ! $previewAsNonAgent;
+    }
+
     private function authorizeTicketAccess(Ticket $ticket): void
     {
         $user = Auth::user();
@@ -19,7 +32,7 @@ class MessageController extends Controller
             abort(403, 'Acces non autorise.');
         }
 
-        if ($user->agent) {
+        if ($this->isAgentContext()) {
             return;
         }
 
@@ -32,7 +45,7 @@ class MessageController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !$user->agent) {
+        if (!$user || !$this->isAgentContext()) {
             return;
         }
 
@@ -56,6 +69,11 @@ class MessageController extends Controller
      */
     public function index($ticketId)
     {
+        // If this endpoint is opened directly in a browser tab, route back to the ticket page.
+        if (! request()->expectsJson() && ! request()->ajax()) {
+            return redirect()->route('tickets.show', ['ticket' => $ticketId]);
+        }
+
         $ticket = Ticket::findOrFail($ticketId);
         $this->authorizeTicketAccess($ticket);
 

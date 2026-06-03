@@ -19,6 +19,8 @@ export interface NavItem {
     title: string;
     href: NonNullable<InertiaLinkProps['href']>;
     icon?: LucideIcon | null;
+    quickHref?: NonNullable<InertiaLinkProps['href']>;
+    quickLabel?: string;
     isActive?: boolean;
     items?: NavItem[];
 }
@@ -27,6 +29,10 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    preview?: {
+        nonAgent: boolean;
+        canToggle: boolean;
+    };
     sidebarOpen: boolean;
     [key: string]: unknown;
 }

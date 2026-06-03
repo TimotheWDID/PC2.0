@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import {
     Collapsible,
     CollapsibleContent,
@@ -21,7 +21,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
     const page = usePage();
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
             <SidebarMenu>
                 {items.map((item) => {
                     const isActive = page.url.startsWith(
@@ -43,7 +43,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                             asChild
                                             tooltip={{ children: item.title }}
                                             isActive={isActive}
-                                            className="flex-1"
+                                            className="min-h-10 flex-1"
                                         >
                                             <Link href={item.href} prefetch>
                                                 {item.icon && <item.icon />}
@@ -53,7 +53,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                         <CollapsibleTrigger asChild>
                                             <SidebarMenuButton
                                                 tooltip={{ children: `Ouvrir ${item.title}` }}
-                                                className="w-8 shrink-0 justify-center px-0"
+                                                className="min-h-10 w-8 shrink-0 justify-center px-0"
                                             >
                                                 <ChevronRight className="transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                                             </SidebarMenuButton>
@@ -69,6 +69,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                                         <SidebarMenuSubButton
                                                             asChild
                                                             isActive={isSubActive}
+                                                            className="min-h-10"
                                                         >
                                                             <Link href={subItem.href} prefetch>
                                                                 <span>{subItem.title}</span>
@@ -87,16 +88,31 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                     // Regular menu item without sub-items
                     return (
                         <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton
-                                asChild
-                                isActive={isActive}
-                                tooltip={{ children: item.title }}
-                            >
-                                <Link href={item.href} prefetch>
-                                    {item.icon && <item.icon />}
-                                    <span>{item.title}</span>
-                                </Link>
-                            </SidebarMenuButton>
+                            <div className="flex items-center gap-1">
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={isActive}
+                                    tooltip={{ children: item.title }}
+                                    className="min-h-10 flex-1"
+                                >
+                                    <Link href={item.href} prefetch>
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+
+                                {item.quickHref && (
+                                    <SidebarMenuButton
+                                        asChild
+                                        tooltip={{ children: item.quickLabel ?? `Ajouter ${item.title}` }}
+                                        className="hidden min-h-10 w-8 shrink-0 justify-center px-0 md:inline-flex group-data-[collapsible=icon]:hidden"
+                                    >
+                                        <Link href={item.quickHref} prefetch>
+                                            <Plus className="h-4 w-4" />
+                                        </Link>
+                                    </SidebarMenuButton>
+                                )}
+                            </div>
                         </SidebarMenuItem>
                     );
                 })}

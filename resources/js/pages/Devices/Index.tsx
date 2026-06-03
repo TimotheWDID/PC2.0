@@ -96,7 +96,7 @@ export default function DevicesIndex({
               <div className="md:col-span-2">
                 <Label>Recherche</Label>
                 <Input
-                  placeholder="Modele, serie, suivi, IMEI, client..."
+                  placeholder="ID, modele, serie, suivi, IMEI, demandeur..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => {

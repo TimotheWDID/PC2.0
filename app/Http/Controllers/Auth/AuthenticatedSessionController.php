@@ -53,7 +53,14 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        Auth::guard('web')->logout();
+        $guard = Auth::guard('web');
+
+        // Keep remember-me sessions valid on other devices when supported.
+        if (method_exists($guard, 'logoutCurrentDevice')) {
+            $guard->logoutCurrentDevice();
+        } else {
+            $guard->logout();
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

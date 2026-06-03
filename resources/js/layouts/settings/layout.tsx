@@ -7,10 +7,10 @@ import { edit as editPassword } from '@/routes/password';
 import { edit } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { type PropsWithChildren } from 'react';
 
-const sidebarNavItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
     {
         title: 'Profil',
         href: edit(),
@@ -19,6 +19,11 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Mot de passe',
         href: editPassword(),
+        icon: null,
+    },
+    {
+        title: 'Appareils connectes',
+        href: '/settings/device-sessions',
         icon: null,
     },
     {
@@ -31,6 +36,9 @@ const sidebarNavItems: NavItem[] = [
         href: editAppearance(),
         icon: null,
     },
+];
+
+const agentAdminNavItems: NavItem[] = [
     {
         title: 'Etiquette tickets',
         href: '/settings/ticket-label',
@@ -44,12 +52,19 @@ const sidebarNavItems: NavItem[] = [
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
+    const { props } = usePage();
+    const authUser = (props as any).auth?.user ?? null;
+
     // When server-side rendering, we only render the layout on the client...
     if (typeof window === 'undefined') {
         return null;
     }
 
     const currentPath = window.location.pathname;
+    const isAdmin = !!(authUser?.is_admin || authUser?.agent?.is_admin);
+    const sidebarNavItems = isAdmin
+        ? [...baseNavItems, ...agentAdminNavItems]
+        : baseNavItems;
 
     return (
         <div className="px-4 py-6">

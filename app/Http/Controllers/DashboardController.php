@@ -9,23 +9,39 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    private function isAgentContext(): bool
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $user->agent) {
+            return false;
+        }
+
+        $previewAsNonAgent = (bool) request()->session()->get('preview_as_non_agent', false);
+
+        return ! $previewAsNonAgent;
+    }
+
     /**
      * Show the application dashboard with ticket stats and recent open tickets.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
-        $isAgent = $user && $user->agent;
+        $isAgent = $this->isAgentContext();
 
         if ($isAgent) {
-            // Agent dashboard: show all tickets stats
-            $total = Ticket::count();
-            $open = Ticket::where('status', 'open')->count();
-            $pending = Ticket::where('status', 'pending')->count();
-            $inProgress = Ticket::where('status', 'in_progress')->count();
-            $closed = Ticket::where('status', 'closed')->count();
+            // Agent dashboard: show only tickets assigned to the current agent user
+            $agentTickets = Ticket::where('assignee_id', $user->id);
 
-            $openTickets = Ticket::whereIn('status', ['open', 'pending', 'in_progress'])
+            $total = (clone $agentTickets)->count();
+            $open = (clone $agentTickets)->where('status', 'open')->count();
+            $pending = (clone $agentTickets)->where('status', 'pending')->count();
+            $inProgress = (clone $agentTickets)->where('status', 'in_progress')->count();
+            $closed = (clone $agentTickets)->where('status', 'closed')->count();
+
+            $openTickets = (clone $agentTickets)
+                ->whereIn('status', ['open', 'pending', 'in_progress'])
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($t) {

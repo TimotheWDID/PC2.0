@@ -99,7 +99,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
           <CardContent>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4">
               <Input
-                placeholder="Rechercher..."
+                placeholder="Rechercher ID, sujet, demandeur, ticket..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

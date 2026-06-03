@@ -137,11 +137,27 @@ class CommandeController extends Controller
 
         // Search functionality
         if ($request->has('search') && $request->search !== '') {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
+            $search = trim((string) $request->search);
+            $searchNumeric = is_numeric($search) ? (int) $search : null;
+            $query->where(function ($q) use ($search, $searchNumeric) {
                 $q->where('command_number', 'like', "%{$search}%")
+                    ->orWhere('nom', 'like', "%{$search}%")
                     ->orWhere('fournisseur', 'like', "%{$search}%")
-                    ->orWhere('invoice_id', 'like', "%{$search}%");
+                    ->orWhere('invoice_id', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('ticket', function ($ticketQuery) use ($search) {
+                        $ticketQuery->where('title', 'like', "%{$search}%");
+                    });
+
+                if (!is_null($searchNumeric)) {
+                    $q->orWhere('id', $searchNumeric)
+                        ->orWhere('ticket_id', $searchNumeric)
+                        ->orWhere('user_id', $searchNumeric);
+                }
             });
         }
 

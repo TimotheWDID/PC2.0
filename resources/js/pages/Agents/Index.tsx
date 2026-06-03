@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 type Agent = {
   id: number;
   user_name?: string | null;
-  speciality?: string | null;
+  specialities?: string[];
   created_at?: string | null;
 };
 
@@ -26,7 +26,10 @@ export default function Index({ agents }: { agents: Agent[] }) {
   const isAdmin = !!(auth?.user?.is_admin || auth?.user?.agent?.is_admin);
 
   const filtered = agents?.filter((a) =>
-    (a.user_name ?? '').toLowerCase().includes(query.toLowerCase()) || String(a.id).includes(query)
+    (a.user_name ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    (a.specialities ?? []).join(' ').toLowerCase().includes(query.toLowerCase()) ||
+    (a.created_at ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    String(a.id).includes(query)
   ) ?? [];
 
   return (
@@ -39,7 +42,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Liste des agents</CardTitle>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <Input placeholder="Rechercher" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <Input placeholder="Rechercher ID, nom, specialite..." value={query} onChange={(e) => setQuery(e.target.value)} />
               {isAdmin && (
                 <Link href="/agents/create">
                   <Button variant="default" className="w-full sm:w-auto">Nouveau</Button>
@@ -57,7 +60,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                       <p className="text-sm font-semibold">#{a.id} - {a.user_name ?? '-'}</p>
                       <span className="text-xs text-muted-foreground">{a.created_at ?? '-'}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">Spécialité: {a.speciality ?? '-'}</p>
+                    <p className="text-xs text-muted-foreground">Spécialité: {(a.specialities && a.specialities.length > 0) ? a.specialities.join(', ') : '-'}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Link href={`/agents/${a.id}`}>
                         <Button variant="outline" size="sm">Voir</Button>
@@ -99,7 +102,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                       <tr key={a.id} className="border-b last:border-0">
                         <td className="px-4 py-3 text-sm">{a.id}</td>
                         <td className="px-4 py-3 text-sm">{a.user_name ?? '-'}</td>
-                        <td className="px-4 py-3 text-sm">{a.speciality ?? '-'}</td>
+                        <td className="px-4 py-3 text-sm">{(a.specialities && a.specialities.length > 0) ? a.specialities.join(', ') : '-'}</td>
                         <td className="px-4 py-3 text-sm">{a.created_at ?? '-'}</td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-2">

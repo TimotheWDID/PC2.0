@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
 import { useState, useMemo } from 'react'
@@ -323,9 +324,9 @@ export default function CreateTicket({
 
                     {/* Utilisateur sélectionné */}
                     {selectedUser && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <div className="rounded-md border border-border bg-muted/40 p-3 text-foreground">
                         <p className="font-medium">{selectedUser.name}</p>
-                        <p className="text-sm text-gray-600">{selectedUser.email || 'Pas d\'email'}</p>
+                        <p className="text-sm text-muted-foreground">{selectedUser.email || 'Pas d\'email'}</p>
                         <Button
                           type="button"
                           variant="ghost"
@@ -353,7 +354,7 @@ export default function CreateTicket({
 
                     {/* Liste des résultats */}
                     {searchQuery && !selectedUser && filteredUsers.length > 0 && (
-                      <div className="border rounded-md max-h-48 overflow-y-auto">
+                      <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background text-foreground">
                         {filteredUsers.map((user) => (
                           <button
                             key={user.id}
@@ -363,7 +364,7 @@ export default function CreateTicket({
                               setSearchQuery('')
                               setData('device_id', '')
                             }}
-                            className="w-full border-b p-3 text-left hover:bg-muted/50 last:border-b-0"
+                            className="w-full border-b border-border p-3 text-left hover:bg-muted/50 last:border-b-0"
                           >
                             <p className="font-medium">{user.name}</p>
                             <p className="text-sm text-muted-foreground">{user.email || 'Pas d\'email'}</p>
@@ -374,9 +375,11 @@ export default function CreateTicket({
 
                     {/* Message utilisateur introuvable */}
                     {searchQuery && !selectedUser && filteredUsers.length === 0 && (
-                      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
-                        <p className="text-sm text-amber-900 dark:text-amber-200">Aucun utilisateur trouvé. Cliquez sur "Créer" pour créer un nouvel utilisateur.</p>
-                      </div>
+                      <Alert>
+                        <AlertDescription>
+                          Aucun utilisateur trouvé. Cliquez sur "Créer" pour créer un nouvel utilisateur.
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 </div>

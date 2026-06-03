@@ -17,6 +17,11 @@ interface LoginProps {
 }
 
 export default function Login({ status, canResetPassword }: LoginProps) {
+    const csrfToken =
+        typeof document !== 'undefined'
+            ? (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? ''
+            : '';
+
     return (
         <AuthLayout
             title="Connectez-vous à votre compte"
@@ -31,6 +36,8 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             >
                 {({ processing, errors }) => (
                     <>
+                        <input type="hidden" name="_token" value={csrfToken} />
+
                         <div className="grid gap-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Adresse email</Label>
@@ -72,13 +79,19 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                 <InputError message={errors.password} />
                             </div>
 
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-start space-x-3">
                                 <Checkbox
                                     id="remember"
                                     name="remember"
+                                    defaultChecked
                                     tabIndex={3}
                                 />
-                                <Label htmlFor="remember">Se souvenir de moi</Label>
+                                <div className="grid gap-1">
+                                    <Label htmlFor="remember">Rester connecte sur cet appareil</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        A desactiver sur un appareil partage.
+                                    </p>
+                                </div>
                             </div>
 
                             <Button

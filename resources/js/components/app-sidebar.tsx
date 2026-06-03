@@ -1,6 +1,7 @@
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
+import { Button } from '@/components/ui/button';
 import {
     Sidebar,
     SidebarContent,
@@ -12,13 +13,13 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, ShoppingCart, Wrench } from 'lucide-react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { BookOpen, Computer, Eye, EyeOff, FilePlus, Folder, HardHat, LayoutGrid, ShoppingCart, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Accueil',
         href: dashboard(),
         icon: LayoutGrid,
     },
@@ -26,136 +27,105 @@ const mainNavItems: NavItem[] = [
         title: 'Tickets',
         href: '/tickets',
         icon: Folder,
-        items: [
-            {
-                title: 'Ouverts',
-                href: '/tickets?status=open',
-                icon: null,
-            },
-            {
-                title: 'En cours',
-                href: '/tickets?status=in_progress',
-                icon: null,
-            },
-            {
-                title: 'En attente',
-                href: '/tickets?status=pending',
-                icon: null,
-            },
-            {
-                title: 'Résolus',
-                href: '/tickets?status=resolved',
-                icon: null,
-            },
-            {
-                title: 'Fermés',
-                href: '/tickets?status=closed',
-                icon: null,
-            },
-            {
-                title: 'Imprimante tickets',
-                href: '/tickets/print-settings',
-                icon: null,
-            },
-        ],
+        quickHref: '/tickets/create',
+        quickLabel: 'Nouveau ticket',
     },
     {
         title: 'Commandes',
         href: '/commandes',
         icon: ShoppingCart,
-        items: [
-            {
-                title: 'Toutes les commandes',
-                href: '/commandes',
-                icon: null,
-            },
-            {
-                title: 'Nouveaux',
-                href: '/commandes?statut=new',
-                icon: null,
-            },
-            {
-                title: 'Panier',
-                href: '/commandes?statut=panier',
-                icon: null,
-            },
-            {
-                title: 'Commandés',
-                href: '/commandes?statut=commandé',
-                icon: null,
-            },
-            {
-                title: 'Réceptionnés',
-                href: '/commandes?statut=réceptionner',
-                icon: null,
-            },
-            {
-                title: 'Traités',
-                href: '/commandes?statut=traité',
-                icon: null,
-            },
-        ],
+        quickHref: '/commandes/create',
+        quickLabel: 'Nouvelle commande',
     },
     {
-        title: 'Users',
+        title: 'Clients',
         href: '/users',
-        icon: Folder,
+        icon: User,
     },
     {
-        title: 'Parc appareils',
+        title: 'Appareils',
         href: '/devices',
-        icon: Folder,
-    },
-    {
-        title: 'Bug et amélioration',
-        href: '/tickets/bugs-improvements',
-        icon: BookOpen,
-        items: [
-            {
-                title: 'Tous les tickets spéciaux',
-                href: '/tickets/bugs-improvements',
-                icon: null,
-            },
-            {
-                title: 'Signaler bug / amélioration',
-                href: '/tickets/bugs-improvements/create?ticket_kind=bug',
-                icon: null,
-            },
-        ],
+        icon: Computer,
     },
     {
         title: 'Agents',
         href: '/agents',
-        icon: Folder,
+        icon: HardHat,
+    },
+    {
+        title: 'Bugs',
+        href: '/tickets/bugs-improvements',
+        icon: BookOpen,
+    },
+    {
+        title: 'Impression',
+        href: '/tickets/print-settings',
+        icon: Wrench,
     },
 ];
 
 const footerNavItems: NavItem[] = [
     {
-        title: 'Signaler bug / amélioration',
-        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
-        icon: Wrench,
+        title: 'Profil',
+        href: '/settings/profile',
+        icon: User,
     },
     {
-        title: 'Statistiques',
-        href: '#',
+        title: 'Signaler',
+        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+        icon: BookOpen,
+    },
+];
+
+const nonAgentNavItems: NavItem[] = [
+    {
+        title: 'Accueil',
+        href: dashboard(),
+        icon: LayoutGrid,
+    },
+    {
+        title: 'Tickets',
+        href: '/tickets',
         icon: Folder,
     },
     {
-        title: 'Rapports',
-        href: '#',
-        icon: BookOpen,
+        title: '+ Ticket',
+        href: '/tickets/create',
+        icon: FilePlus,
+    },
+    {
+        title: 'Commandes',
+        href: '/commandes',
+        icon: ShoppingCart,
+    },
+    {
+        title: 'Profil',
+        href: '/settings/profile',
+        icon: User,
+    },
+];
+
+const nonAgentFooterNavItems: NavItem[] = [
+    {
+        title: 'Signaler',
+        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+        icon: Wrench,
     },
 ];
 
 export function AppSidebar() {
     const page = usePage();
     const user = (page.props as any).auth?.user ?? null;
+    const preview = (page.props as any).preview ?? { nonAgent: false, canToggle: false };
 
     // If the authenticated user is not an agent, render an empty sidebar
     // (no navigation items or footer). Keep the logo in the header so the
     // layout remains stable and users can still return to the home route.
     const isAgent = !!user?.agent;
+
+    const togglePreviewMode = () => {
+        router.post('/settings/preview/non-agent/toggle', {}, { preserveScroll: true });
+    };
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -174,31 +144,44 @@ export function AppSidebar() {
             {isAgent ? (
                 <>
                     <SidebarContent>
-                        {/* Add main nav items and conditionally the "Nouveau ticket" link when authenticated */}
-                        {(() => {
-                            const isAuth = !!user;
-                            const items = [...mainNavItems];
-                            if (isAuth) {
-                                items.push({ title: 'Nouveau ticket', href: '/tickets/create', icon: BookOpen });
-                                items.push({ title: 'Nouvelle commande', href: '/commandes/create', icon: ShoppingCart });
-                                items.push({ title: 'Commande groupée', href: '/commandes/create-bulk', icon: ShoppingCart });
-                            }
-                            return <NavMain items={items} />;
-                        })()}
+                        <NavMain items={mainNavItems} />
                     </SidebarContent>
 
                     <SidebarFooter>
+                        {preview.canToggle && (
+                            <Button
+                                variant={preview.nonAgent ? 'default' : 'outline'}
+                                size="sm"
+                                className="mb-2 w-full justify-start"
+                                onClick={togglePreviewMode}
+                            >
+                                {preview.nonAgent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                {preview.nonAgent ? 'Quitter aperçu non-agent' : 'Aperçu non-agent'}
+                            </Button>
+                        )}
                         <NavFooter items={footerNavItems} className="mt-auto" />
                         <NavUser />
                     </SidebarFooter>
                 </>
             ) : (
-                // Empty main content for non-agent users, but keep the footer
-                // (settings / logout / user menu) so they can manage their account.
+                // Dedicated navigation for non-agent users.
                 <>
-                    <SidebarContent />
+                    <SidebarContent>
+                        <NavMain items={nonAgentNavItems} />
+                    </SidebarContent>
                     <SidebarFooter>
-                        <NavFooter items={footerNavItems} className="mt-auto" />
+                        {preview.canToggle && (
+                            <Button
+                                variant={preview.nonAgent ? 'default' : 'outline'}
+                                size="sm"
+                                className="mb-2 w-full justify-start"
+                                onClick={togglePreviewMode}
+                            >
+                                {preview.nonAgent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                {preview.nonAgent ? 'Quitter aperçu non-agent' : 'Aperçu non-agent'}
+                            </Button>
+                        )}
+                        <NavFooter items={nonAgentFooterNavItems} className="mt-auto" />
                         <NavUser />
                     </SidebarFooter>
                 </>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import Heading from '@/components/heading';
@@ -35,6 +35,7 @@ type Ticket = {
   status: string | null;
   created_at: string | null;
   user?: { id: number; name: string } | null;
+  assignee?: { id: number; name: string } | null;
   device?: {
     id: number;
     display_name: string;
@@ -91,6 +92,7 @@ export default function Index({
   const [deviceIdToAttach, setDeviceIdToAttach] = useState('');
   const [isAttachingDevice, setIsAttachingDevice] = useState(false);
   const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [selfAssigningTicketId, setSelfAssigningTicketId] = useState<number | null>(null);
   const [newDevice, setNewDevice] = useState({
     device_type: 'computer',
     brand: '',
@@ -133,6 +135,8 @@ export default function Index({
   };
 
   const [statusFilters, setStatusFilters] = useState(getInitialFilters());
+  const page = usePage();
+  const isAgent = !!(page.props as any).auth?.user?.agent;
 
   // Traduction du statut pour l'affichage
   const statusTitle = currentStatus ? translateStatus(currentStatus) : 'Tous les tickets';
@@ -267,6 +271,19 @@ export default function Index({
     );
   };
 
+  const handleSelfAssign = (ticketId: number) => {
+    setSelfAssigningTicketId(ticketId);
+
+    router.patch(
+      `/tickets/${ticketId}/self-assign`,
+      {},
+      {
+        preserveScroll: true,
+        onFinish: () => setSelfAssigningTicketId(null),
+      },
+    );
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={pageTitle} />
@@ -355,10 +372,22 @@ export default function Index({
                     </div>
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <p>Demandeur: {t.user?.name ?? '-'}</p>
+                      <p>Agent attitre: {t.assignee?.name ?? '-'}</p>
                       <p>Appareil: {t.device?.display_name ?? '-'}</p>
                       <p>Créé le: {t.created_at ?? '-'}</p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
+                      {!t.assignee && isAgent && (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          disabled={selfAssigningTicketId === t.id}
+                          onClick={() => handleSelfAssign(t.id)}
+                        >
+                          {selfAssigningTicketId === t.id ? 'Attribution...' : "Je m'en occupe"}
+                        </Button>
+                      )}
                       <Link href={`/tickets/${t.id}`}>
                         <Button type="button" variant="secondary" size="sm">Ouvrir</Button>
                       </Link>
@@ -398,6 +427,7 @@ export default function Index({
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Demandeur</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Appareil</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Statut</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Agent attitre</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Créé le</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
             </tr>
@@ -419,6 +449,23 @@ export default function Index({
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.device?.display_name ?? '-'}</td>
                       <td className="px-4 py-4">
                         <Badge variant={t.status === 'open' ? 'destructive' : t.status === 'in_progress' ? 'default' : t.status === 'pending' ? 'secondary' : 'outline'}>{translateStatus(t.status ?? '-')}</Badge>
+                      </td>
+                      <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                        {t.assignee?.name ? (
+                          <span className="text-muted-foreground">{t.assignee.name}</span>
+                        ) : isAgent ? (
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            disabled={selfAssigningTicketId === t.id}
+                            onClick={() => handleSelfAssign(t.id)}
+                          >
+                            {selfAssigningTicketId === t.id ? 'Attribution...' : "Je m'en occupe"}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.created_at ?? '-'}</td>
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
@@ -450,7 +497,7 @@ export default function Index({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
                   </tr>
                 )}
           </tbody>

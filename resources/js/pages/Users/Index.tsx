@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 
 type User = {
   id: number;
+  first_name?: string | null;
+  last_name?: string | null;
   name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -27,8 +29,11 @@ export default function Index({ users }: { users: User[] }) {
 
   const filtered = users?.filter((u) =>
     (u.name ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    (u.first_name ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    (u.last_name ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.email ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.phone ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    (u.created_at ?? '').toLowerCase().includes(query.toLowerCase()) ||
     String(u.id).includes(query)
   ) ?? [];
 
@@ -42,7 +47,7 @@ export default function Index({ users }: { users: User[] }) {
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Liste des utilisateurs</CardTitle>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <Input placeholder="Rechercher" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <Input placeholder="Rechercher ID, nom, email, telephone..." value={query} onChange={(e) => setQuery(e.target.value)} />
               {isAdmin && (
                 <Link href="/users/create">
                   <Button variant="default" className="w-full sm:w-auto">Nouveau</Button>

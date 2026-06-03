@@ -29,7 +29,8 @@ class DeviceController extends Controller
         $search = trim((string) $request->query('q', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
-                $q->where('brand', 'like', '%' . $search . '%')
+                $q->where('id', 'like', '%' . $search . '%')
+                    ->orWhere('brand', 'like', '%' . $search . '%')
                     ->orWhere('model', 'like', '%' . $search . '%')
                     ->orWhere('serial_number', 'like', '%' . $search . '%')
                     ->orWhere('asset_tag', 'like', '%' . $search . '%')

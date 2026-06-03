@@ -21,6 +21,7 @@ Route::middleware('auth')->group(function () {
 
     // Update ticket priority
     Route::patch('tickets/{ticket}/priority', [TicketController::class, 'updatePriority'])->name('tickets.updatePriority');
+    Route::patch('tickets/{ticket}/self-assign', [TicketController::class, 'selfAssign'])->name('tickets.selfAssign');
 
     // Add a manual timeline event to a ticket
     Route::post('tickets/{ticket}/timeline-events', [TicketController::class, 'storeTimelineEvent'])->name('tickets.timelineEvents.store');

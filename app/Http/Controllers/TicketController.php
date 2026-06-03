@@ -122,13 +122,26 @@ class TicketController extends Controller
             abort(403, 'Acces non autorise.');
         }
 
-        if ($user->agent) {
+        if ($this->isAgentContext()) {
             return;
         }
 
         if ((int) $ticket->user_id !== (int) $user->id) {
             abort(403, 'Acces non autorise.');
         }
+    }
+
+    private function isAgentContext(): bool
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $user->agent) {
+            return false;
+        }
+
+        $previewAsNonAgent = (bool) request()->session()->get('preview_as_non_agent', false);
+
+        return ! $previewAsNonAgent;
     }
 
     public function specialIndex(Request $request)
@@ -186,7 +199,7 @@ class TicketController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !$user->agent) {
+        if (!$user || !$this->isAgentContext()) {
             return;
         }
 
@@ -204,7 +217,7 @@ class TicketController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !$user->agent) {
+        if (!$user || !$this->isAgentContext()) {
             abort(403, 'Acces reserve aux techniciens.');
         }
 
@@ -235,7 +248,7 @@ class TicketController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Ticket::query()->with(['user', 'category', 'device']);
+        $query = Ticket::query()->with(['user', 'category', 'device', 'assignee']);
         $user = Auth::user();
         $supportsTicketKind = $this->supportsTicketKind();
         $specialCategoryIds = $this->getSpecialCategoryIds();
@@ -248,7 +261,9 @@ class TicketController extends Controller
             abort(403, 'Acces non autorise.');
         }
 
-        if (!$user->agent) {
+        $isAgent = $this->isAgentContext();
+
+        if (!$isAgent) {
             $query->where('user_id', $user->id);
         } elseif (!empty($selectedUserId)) {
             $query->where('user_id', $selectedUserId);
@@ -327,6 +342,10 @@ class TicketController extends Controller
                     'id' => $t->user->id,
                     'name' => $t->user->first_name . ' ' . $t->user->last_name,
                 ] : null,
+                'assignee' => $t->assignee ? [
+                    'id' => $t->assignee->id,
+                    'name' => $t->assignee->first_name . ' ' . $t->assignee->last_name,
+                ] : null,
                 'device' => $t->device ? [
                     'id' => $t->device->id,
                     'display_name' => $t->device->display_name,
@@ -347,7 +366,7 @@ class TicketController extends Controller
         });
 
         $filteredUser = null;
-        if (!empty($selectedUserId) && $user->agent) {
+        if (!empty($selectedUserId) && $isAgent) {
             $selectedUser = \App\Models\User::find($selectedUserId);
             if ($selectedUser) {
                 $filteredUser = [
@@ -532,7 +551,7 @@ class TicketController extends Controller
         ]);
 
         $currentUser = Auth::user();
-        $isAgent = $currentUser && $currentUser->agent;
+        $isAgent = $this->isAgentContext();
 
         $users = [];
         if ($isAgent) {
@@ -599,7 +618,7 @@ class TicketController extends Controller
     public function store(Request $request)
     {
         $currentUser = Auth::user();
-        $isAgent = $currentUser && $currentUser->agent;
+        $isAgent = $this->isAgentContext();
         $supportsTicketKind = $this->supportsTicketKind();
         $specialOnly = $request->boolean('special_only');
         $allowedTicketKinds = $specialOnly ? ['bug', 'improvement'] : ['standard'];
@@ -929,7 +948,7 @@ class TicketController extends Controller
             ]);
 
         $timelineEvents = [];
-        if ($viewer && $viewer->agent) {
+        if ($this->isAgentContext()) {
             $timelineEvents = $ticket->timelineEvents()
                 ->withTrashed()
                 ->with([
@@ -1037,7 +1056,7 @@ class TicketController extends Controller
             'userDevices' => $ticket->user ? $ticket->user->devices->map(fn(Device $device) => $this->serializeDevice($device))->values() : [],
             'timelineEvents' => $timelineEvents,
             'deviceEvents' => $deviceEvents,
-            'timelineTemplateSettings' => $viewer && $viewer->agent ? TicketTimelineTemplateSettings::load() : ['templates' => []],
+            'timelineTemplateSettings' => $this->isAgentContext() ? TicketTimelineTemplateSettings::load() : ['templates' => []],
         ]);
     }
 
@@ -1252,6 +1271,42 @@ class TicketController extends Controller
         }
 
         return back();
+    }
+
+    /**
+     * Assign the authenticated agent user to a ticket in one click.
+     */
+    public function selfAssign(string $id)
+    {
+        $agentUser = $this->ensureAgentOrAbort();
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        if (!empty($ticket->assignee_id) && (int) $ticket->assignee_id !== (int) $agentUser->id) {
+            return back()->withErrors([
+                'assignee_id' => 'Ce ticket est deja attribue a un autre agent.',
+            ]);
+        }
+
+        if ((int) $ticket->assignee_id === (int) $agentUser->id) {
+            return back();
+        }
+
+        $previousAssigneeId = $ticket->assignee_id;
+        $ticket->assignee_id = $agentUser->id;
+        $ticket->save();
+
+        $this->logTechnicianTimeline(
+            $ticket,
+            'assignee_changed',
+            'Agent attribue au ticket',
+            [
+                'before' => $this->formatTimelineValue('assignee_id', $previousAssigneeId),
+                'after' => $this->formatTimelineValue('assignee_id', $ticket->assignee_id),
+            ]
+        );
+
+        return back()->with('success', 'Ticket attribue.');
     }
 
     /**
