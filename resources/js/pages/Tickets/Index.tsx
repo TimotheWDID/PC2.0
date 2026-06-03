@@ -94,6 +94,7 @@ export default function Index({
   const [isAttachingDevice, setIsAttachingDevice] = useState(false);
   const [isCreatingDevice, setIsCreatingDevice] = useState(false);
   const [selfAssigningTicketId, setSelfAssigningTicketId] = useState<number | null>(null);
+  const [selfAssignError, setSelfAssignError] = useState<string | null>(null);
   const [newDevice, setNewDevice] = useState({
     device_type: 'computer',
     brand: '',
@@ -274,12 +275,17 @@ export default function Index({
 
   const handleSelfAssign = (ticketId: number) => {
     setSelfAssigningTicketId(ticketId);
+    setSelfAssignError(null);
 
     router.patch(
       `/tickets/${ticketId}/self-assign`,
       {},
       {
         preserveScroll: true,
+        onError: (errors) => {
+          setSelfAssignError((errors as Record<string, string | undefined>).assignee_id ?? 'Impossible de prendre en charge ce ticket.');
+        },
+        onSuccess: () => setSelfAssignError(null),
         onFinish: () => setSelfAssigningTicketId(null),
       },
     );
@@ -293,6 +299,12 @@ export default function Index({
           title={pageTitle}
           description={clientScope ? `${baseDescription} - ${clientScope}` : baseDescription}
         />
+
+        {selfAssignError && (
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {selfAssignError}
+          </div>
+        )}
 
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

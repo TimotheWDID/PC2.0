@@ -99,6 +99,24 @@ class TicketController extends Controller
         return (int) $category->id;
     }
 
+    private function sanitizeReportText(mixed $value, int $maxLength = 3000): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = trim(strip_tags($value));
+        $value = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        return Str::limit($value, $maxLength, '');
+    }
+
     private function inferTicketKindFromCategoryName(?string $categoryName): string
     {
         $normalized = Str::lower((string) $categoryName);
@@ -583,6 +601,8 @@ class TicketController extends Controller
         $defaultTicketKind = in_array($requestedTicketKind, $allowedKinds, true)
             ? $requestedTicketKind
             : ($specialOnly ? 'bug' : 'standard');
+        $defaultTitle = $this->sanitizeReportText($request->query('report_title'), 255);
+        $defaultMessage = $this->sanitizeReportText($request->query('report_message'));
 
         return Inertia::render('Tickets/Create', [
             'categories' => $categories,
@@ -590,6 +610,8 @@ class TicketController extends Controller
             'users' => $users,
             'currentUserDevices' => $currentUserDevices,
             'defaultTicketKind' => $defaultTicketKind,
+            'defaultTitle' => $defaultTitle,
+            'defaultMessage' => $defaultMessage,
             'specialOnly' => $specialOnly,
             'ticketKindSupported' => $supportsTicketKind,
         ]);
@@ -1282,13 +1304,15 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
-        if (!empty($ticket->assignee_id) && (int) $ticket->assignee_id !== (int) $agentUser->id) {
+        $currentAssignee = $ticket->assignee;
+
+        if ($currentAssignee && (int) $currentAssignee->id !== (int) $agentUser->id) {
             return back()->withErrors([
                 'assignee_id' => 'Ce ticket est deja attribue a un autre agent.',
             ]);
         }
 
-        if ((int) $ticket->assignee_id === (int) $agentUser->id) {
+        if ($currentAssignee && (int) $currentAssignee->id === (int) $agentUser->id) {
             return back();
         }
 

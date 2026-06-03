@@ -67,7 +67,10 @@ function TwoFactorSetupStep({
     return (
         <>
             {errors?.length ? (
-                <AlertError errors={errors} />
+                <AlertError
+                    errors={errors}
+                    reportContext="Configuration 2FA"
+                />
             ) : (
                 <>
                     <div className="mx-auto flex max-w-md overflow-hidden">

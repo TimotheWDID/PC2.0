@@ -47,6 +47,8 @@ export default function CreateTicket({
   users = [],
   currentUserDevices = [],
   defaultTicketKind = 'standard',
+  defaultTitle = '',
+  defaultMessage = '',
   specialOnly = false,
 }: {
   categories: Category[];
@@ -54,6 +56,8 @@ export default function CreateTicket({
   users?: User[];
   currentUserDevices?: Device[];
   defaultTicketKind?: 'standard' | 'bug' | 'improvement';
+  defaultTitle?: string;
+  defaultMessage?: string;
   specialOnly?: boolean;
 }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -71,8 +75,8 @@ export default function CreateTicket({
   })
 
   const { data, setData, post, processing, errors, transform } = useForm({
-    title: '',
-    message: '',
+    title: defaultTitle,
+    message: defaultMessage,
     category_id: '',
     ticket_kind: defaultTicketKind,
     special_only: specialOnly ? '1' : '0',

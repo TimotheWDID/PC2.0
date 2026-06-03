@@ -105,7 +105,10 @@ export default function TwoFactorRecoveryCodes({
                 >
                     <div className="mt-3 space-y-3">
                         {errors?.length ? (
-                            <AlertError errors={errors} />
+                            <AlertError
+                                errors={errors}
+                                reportContext="Codes de recuperation 2FA"
+                            />
                         ) : (
                             <>
                                 <div
