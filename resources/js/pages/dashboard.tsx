@@ -105,6 +105,8 @@ const tabLabel: Record<DashboardTab, string> = {
     assigned: 'Tickets attitrés',
 };
 
+const assignedTabLabel = (count: number) => `Tickets attitrés (${count})`;
+
 const tabButtonClass = (active: boolean) =>
     `rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
         active ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'
@@ -123,6 +125,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const allActionItems = actionItems ?? [];
     const assigned = assignedTickets ?? [];
     const recent = recentTickets ?? [];
+    const assignedCount = assigned.length;
 
     const [query, setQuery] = useState('');
     const [severity, setSeverity] = useState<Severity>('all');
@@ -257,7 +260,9 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                         <Card className="border-border/70 bg-background">
                             <CardHeader className="space-y-3 border-b border-border/60 p-3 pb-3">
                                 <div className="flex items-center justify-between gap-3">
-                                    <CardTitle className="text-sm">{tabLabel[activeTab]}</CardTitle>
+                                    <CardTitle className="text-sm">
+                                        {activeTab === 'assigned' ? assignedTabLabel(assignedCount) : tabLabel[activeTab]}
+                                    </CardTitle>
                                     {isAgent && (
                                         <div className="ml-auto grid w-full max-w-[240px] grid-cols-2 gap-1 rounded-2xl border border-border/70 p-1">
                                             <button type="button" onClick={() => setActiveTab('recommended')} className={tabButtonClass(activeTab === 'recommended')}>
@@ -511,7 +516,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                         <CardHeader className="space-y-3 p-4 pb-2">
                             <div className="flex items-start justify-between gap-4">
                                 <CardTitle className={sectionTitleClass}>
-                                    {isAgent && activeTab === 'assigned' ? 'Tickets attitrés' : 'Actions recommandées'}
+                                        {isAgent && activeTab === 'assigned' ? assignedTabLabel(assignedCount) : 'Actions recommandées'}
                                 </CardTitle>
                                 {isAgent && (
                                     <div className="inline-flex shrink-0 rounded-lg border border-border/70 p-1 text-sm">
@@ -531,7 +536,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                                                 activeTab === 'assigned' ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                         >
-                                            Tickets attitrés
+                                                    {assignedTabLabel(assignedCount)}
                                         </button>
                                     </div>
                                 )}

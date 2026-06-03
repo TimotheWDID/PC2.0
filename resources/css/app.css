@@ -153,7 +153,26 @@
 @layer components {
     @media (min-width: 1024px) {
         .desktop-premium {
-            @apply space-y-1;
+            @apply relative space-y-1;
+        }
+
+        .desktop-premium::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: url('/images/Logo.svg');
+            background-repeat: no-repeat;
+            background-size: clamp(360px, 42vw, 720px);
+            background-position: right -4rem top 5rem;
+            opacity: 0.045;
+            filter: saturate(0.9);
+        }
+
+        .desktop-premium > * {
+            position: relative;
+            z-index: 1;
         }
 
         .desktop-premium [data-slot='card'] {

@@ -361,7 +361,6 @@ class DashboardController extends Controller
 
             $assignedTickets = (clone $agentTickets)
                 ->orderByDesc('updated_at')
-                ->limit($insightConfig['recent_tickets_limit'])
                 ->get()
                 ->map(fn (Ticket $ticket) => $this->serializeTicket($ticket));
 

@@ -39,6 +39,10 @@ createInertiaApp({
         const root = createRoot(el);
 
         root.render(<App {...props} />);
+
+        window.setTimeout(() => {
+            document.getElementById('initial-loader')?.classList.add('is-hidden');
+        }, 0);
     },
     progress: {
         color: '#4B5563',
