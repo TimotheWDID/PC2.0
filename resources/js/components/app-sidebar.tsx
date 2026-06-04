@@ -24,6 +24,11 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'Dashboard Admin',
+        href: '/admin/dashboard',
+        icon: ShieldCheck,
+    },
+    {
         title: 'Tickets',
         href: '/tickets',
         icon: Folder,
@@ -173,7 +178,7 @@ export function AppSidebar() {
         </div>
     ) : null;
 
-    const adminOnlyPrefixes = ['/agents', '/tickets/print-settings', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/dashboard-insights'];
+    const adminOnlyPrefixes = ['/admin', '/agents', '/tickets/print-settings', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/dashboard-insights'];
 
     const isAdminOnlyPath = (path: string) => adminOnlyPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 

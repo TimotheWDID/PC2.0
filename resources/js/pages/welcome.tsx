@@ -8,7 +8,6 @@ export default function Welcome() {
     return (
         <>
             <Head title="SupportPC" />
-
             <div className="auth-shell flex min-h-screen flex-col px-4 py-6 sm:px-6 lg:px-10">
                 <header className="mx-auto flex w-full max-w-6xl items-center justify-end py-2">
                     <nav className="flex items-center gap-3 text-sm">
