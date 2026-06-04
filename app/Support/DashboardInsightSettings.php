@@ -8,10 +8,29 @@ class DashboardInsightSettings
 {
     public static function defaults(): array
     {
+        $ticketPendingHours = (int) config('dashboard.insights.ticket_pending_hours', 48);
+        $ticketLowInfoHours = (int) config('dashboard.insights.ticket_low_info_hours', 24);
+        $ticketStalledDays = (int) config('dashboard.insights.ticket_stalled_days', 5);
+
         return [
-            'ticket_pending_hours' => (int) config('dashboard.insights.ticket_pending_hours', 48),
-            'ticket_low_info_hours' => (int) config('dashboard.insights.ticket_low_info_hours', 24),
-            'ticket_stalled_days' => (int) config('dashboard.insights.ticket_stalled_days', 5),
+            'ticket_pending_hours' => $ticketPendingHours,
+            'ticket_pending_hours_by_priority' => [
+                'high' => $ticketPendingHours,
+                'medium' => $ticketPendingHours,
+                'low' => $ticketPendingHours,
+            ],
+            'ticket_low_info_hours' => $ticketLowInfoHours,
+            'ticket_low_info_hours_by_priority' => [
+                'high' => $ticketLowInfoHours,
+                'medium' => $ticketLowInfoHours,
+                'low' => $ticketLowInfoHours,
+            ],
+            'ticket_stalled_days' => $ticketStalledDays,
+            'ticket_stalled_days_by_priority' => [
+                'high' => $ticketStalledDays,
+                'medium' => $ticketStalledDays,
+                'low' => $ticketStalledDays,
+            ],
             'commande_incomplete_hours' => (int) config('dashboard.insights.commande_incomplete_hours', 24),
             'commande_stalled_days' => (int) config('dashboard.insights.commande_stalled_days', 3),
             'max_items_per_rule' => (int) config('dashboard.insights.max_items_per_rule', 3),
@@ -33,7 +52,7 @@ class DashboardInsightSettings
             }
         }
 
-        return array_merge($defaults, $stored);
+        return array_replace_recursive($defaults, $stored);
     }
 
     public static function save(array $settings): void

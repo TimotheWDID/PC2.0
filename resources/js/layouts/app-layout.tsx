@@ -9,6 +9,6 @@ interface AppLayoutProps {
 
 export default ({ children, breadcrumbs, ...props }: AppLayoutProps) => (
     <AppLayoutTemplate breadcrumbs={breadcrumbs} {...props}>
-        <div className="desktop-premium">{children}</div>
+        <div className="desktop-premium app-page-shell">{children}</div>
     </AppLayoutTemplate>
 );

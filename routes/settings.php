@@ -31,8 +31,10 @@ Route::middleware('auth')->group(function () {
         ->name('device-sessions.destroy-others');
 
     Route::post('settings/preview/non-agent/toggle', [PreviewModeController::class, 'toggleNonAgent'])
-        ->middleware('admin')
         ->name('preview.non-agent.toggle');
+
+    Route::post('settings/preview/mode', [PreviewModeController::class, 'setMode'])
+        ->name('preview.mode.set');
 
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');

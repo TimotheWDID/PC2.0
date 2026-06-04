@@ -102,6 +102,10 @@
     --sidebar-accent-foreground: var(--bleu-yankees);
     --sidebar-border: #e5e7eb;
     --sidebar-ring: var(--bleu-palatinat);
+
+    --surface-glow:
+        radial-gradient(1200px 520px at 90% -8%, color-mix(in oklab, var(--color-primary) 13%, transparent), transparent 68%),
+        radial-gradient(900px 420px at 5% 8%, color-mix(in oklab, var(--color-secondary) 13%, transparent), transparent 72%);
 }
 
 .dark {
@@ -137,20 +141,93 @@
     --sidebar-accent-foreground: #ffffff;
     --sidebar-border: #1e2949;
     --sidebar-ring: var(--bleu-palatinat);
+
+    --surface-glow:
+        radial-gradient(1200px 520px at 90% -8%, color-mix(in oklab, var(--color-primary) 24%, transparent), transparent 68%),
+        radial-gradient(900px 420px at 5% 8%, color-mix(in oklab, var(--color-secondary) 18%, transparent), transparent 72%);
 }
 
 @layer base {
     * {
-        color: var(--foreground);
         @apply border-border;
     }
 
+    html,
+    body,
+    #app {
+        min-height: 100%;
+    }
+
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background text-foreground antialiased;
+        background-image: var(--surface-glow);
+        background-attachment: fixed;
+    }
+
+    a {
+        color: color-mix(in oklab, var(--color-primary) 82%, var(--color-foreground));
+    }
+
+    :focus-visible {
+        outline: none;
     }
 }
 
 @layer components {
+    .app-page-shell {
+        @apply relative w-full px-3 py-4 sm:px-4 sm:py-5;
+    }
+
+    .auth-shell {
+        @apply relative overflow-hidden;
+    }
+
+    .auth-shell::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+            radial-gradient(460px 260px at 15% 18%, color-mix(in oklab, var(--color-secondary) 14%, transparent), transparent 68%),
+            radial-gradient(720px 420px at 92% 0%, color-mix(in oklab, var(--color-primary) 12%, transparent), transparent 74%);
+        z-index: 0;
+    }
+
+    .auth-shell > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    [data-slot='card'] {
+        @apply border-border/70 bg-card/95 shadow-sm backdrop-blur-sm;
+    }
+
+    [data-slot='input'],
+    [data-slot='select-trigger'],
+    textarea {
+        @apply bg-background/80;
+    }
+
+    .status-badge-new {
+        @apply bg-primary text-primary-foreground;
+    }
+
+    .status-badge-panier {
+        @apply bg-secondary text-secondary-foreground;
+    }
+
+    .status-badge-commande {
+        @apply bg-chart-3 text-white;
+    }
+
+    .status-badge-reception {
+        @apply bg-chart-2 text-foreground;
+    }
+
+    .status-badge-traite {
+        @apply bg-muted text-foreground;
+    }
+
     @media (min-width: 1024px) {
         .desktop-premium {
             @apply relative space-y-1;

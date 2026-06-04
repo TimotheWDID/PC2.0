@@ -66,11 +66,11 @@ const statutLabels: Record<string, string> = {
 };
 
 const statutColors: Record<string, string> = {
-  'new': 'bg-blue-500',
-  'panier': 'bg-yellow-500',
-  'commandé': 'bg-purple-500',
-  'réceptionner': 'bg-green-500',
-  'traité': 'bg-gray-500',
+  'new': 'status-badge-new',
+  'panier': 'status-badge-panier',
+  'commandé': 'status-badge-commande',
+  'réceptionner': 'status-badge-reception',
+  'traité': 'status-badge-traite',
 };
 
 export default function Index({ commandes, filters }: { commandes: PaginatedCommandes; filters: Filters }) {
@@ -181,7 +181,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                         <Button size="sm" variant="secondary">Ouvrir</Button>
                       </Link>
                       {commande.ticket ? (
-                        <Link href={`/tickets/${commande.ticket.id}`} className="text-xs text-blue-600 hover:underline">
+                        <Link href={`/tickets/${commande.ticket.id}`} className="text-xs text-primary hover:underline">
                           Ticket #{commande.ticket.id}
                         </Link>
                       ) : (
@@ -232,8 +232,8 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                         </td>
                         <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                           {commande.ticket ? (
-                            <Link href={`/tickets/${commande.ticket.id}`} className="text-blue-600 hover:underline">
-                              #{commande.ticket.id}
+                            <Link href={`/tickets/${commande.ticket.id}`} className="text-primary hover:underline">
+                                 #{commande.ticket.id}
                             </Link>
                           ) : '-'}
                         </td>
@@ -302,3 +302,4 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
     </AppLayout>
   );
 }
+

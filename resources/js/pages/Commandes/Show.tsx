@@ -60,11 +60,11 @@ const statutLabels: Record<string, string> = {
 };
 
 const statutColors: Record<string, string> = {
-  'new': 'bg-blue-500',
-  'panier': 'bg-yellow-500',
-  'commandé': 'bg-purple-500',
-  'réceptionner': 'bg-green-500',
-  'traité': 'bg-gray-500',
+  'new': 'status-badge-new',
+  'panier': 'status-badge-panier',
+  'commandé': 'status-badge-commande',
+  'réceptionner': 'status-badge-reception',
+  'traité': 'status-badge-traite',
 };
 
 export default function Show({ commande }: { commande: Commande }) {
@@ -209,7 +209,7 @@ export default function Show({ commande }: { commande: Commande }) {
                 <div className="text-sm font-medium text-muted-foreground">Ticket associé</div>
                 <div className="text-lg">
                   {commande.ticket ? (
-                    <Link href={`/tickets/${commande.ticket.id}`} className="text-blue-600 hover:underline">
+                    <Link href={`/tickets/${commande.ticket.id}`} className="text-primary hover:underline">
                       #{commande.ticket.id} - {commande.ticket.title}
                     </Link>
                   ) : '-'}
@@ -308,7 +308,7 @@ export default function Show({ commande }: { commande: Commande }) {
               )}
 
               {statusError && (
-                <p className="text-sm text-red-500">{statusError}</p>
+                <p className="text-sm text-destructive">{statusError}</p>
               )}
             </div>
 
@@ -340,3 +340,4 @@ export default function Show({ commande }: { commande: Commande }) {
     </AppLayout>
   );
 }
+

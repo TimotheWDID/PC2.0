@@ -20,7 +20,7 @@ export default function ForgotPassword({ status }: { status?: string }) {
             <Head title="Mot de passe oublié" />
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div role="status" aria-live="polite" className="mb-4 text-center text-sm font-medium text-primary">
                     {status}
                 </div>
             )}
@@ -67,3 +67,4 @@ export default function ForgotPassword({ status }: { status?: string }) {
         </AuthLayout>
     );
 }
+

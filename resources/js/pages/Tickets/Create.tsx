@@ -399,7 +399,7 @@ export default function CreateTicket({
                   onChange={(e) => setData('title', e.target.value)}
                   required
                 />
-                {errors.title && <div className="text-red-500">{errors.title}</div>}
+                {errors.title && <div className="text-destructive">{errors.title}</div>}
               </div>
 
               {specialOnly ? (
@@ -415,7 +415,7 @@ export default function CreateTicket({
                     <option value="bug">Signaler un bug</option>
                     <option value="improvement">Proposer une amélioration</option>
                   </select>
-                  {errors.ticket_kind && <div className="text-red-500">{errors.ticket_kind}</div>}
+                  {errors.ticket_kind && <div className="text-destructive">{errors.ticket_kind}</div>}
                 </div>
               ) : (
                 <input type="hidden" name="ticket_kind" value="standard" />
@@ -431,7 +431,7 @@ export default function CreateTicket({
                   onChange={(e) => setData('message', e.target.value)}
                   required
                 />
-                {errors.message && <div className="text-red-500">{errors.message}</div>}
+                {errors.message && <div className="text-destructive">{errors.message}</div>}
               </div>
 
               <div>
@@ -466,7 +466,7 @@ export default function CreateTicket({
                         <option key={device.id} value={device.id}>{device.display_name}</option>
                       ))}
                     </select>
-                    {errors.device_id && <div className="text-red-500">{errors.device_id}</div>}
+                    {errors.device_id && <div className="text-destructive">{errors.device_id}</div>}
                   </div>
 
                   <label className="flex items-center gap-2 text-sm">
@@ -513,7 +513,7 @@ export default function CreateTicket({
                           onChange={(e) => setData('quick_device_model', e.target.value)}
                           placeholder="Latitude, iPhone..."
                         />
-                        {errors.quick_device_model && <div className="text-red-500">{errors.quick_device_model}</div>}
+                        {errors.quick_device_model && <div className="text-destructive">{errors.quick_device_model}</div>}
                       </div>
 
                       <div>
@@ -523,7 +523,7 @@ export default function CreateTicket({
                           value={data.quick_device_serial_number}
                           onChange={(e) => setData('quick_device_serial_number', e.target.value)}
                         />
-                        {errors.quick_device_serial_number && <div className="text-red-500">{errors.quick_device_serial_number}</div>}
+                        {errors.quick_device_serial_number && <div className="text-destructive">{errors.quick_device_serial_number}</div>}
                       </div>
 
                       <div>
@@ -533,7 +533,7 @@ export default function CreateTicket({
                           value={data.quick_device_asset_tag}
                           onChange={(e) => setData('quick_device_asset_tag', e.target.value)}
                         />
-                        {errors.quick_device_asset_tag && <div className="text-red-500">{errors.quick_device_asset_tag}</div>}
+                        {errors.quick_device_asset_tag && <div className="text-destructive">{errors.quick_device_asset_tag}</div>}
                       </div>
 
                       <div>
@@ -554,7 +554,7 @@ export default function CreateTicket({
                           value={data.quick_device_warranty_end_date}
                           onChange={(e) => setData('quick_device_warranty_end_date', e.target.value)}
                         />
-                        {errors.quick_device_warranty_end_date && <div className="text-red-500">{errors.quick_device_warranty_end_date}</div>}
+                        {errors.quick_device_warranty_end_date && <div className="text-destructive">{errors.quick_device_warranty_end_date}</div>}
                       </div>
                     </div>
                   )}
@@ -585,3 +585,4 @@ export default function CreateTicket({
     </AppLayout>
   )
 }
+

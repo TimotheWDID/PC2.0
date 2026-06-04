@@ -54,7 +54,7 @@ export default function Create() {
                     onChange={(e) => setData('first_name', e.target.value)}
                     required
                   />
-                  {errors.first_name && <div className="text-red-500 text-sm mt-1">{errors.first_name}</div>}
+                  {errors.first_name && <div className="text-destructive text-sm mt-1">{errors.first_name}</div>}
                 </div>
 
                 <div>
@@ -65,7 +65,7 @@ export default function Create() {
                     onChange={(e) => setData('last_name', e.target.value)}
                     required
                   />
-                  {errors.last_name && <div className="text-red-500 text-sm mt-1">{errors.last_name}</div>}
+                  {errors.last_name && <div className="text-destructive text-sm mt-1">{errors.last_name}</div>}
                 </div>
 
                 <div>
@@ -76,7 +76,7 @@ export default function Create() {
                     value={data.email}
                     onChange={(e) => setData('email', e.target.value)}
                   />
-                  {errors.email && <div className="text-red-500 text-sm mt-1">{errors.email}</div>}
+                  {errors.email && <div className="text-destructive text-sm mt-1">{errors.email}</div>}
                 </div>
 
                 <div>
@@ -87,7 +87,7 @@ export default function Create() {
                     onChange={(e) => setData('phone', e.target.value)}
                     placeholder="+33 6 12 34 56 78"
                   />
-                  {errors.phone && <div className="text-red-500 text-sm mt-1">{errors.phone}</div>}
+                  {errors.phone && <div className="text-destructive text-sm mt-1">{errors.phone}</div>}
                 </div>
 
                 <div className="md:col-span-2">
@@ -98,7 +98,7 @@ export default function Create() {
                     onChange={(e) => setData('address', e.target.value)}
                     placeholder="123 Rue de la Paix, Paris"
                   />
-                  {errors.address && <div className="text-red-500 text-sm mt-1">{errors.address}</div>}
+                  {errors.address && <div className="text-destructive text-sm mt-1">{errors.address}</div>}
                 </div>
 
                 <div>
@@ -112,7 +112,7 @@ export default function Create() {
                   <p className="text-xs text-muted-foreground mt-1">
                     Laisser vide pour permettre à l'utilisateur de définir son propre mot de passe
                   </p>
-                  {errors.password && <div className="text-red-500 text-sm mt-1">{errors.password}</div>}
+                  {errors.password && <div className="text-destructive text-sm mt-1">{errors.password}</div>}
                 </div>
 
                 <div>
@@ -123,7 +123,7 @@ export default function Create() {
                     value={data.password_confirmation}
                     onChange={(e) => setData('password_confirmation', e.target.value)}
                   />
-                  {errors.password_confirmation && <div className="text-red-500 text-sm mt-1">{errors.password_confirmation}</div>}
+                  {errors.password_confirmation && <div className="text-destructive text-sm mt-1">{errors.password_confirmation}</div>}
                 </div>
               </div>
 
@@ -143,3 +143,4 @@ export default function Create() {
     </AppLayout>
   );
 }
+

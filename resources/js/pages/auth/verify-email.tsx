@@ -17,7 +17,7 @@ export default function VerifyEmail({ status }: { status?: string }) {
             <Head title="Vérification email" />
 
             {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div role="status" aria-live="polite" className="mb-4 text-center text-sm font-medium text-primary">
                     Un nouveau lien de vérification a été envoyé à l'adresse email
                     que vous avez fournie lors de l'inscription.
                 </div>
@@ -46,3 +46,4 @@ export default function VerifyEmail({ status }: { status?: string }) {
         </AuthLayout>
     );
 }
+

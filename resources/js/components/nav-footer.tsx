@@ -36,7 +36,7 @@ export function NavFooter({
                             <SidebarMenuItem key={item.title}>
                                 <SidebarMenuButton
                                     asChild
-                                    className="min-h-10 text-neutral-600 hover:text-neutral-800 dark:text-neutral-300 dark:hover:text-neutral-100"
+                                    className="min-h-10 text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
                                 >
                                     {isExternal ? (
                                         <a href={href} target="_blank" rel="noopener noreferrer">
@@ -68,3 +68,4 @@ export function NavFooter({
         </SidebarGroup>
     );
 }
+

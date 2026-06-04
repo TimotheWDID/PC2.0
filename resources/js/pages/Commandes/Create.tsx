@@ -180,7 +180,7 @@ export default function Create({
                 {selectedUser && (
                   <div className="mt-3 p-3 bg-background border rounded-md">
                     <p className="font-medium">{selectedUser.name}</p>
-                    <p className="text-sm text-gray-600">{selectedUser.email || "Pas d'email"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedUser.email || "Pas d'email"}</p>
                     <Button
                       type="button"
                       variant="ghost"
@@ -208,10 +208,10 @@ export default function Create({
                           setData('user_id', user.id.toString());
                           setSearchQuery('');
                         }}
-                        className="w-full text-left p-3 hover:bg-gray-100 border-b last:border-b-0"
+                        className="w-full text-left p-3 hover:bg-muted border-b last:border-b-0"
                       >
                         <p className="font-medium">{user.name}</p>
-                        <p className="text-sm text-gray-600">{user.email || "Pas d'email"}</p>
+                        <p className="text-sm text-muted-foreground">{user.email || "Pas d'email"}</p>
                       </button>
                     ))}
                   </div>
@@ -233,7 +233,7 @@ export default function Create({
                 )}
 
                 <input type="hidden" name="user_id" value={data.user_id} />
-                {errors.user_id && <div className="text-red-500 text-sm mt-1">{errors.user_id}</div>}
+                {errors.user_id && <div className="text-destructive text-sm mt-1">{errors.user_id}</div>}
               </div>
 
               <div>
@@ -310,7 +310,7 @@ export default function Create({
                     Ticket pré-sélectionné depuis la page du ticket
                   </p>
                 )}
-                {errors.ticket_id && <div className="text-red-500 text-sm mt-1">{errors.ticket_id}</div>}
+                {errors.ticket_id && <div className="text-destructive text-sm mt-1">{errors.ticket_id}</div>}
               </div>
 
               <div>
@@ -322,7 +322,7 @@ export default function Create({
                   placeholder="Ex: Matériel informatique"
                   required
                 />
-                {errors.nom && <div className="text-red-500 text-sm mt-1">{errors.nom}</div>}
+                {errors.nom && <div className="text-destructive text-sm mt-1">{errors.nom}</div>}
               </div>
 
               <div>
@@ -336,7 +336,7 @@ export default function Create({
                   onChange={(e) => setData('fournisseur', e.target.value)}
                   required={data.statut !== 'new'}
                 />
-                {errors.fournisseur && <div className="text-red-500 text-sm mt-1">{errors.fournisseur}</div>}
+                {errors.fournisseur && <div className="text-destructive text-sm mt-1">{errors.fournisseur}</div>}
               </div>
 
               <div>
@@ -350,7 +350,7 @@ export default function Create({
                   onChange={(e) => setData('command_number', e.target.value)}
                   required={!['new', 'panier'].includes(data.statut)}
                 />
-                {errors.command_number && <div className="text-red-500 text-sm mt-1">{errors.command_number}</div>}
+                {errors.command_number && <div className="text-destructive text-sm mt-1">{errors.command_number}</div>}
               </div>
 
               <div>
@@ -360,7 +360,7 @@ export default function Create({
                   value={data.invoice_id}
                   onChange={(e) => setData('invoice_id', e.target.value)}
                 />
-                {errors.invoice_id && <div className="text-red-500 text-sm mt-1">{errors.invoice_id}</div>}
+                {errors.invoice_id && <div className="text-destructive text-sm mt-1">{errors.invoice_id}</div>}
               </div>
 
               <div>
@@ -379,7 +379,7 @@ export default function Create({
                   <option value="réceptionner">Réceptionné</option>
                   <option value="traité">Traité</option>
                 </select>
-                {errors.statut && <div className="text-red-500 text-sm mt-1">{errors.statut}</div>}
+                {errors.statut && <div className="text-destructive text-sm mt-1">{errors.statut}</div>}
               </div>
 
               <div className="flex space-x-2 pt-4">
@@ -398,3 +398,4 @@ export default function Create({
     </AppLayout>
   );
 }
+

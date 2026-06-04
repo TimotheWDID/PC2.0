@@ -228,7 +228,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     value={data.first_name}
                     onChange={(e) => setData('first_name', e.target.value)}
                   />
-                  {errors.first_name && <p className="text-sm text-red-500">{errors.first_name}</p>}
+                  {errors.first_name && <p className="text-sm text-destructive">{errors.first_name}</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -240,7 +240,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     value={data.last_name}
                     onChange={(e) => setData('last_name', e.target.value)}
                   />
-                  {errors.last_name && <p className="text-sm text-red-500">{errors.last_name}</p>}
+                  {errors.last_name && <p className="text-sm text-destructive">{errors.last_name}</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -253,7 +253,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     value={data.email}
                     onChange={(e) => setData('email', e.target.value)}
                   />
-                  {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -265,7 +265,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     value={data.phone}
                     onChange={(e) => setData('phone', e.target.value)}
                   />
-                  {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
+                  {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -277,7 +277,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     value={data.address}
                     onChange={(e) => setData('address', e.target.value)}
                   />
-                  {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
+                  {errors.address && <p className="text-sm text-destructive">{errors.address}</p>}
                 </div>
 
                 {isAdmin && (
@@ -291,7 +291,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                         value={data.hiboutik_id}
                         onChange={(e) => setData('hiboutik_id', e.target.value)}
                       />
-                      {errors.hiboutik_id && <p className="text-sm text-red-500">{errors.hiboutik_id}</p>}
+                      {errors.hiboutik_id && <p className="text-sm text-destructive">{errors.hiboutik_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
@@ -304,7 +304,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                         onChange={(e) => setData('internal_note', e.target.value)}
                         rows={4}
                       />
-                      {errors.internal_note && <p className="text-sm text-red-500">{errors.internal_note}</p>}
+                      {errors.internal_note && <p className="text-sm text-destructive">{errors.internal_note}</p>}
                     </div>
                   </>
                 )}
@@ -324,7 +324,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                       <SelectItem value="None">Aucune</SelectItem>
                     </SelectContent>
                   </Select>
-                  {errors.default_notification_preference && <p className="text-sm text-red-500">{errors.default_notification_preference}</p>}
+                  {errors.default_notification_preference && <p className="text-sm text-destructive">{errors.default_notification_preference}</p>}
                 </div>
 
                 {isAdmin && (
@@ -345,7 +345,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                             value={data.password}
                             onChange={(e) => setData('password', e.target.value)}
                           />
-                          {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
+                          {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                         </div>
 
                         <div className="grid gap-2">
@@ -468,7 +468,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                 <div className="grid gap-2">
                   <Label>Modele *</Label>
                   <Input value={deviceData.model} onChange={(e) => setDeviceData('model', e.target.value)} placeholder="Latitude, iPhone..." />
-                  {deviceErrors.model && <p className="text-sm text-red-500">{deviceErrors.model}</p>}
+                  {deviceErrors.model && <p className="text-sm text-destructive">{deviceErrors.model}</p>}
                 </div>
               </div>
 
@@ -476,12 +476,12 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                 <div className="grid gap-2">
                   <Label>Numero de serie</Label>
                   <Input value={deviceData.serial_number} onChange={(e) => setDeviceData('serial_number', e.target.value)} />
-                  {deviceErrors.serial_number && <p className="text-sm text-red-500">{deviceErrors.serial_number}</p>}
+                  {deviceErrors.serial_number && <p className="text-sm text-destructive">{deviceErrors.serial_number}</p>}
                 </div>
                 <div className="grid gap-2">
                   <Label>Numero de suivi interne</Label>
                   <Input value={deviceData.asset_tag} onChange={(e) => setDeviceData('asset_tag', e.target.value)} />
-                  {deviceErrors.asset_tag && <p className="text-sm text-red-500">{deviceErrors.asset_tag}</p>}
+                  {deviceErrors.asset_tag && <p className="text-sm text-destructive">{deviceErrors.asset_tag}</p>}
                 </div>
               </div>
 
@@ -493,7 +493,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                 <div className="grid gap-2">
                   <Label>Fin de garantie</Label>
                   <Input type="date" value={deviceData.warranty_end_date} onChange={(e) => setDeviceData('warranty_end_date', e.target.value)} />
-                  {deviceErrors.warranty_end_date && <p className="text-sm text-red-500">{deviceErrors.warranty_end_date}</p>}
+                  {deviceErrors.warranty_end_date && <p className="text-sm text-destructive">{deviceErrors.warranty_end_date}</p>}
                 </div>
               </div>
 
@@ -574,3 +574,4 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
     </AppLayout>
   );
 }
+

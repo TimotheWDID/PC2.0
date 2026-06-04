@@ -194,7 +194,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                     onChange={(e) => setFournisseur(e.target.value)}
                     required
                   />
-                  {errors.fournisseur && <div className="text-red-500 text-sm mt-1">{errors.fournisseur}</div>}
+                  {errors.fournisseur && <div className="text-destructive text-sm mt-1">{errors.fournisseur}</div>}
                 </div>
 
                 <div>
@@ -205,7 +205,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                     onChange={(e) => setCommandNumber(e.target.value)}
                     required
                   />
-                  {errors.command_number && <div className="text-red-500 text-sm mt-1">{errors.command_number}</div>}
+                  {errors.command_number && <div className="text-destructive text-sm mt-1">{errors.command_number}</div>}
                 </div>
               </div>
             </CardContent>
@@ -238,7 +238,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                           size="sm"
                           onClick={() => removeItem(item.id)}
                         >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </CardHeader>
@@ -254,7 +254,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                             required
                           />
                           {errors[`items.${index}.nom` as keyof typeof errors] && (
-                            <div className="text-red-500 text-sm mt-1">
+                            <div className="text-destructive text-sm mt-1">
                               {errors[`items.${index}.nom` as keyof typeof errors]}
                             </div>
                           )}
@@ -326,12 +326,12 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
 
                           <input type="hidden" name={`items[${index}][user_id]`} value={item.user_id} />
                           {!item.user_id && selectedUserNames[item.id] && (
-                            <div className="text-amber-600 text-sm mt-1">
+                            <div className="mt-1 text-sm text-muted-foreground">
                               ⚠️ Veuillez sélectionner un client dans la liste
                             </div>
                           )}
                           {errors[`items.${index}.user_id` as keyof typeof errors] && (
-                            <div className="text-red-500 text-sm mt-1">
+                            <div className="text-destructive text-sm mt-1">
                               {errors[`items.${index}.user_id` as keyof typeof errors]}
                             </div>
                           )}
@@ -353,7 +353,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                             ))}
                           </select>
                           {errors[`items.${index}.ticket_id` as keyof typeof errors] && (
-                            <div className="text-red-500 text-sm mt-1">
+                            <div className="text-destructive text-sm mt-1">
                               {errors[`items.${index}.ticket_id` as keyof typeof errors]}
                             </div>
                           )}
@@ -368,7 +368,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                             placeholder="Ex: FACT-2025-001"
                           />
                           {errors[`items.${index}.invoice_id` as keyof typeof errors] && (
-                            <div className="text-red-500 text-sm mt-1">
+                            <div className="text-destructive text-sm mt-1">
                               {errors[`items.${index}.invoice_id` as keyof typeof errors]}
                             </div>
                           )}
@@ -380,7 +380,7 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
               )}
 
               {errors.items && typeof errors.items === 'string' && (
-                <div className="text-red-500 text-sm mt-1">{errors.items}</div>
+                <div className="text-destructive text-sm mt-1">{errors.items}</div>
               )}
             </CardContent>
           </Card>
@@ -399,3 +399,4 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
     </AppLayout>
   );
 }
+

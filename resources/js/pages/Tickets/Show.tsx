@@ -635,7 +635,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             <div className="flex items-center justify-between">
                               <Label>Type d&apos;evenement</Label>
                               {hasPrefillTemplate && (
-                                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                                <span className="inline-flex items-center gap-1 text-xs text-primary">
                                   <Sparkles className="h-3.5 w-3.5" />
                                   Pre-rempli actif
                                 </span>
@@ -656,7 +656,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                   <SelectItem key={option.value} value={option.value}>
                                     <span className="inline-flex items-center gap-1.5">
                                       {option.enabled ? (
-                                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
                                       ) : null}
                                       <span>{option.label}</span>
                                     </span>
@@ -812,13 +812,13 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                 • {formatDateTime(event.happened_at)}
                               </p>
                               {event.is_removed && (
-                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                <p className="text-xs text-muted-foreground">
                                   {event.removed_by?.name ?? 'Technicien'} a retiré un événement le {formatDateTime(event.removed_at)}
                                   {event.removed_reason ? ` - ${event.removed_reason}` : ''}
                                 </p>
                               )}
                               {!event.is_removed && event.restored_by?.name && (
-                                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                <p className="text-xs text-primary">
                                   Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
                                 </p>
                               )}
@@ -1029,7 +1029,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           id="is_resolved"
                           checked={formData.is_resolved}
                           onChange={(e) => setFormData({ ...formData, is_resolved: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300"
+                          className="h-4 w-4 rounded border-input"
                         />
                         <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
                       </div>
@@ -1040,7 +1040,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           id="is_locked"
                           checked={formData.is_locked}
                           onChange={(e) => setFormData({ ...formData, is_locked: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300"
+                          className="h-4 w-4 rounded border-input"
                         />
                         <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
                       </div>
@@ -1146,7 +1146,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             <div className="flex gap-4 text-sm">
                               <div className="flex items-center gap-2">
                                 {ticket.is_resolved ? (
-                                  <Badge variant="default" className="bg-green-600">Résolu</Badge>
+                                  <Badge variant="default" className="bg-primary">Résolu</Badge>
                                 ) : (
                                   <Badge variant="secondary">Non résolu</Badge>
                                 )}
@@ -1286,11 +1286,11 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className="font-medium truncate">{commande.nom}</span>
                               <Badge className={
-                                commande.statut === 'traité' ? 'bg-gray-500 text-xs' :
-                                commande.statut === 'réceptionner' ? 'bg-green-500 text-xs' :
-                                commande.statut === 'commandé' ? 'bg-purple-500 text-xs' :
-                                commande.statut === 'panier' ? 'bg-yellow-500 text-xs' :
-                                'bg-blue-500 text-xs'
+                                commande.statut === 'traité' ? 'status-badge-traite text-xs' :
+                                commande.statut === 'réceptionner' ? 'status-badge-reception text-xs' :
+                                commande.statut === 'commandé' ? 'status-badge-commande text-xs' :
+                                commande.statut === 'panier' ? 'status-badge-panier text-xs' :
+                                'status-badge-new text-xs'
                               }>
                                 {commande.statut === 'new' ? 'Nouveau' :
                                  commande.statut === 'panier' ? 'Panier' :
@@ -1373,7 +1373,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             <div className="flex items-center justify-between">
                               <Label>Type d&apos;evenement</Label>
                               {hasPrefillTemplate && (
-                                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                                <span className="inline-flex items-center gap-1 text-xs text-primary">
                                   <Sparkles className="h-3.5 w-3.5" />
                                   Pre-rempli actif
                                 </span>
@@ -1394,7 +1394,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                   <SelectItem key={option.value} value={option.value}>
                                     <span className="inline-flex items-center gap-1.5">
                                       {option.enabled ? (
-                                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
                                       ) : null}
                                       <span>{option.label}</span>
                                     </span>
@@ -1550,13 +1550,13 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                 • {formatDateTime(event.happened_at)}
                               </p>
                               {event.is_removed && (
-                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                <p className="text-xs text-muted-foreground">
                                   {event.removed_by?.name ?? 'Technicien'} a retire un evenement le {formatDateTime(event.removed_at)}
                                   {event.removed_reason ? ` - ${event.removed_reason}` : ''}
                                 </p>
                               )}
                               {!event.is_removed && event.restored_by?.name && (
-                                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                <p className="text-xs text-primary">
                                   Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
                                 </p>
                               )}
@@ -1851,3 +1851,4 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     </AppLayout>
   );
 }
+

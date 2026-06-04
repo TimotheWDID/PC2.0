@@ -68,13 +68,13 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
               <div>
                 <Label htmlFor="title">Sujet</Label>
                 <Input id="title" name="title" value={data.title} onChange={(e) => setData('title', e.target.value)} required />
-                {errors.title && <div className="text-red-500">{errors.title}</div>}
+                {errors.title && <div className="text-destructive">{errors.title}</div>}
               </div>
 
               <div>
                 <Label htmlFor="message">Description</Label>
                 <Textarea id="message" name="message" rows={6} value={data.message} onChange={(e) => setData('message', e.target.value)} />
-                {errors.message && <div className="text-red-500">{errors.message}</div>}
+                {errors.message && <div className="text-destructive">{errors.message}</div>}
               </div>
 
               <div>
@@ -120,7 +120,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.device_id && <div className="text-red-500">{errors.device_id}</div>}
+                {errors.device_id && <div className="text-destructive">{errors.device_id}</div>}
               </div>
 
               <div>
@@ -161,7 +161,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
                     id="is_resolved"
                     checked={data.is_resolved}
                     onChange={(e) => setData('is_resolved', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-input"
                   />
                   <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
                 </div>
@@ -172,7 +172,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
                     id="is_locked"
                     checked={data.is_locked}
                     onChange={(e) => setData('is_locked', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-input"
                   />
                   <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
                 </div>
@@ -190,3 +190,4 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
     </AppLayout>
   );
 }
+

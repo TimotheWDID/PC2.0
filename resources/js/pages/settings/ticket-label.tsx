@@ -311,7 +311,7 @@ export default function TicketLabelSettings({
                   <Button variant="ghost" asChild>
                     <Link href="/tickets/print-settings">Imprimante tickets</Link>
                   </Button>
-                  {saved && <span className="text-sm text-emerald-600">Enregistre</span>}
+                  {saved && <span className="text-sm text-primary">Enregistre</span>}
                 </div>
                 {!canManage && (
                   <p className="text-sm text-muted-foreground">

@@ -40,13 +40,32 @@ class HandleInertiaRequests extends Middleware
 
         $user = $request->user() ? $request->user()->load('agent') : null;
         $canToggleNonAgentPreview = (bool) ($user?->agent?->is_admin);
-        $nonAgentPreviewActive = $canToggleNonAgentPreview && (bool) $request->session()->get('preview_as_non_agent', false);
+        $sessionPreviewMode = $request->session()->get('preview_mode');
+        $legacyNonAgentPreview = (bool) $request->session()->get('preview_as_non_agent', false);
+        $previewMode = is_string($sessionPreviewMode) && in_array($sessionPreviewMode, ['admin', 'agent', 'user'], true)
+            ? $sessionPreviewMode
+            : ($legacyNonAgentPreview ? 'user' : ($canToggleNonAgentPreview ? 'admin' : ($user?->agent ? 'agent' : 'user')));
+        $previewMode = $canToggleNonAgentPreview ? $previewMode : ($user?->agent ? 'agent' : 'user');
+        $nonAgentPreviewActive = $previewMode === 'user';
         $sharedUser = $user;
 
-        if ($nonAgentPreviewActive && $user) {
+        if ($user && $canToggleNonAgentPreview) {
             // Never mutate the authenticated user instance used by route middleware/authorization.
             $sharedUser = clone $user;
-            $sharedUser->setRelation('agent', null);
+
+            if ($previewMode === 'user') {
+                $sharedUser->setRelation('agent', null);
+            } elseif ($previewMode === 'agent') {
+                if ($sharedUser->relationLoaded('agent') && $sharedUser->agent) {
+                    $sharedAgent = clone $sharedUser->agent;
+                    $sharedAgent->is_admin = false;
+                    $sharedUser->setRelation('agent', $sharedAgent);
+                }
+
+                if (isset($sharedUser->is_admin)) {
+                    $sharedUser->is_admin = false;
+                }
+            }
         }
 
         return [
@@ -60,6 +79,7 @@ class HandleInertiaRequests extends Middleware
             'preview' => [
                 'nonAgent' => $nonAgentPreviewActive,
                 'canToggle' => $canToggleNonAgentPreview,
+                'mode' => $previewMode,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

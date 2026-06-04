@@ -261,7 +261,7 @@ export default function PrintLabel({
   // ==========================================
 
   return (
-    <div className="page-root min-h-screen bg-slate-100 p-6 print:bg-white print:p-0">
+    <div className="page-root min-h-screen bg-background p-6 print:bg-white print:p-0">
       <Head title={`Impression ticket #${ticket.id}`} />
 
       {/* ===== STYLE CSS @media print ===== */}
@@ -356,7 +356,7 @@ export default function PrintLabel({
         <button
           type="button"
           onClick={() => window.print()}
-          className="ml-auto text-sm rounded-md border px-3 py-1 bg-white hover:bg-slate-50"
+          className="ml-auto rounded-md border bg-card px-3 py-1 text-sm hover:bg-muted"
         >
           Imprimer
         </button>
@@ -404,7 +404,7 @@ export default function PrintLabel({
                     >
                       <span>Ticket#{ticket.id}</span>
                       {labelSettings.showPriority && ticket.priority && (
-                        <span className="text-slate-700">({translatePriority(ticket.priority)})</span>
+                        <span className="text-muted-foreground">({translatePriority(ticket.priority)})</span>
                       )}
                     </div>
                   )}
@@ -412,7 +412,7 @@ export default function PrintLabel({
                   {/* Titre du ticket */}
                   {labelSettings.showTitle && (
                     <div
-                      className="text-slate-700"
+                      className="text-muted-foreground"
                       style={{ fontSize: `${titleFontPt}pt`, lineHeight: '1.1', wordBreak: 'break-word' }}
                     >
                       {labelTitle}
@@ -467,7 +467,7 @@ export default function PrintLabel({
 
                   {/* Extrait du message (dernière ligne) */}
                   {labelSettings.showMessage && ticketMessage && (
-                    <div className="italic text-slate-600" style={{ wordBreak: 'break-word' }}>
+                    <div className="italic text-muted-foreground" style={{ wordBreak: 'break-word' }}>
                       {ticketMessage}
                     </div>
                   )}

@@ -157,7 +157,10 @@ class TicketController extends Controller
             return false;
         }
 
-        $previewAsNonAgent = (bool) request()->session()->get('preview_as_non_agent', false);
+        $sessionPreviewMode = request()->session()->get('preview_mode');
+        $previewAsNonAgent = is_string($sessionPreviewMode)
+            ? $sessionPreviewMode === 'user'
+            : (bool) request()->session()->get('preview_as_non_agent', false);
 
         return ! $previewAsNonAgent;
     }

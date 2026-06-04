@@ -11,7 +11,9 @@ Route::middleware('auth')->group(function () {
     Route::get('tickets/bugs-improvements', [TicketController::class, 'specialIndex'])->name('tickets.special.index');
     Route::get('tickets/bugs-improvements/create', [TicketController::class, 'specialCreate'])->name('tickets.special.create');
 
-    Route::get('tickets/print-settings', [TicketController::class, 'printSettings'])->name('tickets.printSettings');
+    Route::get('tickets/print-settings', [TicketController::class, 'printSettings'])
+        ->middleware('admin')
+        ->name('tickets.printSettings');
     Route::get('tickets/{ticket}/print-label', [TicketController::class, 'printLabel'])->name('tickets.printLabel');
 
     Route::resource('tickets', TicketController::class)->whereNumber('ticket');

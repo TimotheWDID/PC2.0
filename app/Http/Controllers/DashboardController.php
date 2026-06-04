@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Commande;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Ticket;
@@ -15,6 +16,74 @@ class DashboardController extends Controller
     private function insightConfig(): array
     {
         return DashboardInsightSettings::load();
+    }
+
+    private function resolveTicketPriorityThresholds(array $insightConfig, string $baseKey): array
+    {
+        $fallback = max(1, (int) ($insightConfig[$baseKey] ?? 1));
+        $prioritySettings = $insightConfig[$baseKey . '_by_priority'] ?? [];
+
+        return [
+            'high' => max(1, (int) ($prioritySettings['high'] ?? $fallback)),
+            'medium' => max(1, (int) ($prioritySettings['medium'] ?? $fallback)),
+            'low' => max(1, (int) ($prioritySettings['low'] ?? $fallback)),
+        ];
+    }
+
+    private function applyPriorityHoursThreshold(Builder $query, array $thresholds): Builder
+    {
+        $knownPriorities = ['high', 'medium', 'low'];
+        $fallbackHours = max(1, (int) ($thresholds['medium'] ?? 1));
+
+        return $query->where(function (Builder $thresholdQuery) use ($thresholds, $knownPriorities, $fallbackHours) {
+            foreach ($knownPriorities as $priority) {
+                $hours = max(1, (int) ($thresholds[$priority] ?? $fallbackHours));
+
+                $thresholdQuery->orWhere(function (Builder $priorityQuery) use ($priority, $hours) {
+                    $priorityQuery
+                        ->where('priority', $priority)
+                        ->where('updated_at', '<=', now()->subHours($hours));
+                });
+            }
+
+            $thresholdQuery->orWhere(function (Builder $fallbackQuery) use ($knownPriorities, $fallbackHours) {
+                $fallbackQuery
+                    ->where(function (Builder $unknownPriorityQuery) use ($knownPriorities) {
+                        $unknownPriorityQuery
+                            ->whereNull('priority')
+                            ->orWhereNotIn('priority', $knownPriorities);
+                    })
+                    ->where('updated_at', '<=', now()->subHours($fallbackHours));
+            });
+        });
+    }
+
+    private function applyPriorityDaysThreshold(Builder $query, array $thresholds): Builder
+    {
+        $knownPriorities = ['high', 'medium', 'low'];
+        $fallbackDays = max(1, (int) ($thresholds['medium'] ?? 1));
+
+        return $query->where(function (Builder $thresholdQuery) use ($thresholds, $knownPriorities, $fallbackDays) {
+            foreach ($knownPriorities as $priority) {
+                $days = max(1, (int) ($thresholds[$priority] ?? $fallbackDays));
+
+                $thresholdQuery->orWhere(function (Builder $priorityQuery) use ($priority, $days) {
+                    $priorityQuery
+                        ->where('priority', $priority)
+                        ->where('updated_at', '<=', now()->subDays($days));
+                });
+            }
+
+            $thresholdQuery->orWhere(function (Builder $fallbackQuery) use ($knownPriorities, $fallbackDays) {
+                $fallbackQuery
+                    ->where(function (Builder $unknownPriorityQuery) use ($knownPriorities) {
+                        $unknownPriorityQuery
+                            ->whereNull('priority')
+                            ->orWhereNotIn('priority', $knownPriorities);
+                    })
+                    ->where('updated_at', '<=', now()->subDays($fallbackDays));
+            });
+        });
     }
 
     private function formatUserName(?\App\Models\User $user): ?string
@@ -166,7 +235,10 @@ class DashboardController extends Controller
             return false;
         }
 
-        $previewAsNonAgent = (bool) request()->session()->get('preview_as_non_agent', false);
+        $sessionPreviewMode = request()->session()->get('preview_mode');
+        $previewAsNonAgent = is_string($sessionPreviewMode)
+            ? $sessionPreviewMode === 'user'
+            : (bool) request()->session()->get('preview_as_non_agent', false);
 
         return ! $previewAsNonAgent;
     }
@@ -179,6 +251,9 @@ class DashboardController extends Controller
         $user = Auth::user();
         $isAgent = $this->isAgentContext();
         $insightConfig = $this->insightConfig();
+        $ticketPendingThresholds = $this->resolveTicketPriorityThresholds($insightConfig, 'ticket_pending_hours');
+        $ticketLowInfoThresholds = $this->resolveTicketPriorityThresholds($insightConfig, 'ticket_low_info_hours');
+        $ticketStalledThresholds = $this->resolveTicketPriorityThresholds($insightConfig, 'ticket_stalled_days');
 
         if ($isAgent) {
             $agentTickets = Ticket::query()
@@ -210,9 +285,9 @@ class DashboardController extends Controller
 
             $ticketActions = collect()
                 ->merge(
-                    (clone $agentTickets)
+                    $this->applyPriorityHoursThreshold((clone $agentTickets)
                         ->where('status', 'pending')
-                        ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_pending_hours']))
+                    , $ticketPendingThresholds)
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
@@ -232,9 +307,9 @@ class DashboardController extends Controller
                         })
                 )
                 ->merge(
-                    (clone $agentTickets)
+                    $this->applyPriorityHoursThreshold((clone $agentTickets)
                         ->whereIn('status', ['open', 'in_progress'])
-                        ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_low_info_hours']))
+                    , $ticketLowInfoThresholds)
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
@@ -256,9 +331,9 @@ class DashboardController extends Controller
                         })
                 )
                 ->merge(
-                    (clone $agentTickets)
+                    $this->applyPriorityDaysThreshold((clone $agentTickets)
                         ->whereIn('status', ['open', 'in_progress'])
-                        ->where('updated_at', '<=', now()->subDays($insightConfig['ticket_stalled_days']))
+                    , $ticketStalledThresholds)
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
@@ -360,6 +435,7 @@ class DashboardController extends Controller
                 ->map(fn (Ticket $ticket) => $this->serializeTicket($ticket));
 
             $assignedTickets = (clone $agentTickets)
+                ->whereNotIn('status', ['resolved', 'closed'])
                 ->orderByDesc('updated_at')
                 ->get()
                 ->map(fn (Ticket $ticket) => $this->serializeTicket($ticket));
@@ -415,9 +491,9 @@ class DashboardController extends Controller
 
             $ticketActions = collect()
                 ->merge(
-                    (clone $userTicketsQuery)
+                    $this->applyPriorityHoursThreshold((clone $userTicketsQuery)
                         ->where('status', 'pending')
-                        ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_pending_hours']))
+                    , $ticketPendingThresholds)
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()
@@ -437,9 +513,9 @@ class DashboardController extends Controller
                         })
                 )
                 ->merge(
-                    (clone $userTicketsQuery)
+                    $this->applyPriorityHoursThreshold((clone $userTicketsQuery)
                         ->whereIn('status', ['open', 'in_progress'])
-                        ->where('updated_at', '<=', now()->subHours($insightConfig['ticket_low_info_hours']))
+                    , $ticketLowInfoThresholds)
                         ->orderBy('updated_at')
                         ->limit($insightConfig['max_items_per_rule'])
                         ->get()

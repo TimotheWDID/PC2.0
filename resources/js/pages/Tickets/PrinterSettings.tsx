@@ -71,7 +71,7 @@ export default function PrinterSettings() {
                   <Link href="/settings/ticket-label">Options etiquette</Link>
                 </Button>
                 {saved && (
-                  <span className="text-sm text-emerald-600">Enregistre</span>
+                  <span className="text-sm text-primary">Enregistre</span>
                 )}
               </div>
             </form>

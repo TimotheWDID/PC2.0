@@ -289,7 +289,7 @@ export default function TicketTimelineTemplatesSettings({
 
                 <div className="flex items-center gap-2">
                   <Button type="submit" disabled={!canManage}>Enregistrer</Button>
-                  {saved && <span className="text-sm text-emerald-600">Enregistre</span>}
+                  {saved && <span className="text-sm text-primary">Enregistre</span>}
                 </div>
 
                 {!canManage && (

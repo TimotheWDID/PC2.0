@@ -85,6 +85,33 @@ const statusLabel = (status?: string | null): string => {
     return map[status] ?? status;
 };
 
+const statusBadgeClass = (status?: string | null): string => {
+    if (status === 'open') return 'border-transparent bg-primary text-primary-foreground';
+    if (status === 'in_progress') return 'border-transparent bg-secondary text-secondary-foreground';
+    if (status === 'pending') return 'border-border bg-muted text-foreground';
+    if (status === 'resolved') return 'border-transparent bg-accent text-accent-foreground';
+    if (status === 'closed') return 'border-border bg-background text-muted-foreground';
+    return 'border-border bg-background text-muted-foreground';
+};
+
+const priorityLabel = (priority?: string | null): string => {
+    const map: Record<string, string> = {
+        high: 'Haute',
+        medium: 'Moyenne',
+        low: 'Basse',
+    };
+
+    if (!priority) return 'Non précisée';
+    return map[priority] ?? priority;
+};
+
+const priorityBadgeClass = (priority?: string | null): string => {
+    if (priority === 'high') return 'bg-primary text-primary-foreground';
+    if (priority === 'medium') return 'bg-secondary text-secondary-foreground';
+    if (priority === 'low') return 'bg-muted text-foreground';
+    return 'bg-muted text-muted-foreground';
+};
+
 const severityLabel = (severity: Severity): string => {
     if (severity === 'critical') return 'Critique';
     if (severity === 'warning') return 'Attention';
@@ -330,7 +357,9 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0">
                                                         <div className="text-[11px] text-muted-foreground">
-                                                            {item.kind === 'ticket' ? `Ticket n°${item.ticket?.id ?? '-'}` : `Commande n°${item.commande?.id ?? '-'}`}
+                                                            {item.kind === 'ticket'
+                                                                ? `#${item.ticket?.id ?? '-'} ${item.ticket?.title ?? 'Sans titre'}`
+                                                                : `Commande n°${item.commande?.id ?? '-'}`}
                                                         </div>
                                                         <div className="break-words text-sm font-medium leading-snug">{item.title}</div>
                                                     </div>
@@ -378,13 +407,15 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                                                     <div className="text-[11px] text-muted-foreground">{ticket.requester_name ?? 'Demandeur inconnu'}</div>
                                                     <div className="break-words text-sm font-medium leading-snug">Ticket n°{ticket.id} · {ticket.title ?? 'Sans titre'}</div>
                                                 </div>
-                                                <Badge className="shrink-0" variant="outline">
+                                                <Badge className={`shrink-0 ${statusBadgeClass(ticket.status)}`} variant="outline">
                                                     {statusLabel(ticket.status)}
                                                 </Badge>
                                             </div>
 
                                             <p className="mt-1.5 break-words text-xs text-muted-foreground">
-                                                {ticket.priority ? `Priorité ${ticket.priority}` : 'Priorité non précisée'}
+                                                <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${priorityBadgeClass(ticket.priority)}`}>
+                                                    Priorité {priorityLabel(ticket.priority)}
+                                                </span>
                                                 {ticket.updated_at ? ` · Mis à jour le ${formatDateTimeFr(ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
                                             </p>
                                         </Link>
@@ -598,7 +629,9 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0 space-y-1">
                                                         <div className="text-xs text-muted-foreground">
-                                                            {item.kind === 'ticket' ? `Ticket n°${item.ticket?.id ?? '-'}` : `Commande n°${item.commande?.id ?? '-'}`}
+                                                            {item.kind === 'ticket'
+                                                                ? `#${item.ticket?.id ?? '-'} ${item.ticket?.title ?? 'Sans titre'}`
+                                                                : `Commande n°${item.commande?.id ?? '-'}`}
                                                         </div>
                                                         <div className="break-words font-medium leading-tight">{item.title}</div>
                                                     </div>
@@ -629,7 +662,9 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
 
                                                 {item.commande && (
                                                     <div className="mt-3 break-words text-xs text-muted-foreground">
-                                                        {item.commande.ticket_title ?? `Ticket n°${item.commande.ticket_id ?? '-'}`} · statut commande: {item.commande.statut ?? 'N/A'}
+                                                        {item.commande.ticket_id
+                                                            ? `#${item.commande.ticket_id} ${item.commande.ticket_title ?? 'Sans titre'}`
+                                                            : item.commande.ticket_title ?? 'Ticket lié'} · statut commande: {item.commande.statut ?? 'N/A'}
                                                     </div>
                                                 )}
 
@@ -658,11 +693,13 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                                                     <div className="text-xs text-muted-foreground">{ticket.requester_name ?? 'Demandeur inconnu'}</div>
                                                     <div className="break-words font-medium leading-tight">Ticket n°{ticket.id} · {ticket.title ?? 'Sans titre'}</div>
                                                 </div>
-                                                <Badge className="shrink-0" variant="outline">{statusLabel(ticket.status)}</Badge>
+                                                <Badge className={`shrink-0 ${statusBadgeClass(ticket.status)}`} variant="outline">{statusLabel(ticket.status)}</Badge>
                                             </div>
 
                                             <p className="mt-2 break-words text-sm text-muted-foreground">
-                                                {ticket.priority ? `Priorité ${ticket.priority}` : 'Priorité non précisée'}
+                                                <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${priorityBadgeClass(ticket.priority)}`}>
+                                                    Priorité {priorityLabel(ticket.priority)}
+                                                </span>
                                                 {ticket.updated_at ? ` · Mis à jour le ${formatDateTimeFr(ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
                                             </p>
                                         </Link>

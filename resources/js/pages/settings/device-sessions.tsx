@@ -44,7 +44,7 @@ export default function DeviceSessions({ sessions, status }: DeviceSessionsProps
                     />
 
                     {status && (
-                        <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
+                        <div role="status" aria-live="polite" className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
                             {status}
                         </div>
                     )}
@@ -110,3 +110,4 @@ export default function DeviceSessions({ sessions, status }: DeviceSessionsProps
         </AppLayout>
     );
 }
+
