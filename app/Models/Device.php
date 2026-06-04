@@ -28,12 +28,16 @@ class Device extends Model
         'storage_gb',
         'cpu',
         'notes',
+        'access_password',
+        'no_access_password',
     ];
 
     protected $casts = [
         'purchase_date' => 'date',
         'warranty_start_date' => 'date',
         'warranty_end_date' => 'date',
+        'access_password' => 'encrypted',
+        'no_access_password' => 'boolean',
     ];
 
     public function user(): BelongsTo

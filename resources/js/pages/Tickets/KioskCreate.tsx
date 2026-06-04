@@ -58,6 +58,8 @@ export default function KioskCreate({ categories, success = false, ticketId = nu
     city: '',
     title: '',
     message: '',
+    device_password: '',
+    no_device_password: false,
     category_id: '',
   })
 
@@ -80,6 +82,7 @@ export default function KioskCreate({ categories, success = false, ticketId = nu
             <div>
               <h1 className="text-3xl font-semibold text-foreground md:text-4xl dark:text-foreground">Demande de support</h1>
               <p className="mt-3 text-lg text-muted-foreground dark:text-muted-foreground">Remplissez ce formulaire. Nous vous recontactons rapidement.</p>
+              <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">Comptez environ 2 minutes pour compléter votre demande.</p>
             </div>
 
             <button
@@ -128,8 +131,8 @@ export default function KioskCreate({ categories, success = false, ticketId = nu
           )}
 
           <form onSubmit={submit} className="space-y-6 rounded-2xl bg-card p-6 shadow-sm ring-1 ring-border dark:bg-card dark:ring-border">
-            <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">Vos informations</h2>
+            <section className="space-y-4 rounded-xl border border-border p-4 dark:border-border">
+              <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">1. Vos informations</h2>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -231,8 +234,8 @@ export default function KioskCreate({ categories, success = false, ticketId = nu
               </details>
             </section>
 
-            <section className="space-y-4 border-t border-border pt-6 dark:border-border">
-              <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">Votre demande</h2>
+            <section className="space-y-4 rounded-xl border border-border p-4 dark:border-border">
+              <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">2. Votre demande</h2>
 
               <div>
                 <label htmlFor="title" className="mb-2 block text-lg font-medium text-foreground dark:text-foreground">Sujet</label>
@@ -277,9 +280,46 @@ export default function KioskCreate({ categories, success = false, ticketId = nu
                 />
                 {errors.message && <p className="mt-2 text-base text-destructive">{errors.message}</p>}
               </div>
+
+              <div className="rounded-xl border-2 border-input p-4 dark:border-input">
+                <label htmlFor="device_password" className="mb-2 block text-lg font-medium text-foreground dark:text-foreground">Mot de passe appareil</label>
+                <input
+                  id="device_password"
+                  type="text"
+                  value={data.device_password}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setData('device_password', value)
+                    if (value.trim() !== '' && data.no_device_password) {
+                      setData('no_device_password', false)
+                    }
+                  }}
+                  disabled={data.no_device_password}
+                  className="h-14 w-full rounded-xl border-2 border-input bg-card px-4 text-xl text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-70 dark:border-input dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground"
+                  placeholder="Windows, session, BIOS..."
+                />
+
+                <label className="mt-3 flex items-center gap-2 text-base text-foreground dark:text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={data.no_device_password}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setData('no_device_password', checked)
+                      if (checked) {
+                        setData('device_password', '')
+                      }
+                    }}
+                  />
+                  Je n&apos;ai pas de mots de passe
+                </label>
+
+                {errors.device_password && <p className="mt-2 text-base text-destructive">{errors.device_password}</p>}
+                {errors.no_device_password && <p className="mt-2 text-base text-destructive">{errors.no_device_password}</p>}
+              </div>
             </section>
 
-            <div className="border-t border-border pt-6 dark:border-border">
+            <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-background/95 p-4 backdrop-blur dark:border-border dark:bg-background/95">
               <button
                 type="submit"
                 disabled={processing}

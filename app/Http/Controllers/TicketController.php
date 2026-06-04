@@ -117,6 +117,38 @@ class TicketController extends Controller
         return Str::limit($value, $maxLength, '');
     }
 
+    private function normalizeDevicePassword(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        return Str::limit($value, 500, '');
+    }
+
+    private function syncTicketPasswordToDevice(Ticket $ticket, Device $device): void
+    {
+        if (!empty($ticket->device_password)) {
+            $device->access_password = $ticket->device_password;
+            $device->no_access_password = false;
+            $device->save();
+
+            return;
+        }
+
+        if ($ticket->no_device_password) {
+            $device->access_password = null;
+            $device->no_access_password = true;
+            $device->save();
+        }
+    }
+
     private function inferTicketKindFromCategoryName(?string $categoryName): string
     {
         $normalized = Str::lower((string) $categoryName);
@@ -489,6 +521,7 @@ class TicketController extends Controller
 
             $ticket->device_id = $device->id;
             $ticket->save();
+            $this->syncTicketPasswordToDevice($ticket, $device);
 
             if ((int) $previousDeviceId !== (int) $ticket->device_id) {
                 $this->logTechnicianTimeline(
@@ -547,6 +580,7 @@ class TicketController extends Controller
 
         $ticket->device_id = $device->id;
         $ticket->save();
+        $this->syncTicketPasswordToDevice($ticket, $device);
 
         $this->logTechnicianTimeline(
             $ticket,
@@ -651,6 +685,8 @@ class TicketController extends Controller
         $rules = [
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
+            'device_password' => 'nullable|string|max:500|required_without:no_device_password',
+            'no_device_password' => 'nullable|accepted|required_without:device_password',
             'category_id' => 'nullable|integer',
             'ticket_kind' => ['nullable', Rule::in($allowedTicketKinds)],
             'device_id' => 'nullable|integer|exists:devices,id',
@@ -672,6 +708,14 @@ class TicketController extends Controller
         }
 
         $data = $request->validate($rules);
+        $normalizedDevicePassword = $this->normalizeDevicePassword($request->input('device_password'));
+        $noDevicePassword = $request->boolean('no_device_password');
+
+        if ($normalizedDevicePassword === null && !$noDevicePassword) {
+            return back()->withErrors([
+                'device_password' => 'Renseignez le mot de passe de l\'appareil ou cochez "Je n\'ai pas de mots de passe".',
+            ])->withInput();
+        }
 
         $ticket = new Ticket();
 
@@ -750,6 +794,8 @@ class TicketController extends Controller
 
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
+        $ticket->device_password = $normalizedDevicePassword;
+        $ticket->no_device_password = $normalizedDevicePassword ? false : $noDevicePassword;
         $ticketKind = $data['ticket_kind'] ?? ($specialOnly ? 'bug' : 'standard');
         if ($supportsTicketKind) {
             $ticket->ticket_kind = $ticketKind;
@@ -792,6 +838,14 @@ class TicketController extends Controller
             );
         }
 
+        if (!empty($ticket->device_id)) {
+            $linkedDevice = Device::find($ticket->device_id);
+
+            if ($linkedDevice) {
+                $this->syncTicketPasswordToDevice($ticket, $linkedDevice);
+            }
+        }
+
         $this->logTechnicianTimeline(
             $ticket,
             'ticket_created_by_technician',
@@ -831,8 +885,19 @@ class TicketController extends Controller
             'email' => 'nullable|email|max:255',
             'title' => 'required|string|max:255',
             'message' => 'required|string|max:3000',
+            'device_password' => 'nullable|string|max:500|required_without:no_device_password',
+            'no_device_password' => 'nullable|accepted|required_without:device_password',
             'category_id' => 'nullable|integer|exists:categories,id',
         ]);
+
+        $normalizedDevicePassword = $this->normalizeDevicePassword($request->input('device_password'));
+        $noDevicePassword = $request->boolean('no_device_password');
+
+        if ($normalizedDevicePassword === null && !$noDevicePassword) {
+            return back()->withErrors([
+                'device_password' => 'Renseignez le mot de passe de l\'appareil ou cochez "Je n\'ai pas de mots de passe".',
+            ])->withInput();
+        }
 
         if (empty($data['phone']) && empty($data['email'])) {
             return back()->withErrors([
@@ -877,6 +942,8 @@ class TicketController extends Controller
         $ticket->user_id = $user->id;
         $ticket->title = $data['title'];
         $ticket->message = $data['message'];
+        $ticket->device_password = $normalizedDevicePassword;
+        $ticket->no_device_password = $normalizedDevicePassword ? false : $noDevicePassword;
         $ticket->ticket_kind = 'standard';
         $ticket->priority = 'low';
         $ticket->status = 'open';
@@ -1040,6 +1107,8 @@ class TicketController extends Controller
                 'title' => $ticket->title,
                 'ticket_kind' => $this->supportsTicketKind() ? ($ticket->ticket_kind ?? 'standard') : 'standard',
                 'message' => $ticket->message,
+                'device_password' => $ticket->device_password,
+                'no_device_password' => (bool) $ticket->no_device_password,
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'invoice_id' => $ticket->invoice_id,
@@ -1108,6 +1177,8 @@ class TicketController extends Controller
                 'id' => $ticket->id,
                 'title' => $ticket->title,
                 'message' => $ticket->message,
+                'device_password' => $ticket->device_password,
+                'no_device_password' => (bool) $ticket->no_device_password,
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'category_id' => $ticket->category_id,
@@ -1133,6 +1204,7 @@ class TicketController extends Controller
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
+        $previousDeviceId = $ticket->device_id;
 
         $originalValues = [];
         foreach (self::TRACKED_TICKET_FIELDS as $field) {
@@ -1185,6 +1257,14 @@ class TicketController extends Controller
         }
 
         $ticket->save();
+
+        if (!empty($ticket->device_id) && (int) $previousDeviceId !== (int) $ticket->device_id) {
+            $linkedDevice = Device::find($ticket->device_id);
+
+            if ($linkedDevice) {
+                $this->syncTicketPasswordToDevice($ticket, $linkedDevice);
+            }
+        }
 
         if (isset($data['category_id']) && method_exists($ticket, 'categories')) {
             try {

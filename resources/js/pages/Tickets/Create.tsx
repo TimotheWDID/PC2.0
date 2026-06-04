@@ -79,6 +79,8 @@ export default function CreateTicket({
   const { data, setData, post, processing, errors, transform } = useForm({
     title: defaultTitle,
     message: defaultMessage,
+    device_password: '',
+    no_device_password: false,
     category_id: '',
     ticket_kind: defaultTicketKind,
     special_only: specialOnly ? '1' : '0',
@@ -167,20 +169,27 @@ export default function CreateTicket({
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={pageTitle} />
-      <div className="space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
         <Heading title={pageTitle} description={pageDescription} />
 
-        <Card>
-          <CardHeader>
+        <Card className="border-border/70 shadow-sm">
+          <CardHeader className="border-b bg-muted/20">
             <CardTitle>{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={(e) => submit(e, false)} className="space-y-4">
+            <form onSubmit={(e) => submit(e, false)} className="space-y-6 pt-6">
+              <div className="rounded-lg border border-border/70 bg-background p-4">
+                <p className="text-sm font-medium text-foreground">Formulaire de création</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Renseignez le maximum d&apos;informations utiles pour accélérer la prise en charge.
+                </p>
+              </div>
+
               {/* Section pour sélectionner/créer un utilisateur (agents uniquement) */}
               {isAgent && !specialOnly && (
-                <div className="border-b pb-6 mb-6">
-                  <h3 className="text-lg font-semibold mb-4">Demandeur du ticket</h3>
+                <div className="space-y-4 rounded-lg border border-border/70 bg-muted/10 p-4">
+                  <h3 className="text-lg font-semibold">1. Demandeur du ticket</h3>
 
                   <div className="space-y-4">
                     <div>
@@ -391,50 +400,93 @@ export default function CreateTicket({
                 </div>
               )}
 
-              <div>
+              <div className="space-y-2 rounded-lg border border-border/70 p-4">
+                <h3 className="text-lg font-semibold">{isAgent && !specialOnly ? '2. Détails du ticket' : '1. Détails du ticket'}</h3>
                 <Label htmlFor="title">Sujet</Label>
                 <Input
                   id="title"
                   value={data.title}
                   onChange={(e) => setData('title', e.target.value)}
                   required
+                  placeholder="Ex: L&apos;ordinateur redémarre en boucle"
                 />
-                {errors.title && <div className="text-destructive">{errors.title}</div>}
-              </div>
+                <p className="text-xs text-muted-foreground">Titre court et explicite.</p>
+                {errors.title && <div className="text-sm text-destructive">{errors.title}</div>}
 
-              {specialOnly ? (
+                {specialOnly ? (
+                  <div>
+                    <Label htmlFor="ticket_kind">Type de ticket spécial</Label>
+                    <select
+                      id="ticket_kind"
+                      name="ticket_kind"
+                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={data.ticket_kind}
+                      onChange={(e) => setData('ticket_kind', e.target.value as 'bug' | 'improvement')}
+                    >
+                      <option value="bug">Signaler un bug</option>
+                      <option value="improvement">Proposer une amélioration</option>
+                    </select>
+                    {errors.ticket_kind && <div className="text-sm text-destructive">{errors.ticket_kind}</div>}
+                  </div>
+                ) : (
+                  <input type="hidden" name="ticket_kind" value="standard" />
+                )}
+
                 <div>
-                  <Label htmlFor="ticket_kind">Type de ticket spécial</Label>
-                  <select
-                    id="ticket_kind"
-                    name="ticket_kind"
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={data.ticket_kind}
-                    onChange={(e) => setData('ticket_kind', e.target.value as 'bug' | 'improvement')}
-                  >
-                    <option value="bug">Signaler un bug</option>
-                    <option value="improvement">Proposer une amélioration</option>
-                  </select>
-                  {errors.ticket_kind && <div className="text-destructive">{errors.ticket_kind}</div>}
+                  <Label htmlFor="message">Description</Label>
+                  <textarea
+                    id="message"
+                    rows={6}
+                    className="form-control mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={data.message}
+                    onChange={(e) => setData('message', e.target.value)}
+                    required
+                    placeholder="Contexte, symptômes, manipulations déjà tentées..."
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Plus votre description est précise, plus le diagnostic est rapide.</p>
+                  {errors.message && <div className="text-sm text-destructive">{errors.message}</div>}
                 </div>
-              ) : (
-                <input type="hidden" name="ticket_kind" value="standard" />
-              )}
-
-              <div>
-                <Label htmlFor="message">Description</Label>
-                <textarea
-                  id="message"
-                  rows={6}
-                  className="form-control mt-1 w-full rounded-md border px-3 py-2"
-                  value={data.message}
-                  onChange={(e) => setData('message', e.target.value)}
-                  required
-                />
-                {errors.message && <div className="text-destructive">{errors.message}</div>}
               </div>
 
-              <div>
+              <div className="space-y-2 rounded-lg border border-border/70 bg-muted/10 p-4">
+                <Label htmlFor="device_password">MDP appareil</Label>
+                <Input
+                  id="device_password"
+                  type="text"
+                  value={data.device_password}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setData('device_password', value)
+                    if (value.trim() !== '' && data.no_device_password) {
+                      setData('no_device_password', false)
+                    }
+                  }}
+                  disabled={data.no_device_password}
+                  placeholder="Mot de passe Windows, session, BIOS..."
+                />
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={data.no_device_password}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setData('no_device_password', checked)
+                      if (checked) {
+                        setData('device_password', '')
+                      }
+                    }}
+                  />
+                  Je n&apos;ai pas de mots de passe
+                </label>
+
+                <p className="text-xs text-muted-foreground">Ce champ peut rester au niveau du ticket même sans appareil lié.</p>
+
+                {errors.device_password && <div className="text-sm text-destructive">{errors.device_password}</div>}
+                {errors.no_device_password && <div className="text-sm text-destructive">{errors.no_device_password}</div>}
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border/70 p-4">
                 <Label htmlFor="category_id">Catégorie</Label>
                 <select
                   id="category_id"
@@ -448,10 +500,12 @@ export default function CreateTicket({
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+                <p className="text-xs text-muted-foreground">Optionnel, utile pour le tri et la priorisation.</p>
               </div>
 
               {!specialOnly && (
-                <div className="space-y-4 rounded-md border p-3">
+                <div className="space-y-4 rounded-lg border border-border/70 bg-muted/10 p-4">
+                  <h3 className="text-lg font-semibold">{isAgent ? '3. Appareil concerné' : '2. Appareil concerné'}</h3>
                   <div>
                     <Label htmlFor="device_id">Appareil lié (optionnel)</Label>
                     <select
@@ -466,7 +520,7 @@ export default function CreateTicket({
                         <option key={device.id} value={device.id}>{device.display_name}</option>
                       ))}
                     </select>
-                    {errors.device_id && <div className="text-destructive">{errors.device_id}</div>}
+                    {errors.device_id && <div className="text-sm text-destructive">{errors.device_id}</div>}
                   </div>
 
                   <label className="flex items-center gap-2 text-sm">
@@ -513,7 +567,7 @@ export default function CreateTicket({
                           onChange={(e) => setData('quick_device_model', e.target.value)}
                           placeholder="Latitude, iPhone..."
                         />
-                        {errors.quick_device_model && <div className="text-destructive">{errors.quick_device_model}</div>}
+                        {errors.quick_device_model && <div className="text-sm text-destructive">{errors.quick_device_model}</div>}
                       </div>
 
                       <div>
@@ -523,7 +577,7 @@ export default function CreateTicket({
                           value={data.quick_device_serial_number}
                           onChange={(e) => setData('quick_device_serial_number', e.target.value)}
                         />
-                        {errors.quick_device_serial_number && <div className="text-destructive">{errors.quick_device_serial_number}</div>}
+                        {errors.quick_device_serial_number && <div className="text-sm text-destructive">{errors.quick_device_serial_number}</div>}
                       </div>
 
                       <div>
@@ -533,7 +587,7 @@ export default function CreateTicket({
                           value={data.quick_device_asset_tag}
                           onChange={(e) => setData('quick_device_asset_tag', e.target.value)}
                         />
-                        {errors.quick_device_asset_tag && <div className="text-destructive">{errors.quick_device_asset_tag}</div>}
+                        {errors.quick_device_asset_tag && <div className="text-sm text-destructive">{errors.quick_device_asset_tag}</div>}
                       </div>
 
                       <div>
@@ -554,14 +608,14 @@ export default function CreateTicket({
                           value={data.quick_device_warranty_end_date}
                           onChange={(e) => setData('quick_device_warranty_end_date', e.target.value)}
                         />
-                        {errors.quick_device_warranty_end_date && <div className="text-destructive">{errors.quick_device_warranty_end_date}</div>}
+                        {errors.quick_device_warranty_end_date && <div className="text-sm text-destructive">{errors.quick_device_warranty_end_date}</div>}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="flex space-x-2">
+              <div className="sticky bottom-4 z-10 flex flex-wrap gap-2 rounded-lg border border-border/70 bg-background/95 p-3 backdrop-blur">
                 <Button type="submit" disabled={processing || (isAgent && !specialOnly && !selectedUser)} variant="default">
                   {isSpecialTicket ? 'Créer le ticket spécial' : 'Créer'}
                 </Button>

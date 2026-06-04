@@ -22,6 +22,8 @@ class Ticket extends Model
         'invoice_id',
         'title',
         'message',
+        'device_password',
+        'no_device_password',
         'ticket_kind',
         'priority',
         'status',
@@ -35,6 +37,8 @@ class Ticket extends Model
     ];
 
     protected $casts = [
+        'device_password' => 'encrypted',
+        'no_device_password' => 'boolean',
         'is_resolved' => 'boolean',
         'is_locked' => 'boolean',
     ];

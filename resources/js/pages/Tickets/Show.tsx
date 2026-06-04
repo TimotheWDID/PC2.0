@@ -1088,6 +1088,10 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         <span className="text-muted-foreground">Appareil:</span>{' '}
                         <strong>{ticket.device?.display_name ?? 'Aucun appareil lié'}</strong>
                       </div>
+                      <div>
+                        <span className="text-muted-foreground">MDP appareil:</span>{' '}
+                        <strong>{ticket.device_password ?? (ticket.no_device_password ? 'Je n\'ai pas de mots de passe' : '-')}</strong>
+                      </div>
                     </div>
 
                     {ticket.category && (
