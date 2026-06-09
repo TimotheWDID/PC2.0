@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,11 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
   { title: "Créer un ticket", href: '/tickets/create' },
 ]
+
+const selectClassName = 'mt-1 flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs transition-[color,box-shadow] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
+const sectionClassName = 'rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/20 p-5 shadow-sm md:p-6'
+const sectionHeaderClassName = 'mb-4 flex items-start gap-3'
+const stepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted/40 text-sm font-semibold text-foreground'
 
 export default function CreateTicket({
   categories,
@@ -116,60 +122,6 @@ export default function CreateTicket({
     print_label: '0',
   })
 
-  const draftStorageKey = specialOnly ? 'supportpc.ticket-create.draft.special' : 'supportpc.ticket-create.draft.standard'
-
-  useEffect(() => {
-    const rawDraft = window.localStorage.getItem(draftStorageKey)
-    if (!rawDraft) {
-      return
-    }
-
-    try {
-      const parsed = JSON.parse(rawDraft) as {
-        form?: Partial<typeof data>
-        searchQuery?: string
-        selectedUserId?: number | null
-        newUserData?: typeof newUserData
-      }
-
-      if (parsed.form) {
-        setData((current) => ({
-          ...current,
-          ...parsed.form,
-        }))
-      }
-
-      if (typeof parsed.searchQuery === 'string') {
-        setSearchQuery(parsed.searchQuery)
-      }
-
-      if (parsed.newUserData) {
-        setNewUserData(parsed.newUserData)
-      }
-
-      if (isAgent && parsed.selectedUserId) {
-        const restoredUser = users.find((user) => user.id === parsed.selectedUserId) ?? null
-        if (restoredUser) {
-          setSelectedUser(restoredUser)
-        }
-      }
-    } catch {
-      window.localStorage.removeItem(draftStorageKey)
-    }
-  }, [draftStorageKey, isAgent, setData, users])
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      draftStorageKey,
-      JSON.stringify({
-        form: data,
-        searchQuery,
-        selectedUserId: selectedUser?.id ?? null,
-        newUserData,
-      }),
-    )
-  }, [data, draftStorageKey, newUserData, searchQuery, selectedUser])
-
   const isSpecialTicket = data.ticket_kind === 'bug' || data.ticket_kind === 'improvement'
   const pageTitle = specialOnly ? 'Bug et amélioration' : 'Créer un ticket'
   const pageDescription = specialOnly
@@ -189,7 +141,7 @@ export default function CreateTicket({
   const submit = (e: React.SyntheticEvent, printLabel = false) => {
     e.preventDefault()
 
-    if (!data.device_password.trim() && !data.no_device_password) {
+    if (!data.device_password.trim()) {
       setPendingPrintAfterPasswordConfirm(printLabel)
       setShowPasswordConfirmDialog(true)
       return
@@ -200,20 +152,16 @@ export default function CreateTicket({
       ...current,
       user_selection: useExistingUser ? 'existing' : current.user_selection,
       user_id: useExistingUser ? selectedUser?.id.toString() ?? '' : current.user_id,
-      password_empty_confirmed: current.no_device_password,
+      no_device_password: false,
+      password_empty_confirmed: false,
       print_label: printLabel ? '1' : '0',
     }))
     post('/tickets', {
-      onSuccess: () => {
-        window.localStorage.removeItem(draftStorageKey)
-      },
       onFinish: () => transform((current) => current),
     })
   }
 
   const confirmNoPasswordAndSubmit = () => {
-    setData('no_device_password', true)
-    setData('password_empty_confirmed', true)
     setShowPasswordConfirmDialog(false)
 
     const useExistingUser = Boolean(selectedUser && data.user_selection !== 'new')
@@ -227,9 +175,6 @@ export default function CreateTicket({
     }))
 
     post('/tickets', {
-      onSuccess: () => {
-        window.localStorage.removeItem(draftStorageKey)
-      },
       onFinish: () => transform((current) => current),
     })
   }
@@ -268,32 +213,43 @@ export default function CreateTicket({
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={pageTitle} />
-      <div className="mx-auto max-w-6xl space-y-6 pb-24">
-        <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/40 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/10 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-20 left-1/3 h-44 w-44 rounded-full bg-secondary/20 blur-3xl" />
-          <div className="relative space-y-4">
-            <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              {specialOnly ? 'Espace qualité produit' : 'Centre de support'}
+      <div className="mx-auto max-w-7xl space-y-6 pb-24">
+        <section className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-background via-background to-muted/50 p-6 shadow-sm md:p-8">
+          <div className="pointer-events-none absolute -right-12 top-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 left-16 h-32 w-32 rounded-full bg-secondary/20 blur-3xl" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.6fr_0.9fr] lg:items-end">
+            <div className="space-y-4">
+              <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                {specialOnly ? 'Signalement produit' : 'Ouverture de prise en charge'}
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{pageTitle}</h1>
+                <p className="max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">{pageDescription}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-border bg-background/80 px-3 py-1 text-xs text-foreground">Formulaire structure</span>
+                <span className="rounded-full border border-border bg-background/80 px-3 py-1 text-xs text-foreground">Infos techniques centralisees</span>
+                <span className="rounded-full border border-border bg-background/80 px-3 py-1 text-xs text-foreground">Creation plus rapide</span>
+              </div>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{pageTitle}</h1>
-            <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{pageDescription}</p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Description claire</span>
-              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Contexte complet</span>
-              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Prise en charge plus rapide</span>
+            <div className="rounded-3xl border border-border/70 bg-background/80 p-5 backdrop-blur">
+              <p className="text-sm font-semibold text-foreground">Avant de valider</p>
+              <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">Un sujet court, une description precise et un contexte clair evitent les allers-retours.</div>
+                <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">Le mot de passe reste au niveau du ticket et sera aussi reporte sur l'appareil si vous le liez.</div>
+              </div>
             </div>
           </div>
         </section>
 
-        <Card className="overflow-hidden border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-muted/25">
-            <CardTitle className="text-xl">{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
-          </CardHeader>
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
+            <CardHeader className="border-b bg-muted/20 px-6 py-5">
+              <CardTitle className="text-xl">{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
+            </CardHeader>
 
-          <CardContent className="pt-6">
+            <CardContent className="px-6 py-6">
             <form onSubmit={(e) => submit(e, false)} className="space-y-6">
-              <div className="rounded-xl border border-border/70 bg-gradient-to-r from-muted/20 via-background to-muted/20 p-4">
+              <div className="rounded-3xl border border-border/70 bg-gradient-to-r from-muted/20 via-background to-muted/20 p-4">
                 <p className="text-sm font-medium text-foreground">Formulaire de création</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Renseignez le maximum d&apos;informations utiles pour accélérer la prise en charge.
@@ -302,8 +258,14 @@ export default function CreateTicket({
 
               {/* Section pour sélectionner/créer un utilisateur (agents uniquement) */}
               {isAgent && !specialOnly && (
-                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-5">
-                  <h3 className="text-lg font-semibold">1. Demandeur du ticket</h3>
+                <div className={sectionClassName}>
+                  <div className={sectionHeaderClassName}>
+                    <span className={stepPillClassName}>1</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Demandeur du ticket</h3>
+                      <p className="text-sm text-muted-foreground">Selectionnez un client existant ou creez rapidement sa fiche pour rattacher le ticket au bon profil.</p>
+                    </div>
+                  </div>
 
                   <div className="space-y-4">
                     <div>
@@ -514,11 +476,17 @@ export default function CreateTicket({
                 </div>
               )}
 
-              <div className="space-y-3 rounded-xl border border-border/70 p-5">
-                <h3 className="text-lg font-semibold">{isAgent && !specialOnly ? '2. Détails du ticket' : '1. Détails du ticket'}</h3>
+              <div className={sectionClassName}>
+                <div className={sectionHeaderClassName}>
+                  <span className={stepPillClassName}>{isAgent && !specialOnly ? '2' : '1'}</span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Détails du ticket</h3>
+                    <p className="text-sm text-muted-foreground">Centralisez le contexte, l'intention et les éléments techniques utiles dès l'ouverture.</p>
+                  </div>
+                </div>
 
                 {isAgent && (
-                  <label className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+                  <label className="mb-2 flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-foreground">
                     <input
                       type="checkbox"
                       checked={Boolean(data.assign_to_me)}
@@ -545,7 +513,7 @@ export default function CreateTicket({
                     <select
                       id="ticket_kind"
                       name="ticket_kind"
-                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={selectClassName}
                       value={data.ticket_kind}
                       onChange={(e) => setData('ticket_kind', e.target.value as 'bug' | 'improvement')}
                     >
@@ -560,10 +528,10 @@ export default function CreateTicket({
 
                 <div>
                   <Label htmlFor="message">Description</Label>
-                  <textarea
+                  <Textarea
                     id="message"
                     rows={6}
-                    className="form-control mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="mt-1 min-h-32 bg-transparent"
                     value={data.message}
                     onChange={(e) => setData('message', e.target.value)}
                     required
@@ -574,7 +542,14 @@ export default function CreateTicket({
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-xl border border-border/70 bg-muted/10 p-5">
+              <div className={sectionClassName}>
+                <div className={sectionHeaderClassName}>
+                  <span className={stepPillClassName}>{isAgent && !specialOnly ? '2' : '1'}</span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Acces et verification</h3>
+                    <p className="text-sm text-muted-foreground">Ce mot de passe reste attache au ticket. Si un appareil est lie, il sera egalement synchronise dessus.</p>
+                  </div>
+                </div>
                 <Label htmlFor="device_password">MDP appareil</Label>
                 <Input
                   id="device_password"
@@ -583,43 +558,28 @@ export default function CreateTicket({
                   onChange={(e) => {
                     const value = e.target.value
                     setData('device_password', value)
-                    if (value.trim() !== '' && data.no_device_password) {
+                    if (value.trim() !== '') {
                       setData('no_device_password', false)
                       setData('password_empty_confirmed', false)
                     }
                   }}
-                  disabled={data.no_device_password}
                   placeholder="Mot de passe Windows, session, BIOS..."
                 />
 
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={data.no_device_password}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setData('no_device_password', checked)
-                      setData('password_empty_confirmed', checked)
-                      if (checked) {
-                        setData('device_password', '')
-                      }
-                    }}
-                  />
-                  Je n&apos;ai pas de mots de passe
-                </label>
-
-                <p className="text-xs text-muted-foreground">Ce mot de passe reste sur le ticket. Si un appareil est lié, il sera aussi synchronisé dessus.</p>
+                <div className="rounded-2xl border border-border/70 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
+                  Si vous laissez ce champ vide, une confirmation explicite sera demandee au moment de la validation.
+                </div>
 
                 {errors.device_password && <div className="text-sm text-destructive">{errors.device_password}</div>}
                 {errors.no_device_password && <div className="text-sm text-destructive">{errors.no_device_password}</div>}
               </div>
 
-              <div className="space-y-2 rounded-xl border border-border/70 p-5">
+              <div className={sectionClassName}>
                 <Label htmlFor="category_id">Catégorie</Label>
                 <select
                   id="category_id"
                   name="category_id"
-                  className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={selectClassName}
                   value={data.category_id}
                   onChange={(e) => setData('category_id', e.target.value)}
                 >
@@ -632,14 +592,20 @@ export default function CreateTicket({
               </div>
 
               {!specialOnly && (
-                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-5">
-                  <h3 className="text-lg font-semibold">{isAgent ? '3. Appareil concerné' : '2. Appareil concerné'}</h3>
+                <div className={sectionClassName}>
+                  <div className={sectionHeaderClassName}>
+                    <span className={stepPillClassName}>{isAgent ? '3' : '2'}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Appareil concerné</h3>
+                      <p className="text-sm text-muted-foreground">Lie un appareil existant ou preparez une creation rapide pour garder le suivi technique complet.</p>
+                    </div>
+                  </div>
                   <div>
                     <Label htmlFor="device_id">Appareil lié (optionnel)</Label>
                     <select
                       id="device_id"
                       name="device_id"
-                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={selectClassName}
                       value={data.device_id}
                       onChange={(e) => setData('device_id', e.target.value)}
                     >
@@ -652,7 +618,7 @@ export default function CreateTicket({
                   </div>
 
                   {isAgent && (
-                    <div className="rounded-lg border border-border bg-background/70 p-3">
+                    <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
                       <p className="text-sm font-medium text-foreground">Actions rapides</p>
                       <p className="mt-1 text-xs text-muted-foreground">Ajoutez des éléments annexes depuis des fenêtres superposées, sans quitter la création du ticket.</p>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -708,7 +674,7 @@ export default function CreateTicket({
                       <Label htmlFor="quick_device_type">Type appareil</Label>
                       <select
                         id="quick_device_type"
-                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        className={selectClassName}
                         value={data.quick_device_type}
                         onChange={(e) => setData('quick_device_type', e.target.value)}
                       >
@@ -859,7 +825,7 @@ export default function CreateTicket({
                       <Label htmlFor="quick_commande_statut">Statut commande</Label>
                       <select
                         id="quick_commande_statut"
-                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        className={selectClassName}
                         value={data.quick_commande_statut}
                         onChange={(e) => setData('quick_commande_statut', e.target.value)}
                       >
@@ -921,7 +887,7 @@ export default function CreateTicket({
                 </DialogContent>
               </Dialog>
 
-              <div className="sticky bottom-2 z-10 flex flex-wrap gap-2 rounded-xl border border-border/70 bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <div className="sticky bottom-2 z-10 flex flex-wrap gap-2 rounded-3xl border border-border/70 bg-background/95 p-4 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
                 <Button type="submit" disabled={processing || (isAgent && !specialOnly && !selectedUser)} variant="default">
                   {isSpecialTicket ? 'Créer le ticket spécial' : 'Créer'}
                 </Button>
@@ -938,8 +904,8 @@ export default function CreateTicket({
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
       </div>
       <MobileNativeNav showFab={false} />
     </AppLayout>

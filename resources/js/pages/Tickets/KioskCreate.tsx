@@ -1,10 +1,25 @@
 import { Head, useForm } from '@inertiajs/react'
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type Props = {
   success?: boolean
   ticketId?: number | string | null
 }
+
+const kioskSectionClassName = 'rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/15 p-5 shadow-sm md:p-6'
+const kioskStepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted/40 text-sm font-semibold text-foreground'
 
 export default function KioskCreate({ success = false, ticketId = null }: Props) {
   const [isDark, setIsDark] = useState(false)
@@ -53,47 +68,24 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
     password_empty_confirmed: false,
   })
 
-  const draftKey = 'supportpc.kiosk-ticket.draft'
-
-  useEffect(() => {
-    const raw = window.localStorage.getItem(draftKey)
-    if (!raw) {
-      return
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as Partial<typeof data>
-      setData((current) => ({
-        ...current,
-        ...parsed,
-      }))
-    } catch {
-      window.localStorage.removeItem(draftKey)
-    }
-  }, [setData])
-
-  useEffect(() => {
-    window.localStorage.setItem(draftKey, JSON.stringify(data))
-  }, [data])
-
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    if (!data.device_password.trim() && !data.no_device_password) {
+    if (!data.device_password.trim()) {
       setShowNoPasswordConfirm(true)
       return
     }
 
     post('/kiosk/tickets', {
-      onSuccess: () => {
-        window.localStorage.removeItem(draftKey)
+      data: {
+        ...data,
+        no_device_password: false,
+        password_empty_confirmed: false,
       },
     })
   }
 
   const confirmNoPasswordAndSubmit = () => {
-    setData('no_device_password', true)
-    setData('password_empty_confirmed', true)
     setShowNoPasswordConfirm(false)
 
     post('/kiosk/tickets', {
@@ -102,14 +94,10 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
         no_device_password: true,
         password_empty_confirmed: true,
       },
-      onSuccess: () => {
-        window.localStorage.removeItem(draftKey)
-      },
     })
   }
 
   const resetForNextClient = () => {
-    window.localStorage.removeItem(draftKey)
     window.location.href = '/kiosk/tickets/create'
   }
 
@@ -118,13 +106,34 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       <Head title="Demande de support" />
 
       <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 md:px-10 dark:bg-background dark:text-foreground">
-        <div className="mx-auto max-w-2xl">
-          <header className="mb-6 flex items-start justify-between gap-4 rounded-2xl bg-card p-6 shadow-sm ring-1 ring-border dark:bg-card dark:ring-border">
-            <div>
-              <h1 className="text-3xl font-semibold text-foreground md:text-4xl dark:text-foreground">Demande de support</h1>
-              <p className="mt-3 text-base text-muted-foreground dark:text-muted-foreground">
-                Formulaire simplifie pour les clients. Les agents completeront les details techniques si besoin.
-              </p>
+        <div className="mx-auto max-w-5xl space-y-6">
+          <header className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-background via-background to-muted/50 p-6 shadow-sm md:p-8">
+            <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 left-0 h-28 w-28 rounded-full bg-secondary/20 blur-3xl" />
+            <div className="relative grid gap-5 lg:grid-cols-[1.5fr_0.7fr] lg:items-start">
+              <div>
+                <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  Formulaire client simplifie
+                </div>
+                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Demande de support</h1>
+                <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
+                  Decrivez votre probleme simplement. L'equipe technique completera ensuite les informations avancees si necessaire.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Rapide a remplir</span>
+                  <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Lisible sur borne</span>
+                  <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Transmission claire</span>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-border/70 bg-background/80 p-5 backdrop-blur">
+                <p className="text-sm font-semibold text-foreground">Ce qu'il faut preparer</p>
+                <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+                  <div className="rounded-2xl border border-border/60 bg-muted/15 p-3">Un moyen de contact: telephone ou email.</div>
+                  <div className="rounded-2xl border border-border/60 bg-muted/15 p-3">Un titre simple et une description du probleme.</div>
+                  <div className="rounded-2xl border border-border/60 bg-muted/15 p-3">Le mot de passe de l'appareil si vous l'avez.</div>
+                </div>
+              </div>
             </div>
 
             <button
@@ -155,36 +164,44 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
           </header>
 
           {success && (
-            <section role="status" aria-live="polite" className="mb-6 rounded-2xl border-2 border-secondary/45 bg-secondary/15 p-6 dark:border-secondary/45 dark:bg-secondary/20">
+            <section role="status" aria-live="polite" className="rounded-[2rem] border border-secondary/45 bg-secondary/10 p-6 shadow-sm">
               <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">Merci, votre demande est envoyee.</h2>
               {ticketId && (
                 <p className="mt-2 text-lg text-foreground dark:text-foreground">
                   Numero de suivi: <span className="font-bold">#{ticketId}</span>
                 </p>
               )}
-              <button
+              <Button
                 type="button"
                 onClick={resetForNextClient}
-                className="mt-4 rounded-xl bg-primary px-6 py-4 text-lg font-semibold text-white hover:bg-primary/90"
+                className="mt-4 h-12 rounded-xl px-6 text-base"
               >
                 Nouvelle demande
-              </button>
+              </Button>
             </section>
           )}
 
-          <form onSubmit={submit} className="space-y-6 rounded-2xl bg-card p-6 shadow-sm ring-1 ring-border dark:bg-card dark:ring-border">
-            <section className="space-y-4 rounded-xl border border-border p-4 dark:border-border">
-              <h2 className="text-xl font-semibold text-foreground dark:text-foreground">1. Vos informations</h2>
+          <Card className="rounded-[1.75rem] border-border/70 shadow-sm ring-1 ring-border">
+            <CardContent className="p-6">
+          <form onSubmit={submit} className="space-y-6">
+            <section className={kioskSectionClassName}>
+              <div className="mb-4 flex items-start gap-3">
+                <span className={kioskStepPillClassName}>1</span>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Vos informations</h2>
+                  <p className="text-sm text-muted-foreground">Ces informations nous permettent de vous recontacter rapidement.</p>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label htmlFor="first_name" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Prenom</label>
-                  <input
+                  <Label htmlFor="first_name" className="mb-2 block">Prenom</Label>
+                  <Input
                     id="first_name"
                     type="text"
                     value={data.first_name}
                     onChange={(e) => setData('first_name', e.target.value)}
-                    className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                    className="h-12 rounded-xl text-base"
                     required
                     autoComplete="given-name"
                   />
@@ -192,13 +209,13 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
                 </div>
 
                 <div>
-                  <label htmlFor="last_name" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Nom</label>
-                  <input
+                  <Label htmlFor="last_name" className="mb-2 block">Nom</Label>
+                  <Input
                     id="last_name"
                     type="text"
                     value={data.last_name}
                     onChange={(e) => setData('last_name', e.target.value)}
-                    className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                    className="h-12 rounded-xl text-base"
                     required
                     autoComplete="family-name"
                   />
@@ -208,13 +225,13 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label htmlFor="phone" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Telephone</label>
-                  <input
+                  <Label htmlFor="phone" className="mb-2 block">Telephone</Label>
+                  <Input
                     id="phone"
                     type="tel"
                     value={data.phone}
                     onChange={(e) => setData('phone', e.target.value)}
-                    className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                    className="h-12 rounded-xl text-base"
                     autoComplete="tel"
                     placeholder="Ex: 06 12 34 56 78"
                   />
@@ -222,13 +239,13 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Email (optionnel)</label>
-                  <input
+                  <Label htmlFor="email" className="mb-2 block">Email (optionnel)</Label>
+                  <Input
                     id="email"
                     type="email"
                     value={data.email}
                     onChange={(e) => setData('email', e.target.value)}
-                    className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                    className="h-12 rounded-xl text-base"
                     autoComplete="email"
                     placeholder="Ex: client@email.com"
                   />
@@ -237,17 +254,23 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
               </div>
             </section>
 
-            <section className="space-y-4 rounded-xl border border-border p-4 dark:border-border">
-              <h2 className="text-xl font-semibold text-foreground dark:text-foreground">2. Votre demande</h2>
+            <section className={kioskSectionClassName}>
+              <div className="mb-4 flex items-start gap-3">
+                <span className={kioskStepPillClassName}>2</span>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Votre demande</h2>
+                  <p className="text-sm text-muted-foreground">Donnez un maximum de contexte utile avec vos mots.</p>
+                </div>
+              </div>
 
               <div>
-                <label htmlFor="title" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Sujet</label>
-                <input
+                <Label htmlFor="title" className="mb-2 block">Sujet</Label>
+                <Input
                   id="title"
                   type="text"
                   value={data.title}
                   onChange={(e) => setData('title', e.target.value)}
-                  className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                  className="h-12 rounded-xl text-base"
                   required
                   placeholder="Ex: Mon ordinateur ne demarre plus"
                 />
@@ -255,22 +278,22 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
               </div>
 
               <div>
-                <label htmlFor="message" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Expliquez le probleme</label>
-                <textarea
+                <Label htmlFor="message" className="mb-2 block">Expliquez le probleme</Label>
+                <Textarea
                   id="message"
                   rows={5}
                   value={data.message}
                   onChange={(e) => setData('message', e.target.value)}
-                  className="w-full rounded-xl border-2 border-input bg-card px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none dark:border-input dark:bg-card dark:text-foreground"
+                  className="min-h-32 rounded-xl bg-transparent text-base"
                   required
                   placeholder="Exemple: Ecran noir, bruit au demarrage, message d'erreur..."
                 />
                 {errors.message && <p className="mt-2 text-sm text-destructive">{errors.message}</p>}
               </div>
 
-              <div className="rounded-xl border-2 border-input p-4 dark:border-input">
-                <label htmlFor="device_password" className="mb-2 block text-base font-medium text-foreground dark:text-foreground">Mot de passe appareil</label>
-                <input
+              <div className="rounded-3xl border border-border/70 bg-muted/10 p-4">
+                <Label htmlFor="device_password" className="mb-2 block">Mot de passe appareil</Label>
+                <Input
                   id="device_password"
                   type="text"
                   value={data.device_password}
@@ -282,72 +305,53 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
                       setData('password_empty_confirmed', false)
                     }
                   }}
-                  disabled={data.no_device_password}
-                  className="h-12 w-full rounded-xl border-2 border-input bg-card px-4 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-70 dark:border-input dark:bg-card dark:text-foreground"
+                  className="h-12 rounded-xl text-base"
                   placeholder="Windows, session, BIOS..."
                 />
 
-                <label className="mt-3 flex items-center gap-2 text-sm text-foreground dark:text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={data.no_device_password}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setData('no_device_password', checked)
-                      setData('password_empty_confirmed', checked)
-                      if (checked) {
-                        setData('device_password', '')
-                      }
-                    }}
-                  />
-                  Je confirme ne pas avoir de mot de passe
-                </label>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Si vous laissez ce champ vide, une confirmation sera demandée avant l'envoi.
+                </p>
 
                 {errors.device_password && <p className="mt-2 text-sm text-destructive">{errors.device_password}</p>}
                 {errors.no_device_password && <p className="mt-2 text-sm text-destructive">{errors.no_device_password}</p>}
               </div>
             </section>
 
-            <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-background/95 p-4 backdrop-blur dark:border-border dark:bg-background/95">
-              <button
+            <div className="sticky bottom-4 z-10 rounded-3xl border border-border bg-background/95 p-4 backdrop-blur">
+              <Button
                 type="submit"
                 disabled={processing}
-                className="h-14 w-full rounded-2xl bg-primary text-lg font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/50"
+                className="h-14 w-full rounded-2xl text-lg"
               >
                 {processing ? 'Envoi en cours...' : 'Envoyer ma demande'}
-              </button>
+              </Button>
               <p className="mt-3 text-center text-sm text-muted-foreground dark:text-muted-foreground">Besoin d'aide ? Demandez a un membre de l'equipe.</p>
             </div>
           </form>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
-      {showNoPasswordConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-lg">
-            <h3 className="text-lg font-semibold text-foreground">Confirmer l'absence de mot de passe</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+      <Dialog open={showNoPasswordConfirm} onOpenChange={setShowNoPasswordConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmer l'absence de mot de passe</DialogTitle>
+            <DialogDescription>
               Le champ MDP est vide. Confirmez-vous ne pas avoir de mot de passe a fournir ?
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNoPasswordConfirm(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"
-              >
-                Retour
-              </button>
-              <button
-                type="button"
-                onClick={confirmNoPasswordAndSubmit}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
-              >
-                Confirmer et envoyer
-              </button>
-            </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setShowNoPasswordConfirm(false)}>
+              Retour
+            </Button>
+            <Button type="button" onClick={confirmNoPasswordAndSubmit}>
+              Confirmer et envoyer
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
