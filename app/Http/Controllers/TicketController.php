@@ -696,9 +696,9 @@ class TicketController extends Controller
         $rules = [
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
-            'device_password' => 'nullable|string|max:500|required_without:no_device_password',
-            'no_device_password' => 'nullable|accepted|required_without:device_password',
-            'password_empty_confirmed' => 'nullable|accepted',
+            'device_password' => 'nullable|string|max:500',
+            'no_device_password' => 'nullable|boolean',
+            'password_empty_confirmed' => 'nullable|boolean',
             'category_id' => 'nullable|integer',
             'ticket_kind' => ['nullable', Rule::in($allowedTicketKinds)],
             'device_id' => 'nullable|integer|exists:devices,id',
@@ -961,9 +961,9 @@ class TicketController extends Controller
             'email' => 'nullable|email|max:255',
             'title' => 'required|string|max:255',
             'message' => 'required|string|max:3000',
-            'device_password' => 'nullable|string|max:500|required_without:no_device_password',
-            'no_device_password' => 'nullable|accepted|required_without:device_password',
-            'password_empty_confirmed' => 'nullable|accepted',
+            'device_password' => 'nullable|string|max:500',
+            'no_device_password' => 'nullable|boolean',
+            'password_empty_confirmed' => 'nullable|boolean',
             'category_id' => 'nullable|integer|exists:categories,id',
         ]);
 
