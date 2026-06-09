@@ -377,6 +377,11 @@ export default function AdminDashboard({
                                 <Users className="h-3.5 w-3.5" /> Gérer les agents
                             </Button>
                         </Link>
+                        <Link href="/tickets/bulk-distribution">
+                            <Button size="sm" variant="outline" className="gap-1.5">
+                                <ArrowRight className="h-3.5 w-3.5" /> Distribution massive
+                            </Button>
+                        </Link>
                     </div>
                 </div>
 

@@ -277,6 +277,17 @@ class TicketController extends Controller
         return $user;
     }
 
+    private function ensureAdminOrAbort(): \App\Models\User
+    {
+        $user = Auth::user();
+
+        if (!$user || !($user->agent?->is_admin)) {
+            abort(403, 'Acces reserve aux administrateurs.');
+        }
+
+        return $user;
+    }
+
     private function serializeDevice(?Device $device): ?array
     {
         if (!$device) {
@@ -687,6 +698,7 @@ class TicketController extends Controller
             'message' => 'nullable|string',
             'device_password' => 'nullable|string|max:500|required_without:no_device_password',
             'no_device_password' => 'nullable|accepted|required_without:device_password',
+            'password_empty_confirmed' => 'nullable|accepted',
             'category_id' => 'nullable|integer',
             'ticket_kind' => ['nullable', Rule::in($allowedTicketKinds)],
             'device_id' => 'nullable|integer|exists:devices,id',
@@ -698,6 +710,13 @@ class TicketController extends Controller
             'quick_device_asset_tag' => 'nullable|string|max:120|unique:devices,asset_tag',
             'quick_device_purchase_date' => 'nullable|date',
             'quick_device_warranty_end_date' => 'nullable|date|after_or_equal:quick_device_purchase_date',
+            'quick_add_commande' => 'nullable|boolean',
+            'quick_commande_nom' => 'nullable|string|max:255',
+            'quick_commande_fournisseur' => 'nullable|string|max:255',
+            'quick_commande_command_number' => 'nullable|string|max:255',
+            'quick_commande_invoice_id' => 'nullable|string|max:255',
+            'quick_commande_statut' => 'nullable|in:new,panier,commandé,réceptionner,traité',
+            'assign_to_me' => 'nullable|boolean',
         ];
 
         // Sur les tickets standards, un agent peut choisir le demandeur.
@@ -714,6 +733,12 @@ class TicketController extends Controller
         if ($normalizedDevicePassword === null && !$noDevicePassword) {
             return back()->withErrors([
                 'device_password' => 'Renseignez le mot de passe de l\'appareil ou cochez "Je n\'ai pas de mots de passe".',
+            ])->withInput();
+        }
+
+        if ($normalizedDevicePassword === null && $noDevicePassword && !$request->boolean('password_empty_confirmed')) {
+            return back()->withErrors([
+                'no_device_password' => 'Merci de confirmer explicitement l\'absence de mot de passe.',
             ])->withInput();
         }
 
@@ -792,6 +817,17 @@ class TicketController extends Controller
             ]);
         }
 
+        $shouldQuickCreateCommande = $isAgent && !$specialOnly && $request->boolean('quick_add_commande');
+        if ($shouldQuickCreateCommande) {
+            $request->validate([
+                'quick_commande_nom' => 'required|string|max:255',
+                'quick_commande_fournisseur' => 'nullable|string|max:255',
+                'quick_commande_command_number' => 'nullable|string|max:255',
+                'quick_commande_invoice_id' => 'nullable|string|max:255',
+                'quick_commande_statut' => 'nullable|in:new,panier,commandé,réceptionner,traité',
+            ]);
+        }
+
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
         $ticket->device_password = $normalizedDevicePassword;
@@ -807,6 +843,11 @@ class TicketController extends Controller
 
         $ticket->priority = $request->input('priority', 'low');
         $ticket->status = $request->input('status', 'open');
+
+        if ($isAgent && $request->boolean('assign_to_me')) {
+            $ticket->assignee_id = $currentUser?->id;
+        }
+
         $ticket->save();
 
         if ($shouldQuickCreateDevice) {
@@ -844,6 +885,41 @@ class TicketController extends Controller
             if ($linkedDevice) {
                 $this->syncTicketPasswordToDevice($ticket, $linkedDevice);
             }
+        }
+
+        if (!empty($ticket->assignee_id)) {
+            $this->logTechnicianTimeline(
+                $ticket,
+                'assignee_changed',
+                'Agent attribue des la creation du ticket',
+                [
+                    'before' => null,
+                    'after' => $this->formatTimelineValue('assignee_id', $ticket->assignee_id),
+                ]
+            );
+        }
+
+        if ($shouldQuickCreateCommande) {
+            $commande = Commande::create([
+                'user_id' => $ticket->user_id,
+                'ticket_id' => $ticket->id,
+                'nom' => (string) $request->input('quick_commande_nom'),
+                'fournisseur' => $request->input('quick_commande_fournisseur') ?: null,
+                'command_number' => $request->input('quick_commande_command_number') ?: null,
+                'invoice_id' => $request->input('quick_commande_invoice_id') ?: null,
+                'statut' => (string) ($request->input('quick_commande_statut') ?: 'new'),
+            ]);
+
+            $this->logTechnicianTimeline(
+                $ticket,
+                'commande_created_direct',
+                'Commande creee depuis le formulaire de creation du ticket',
+                [
+                    'commande_id' => $commande->id,
+                    'commande_nom' => $commande->nom,
+                    'command_number' => $commande->command_number,
+                ]
+            );
         }
 
         $this->logTechnicianTimeline(
@@ -887,6 +963,7 @@ class TicketController extends Controller
             'message' => 'required|string|max:3000',
             'device_password' => 'nullable|string|max:500|required_without:no_device_password',
             'no_device_password' => 'nullable|accepted|required_without:device_password',
+            'password_empty_confirmed' => 'nullable|accepted',
             'category_id' => 'nullable|integer|exists:categories,id',
         ]);
 
@@ -896,6 +973,12 @@ class TicketController extends Controller
         if ($normalizedDevicePassword === null && !$noDevicePassword) {
             return back()->withErrors([
                 'device_password' => 'Renseignez le mot de passe de l\'appareil ou cochez "Je n\'ai pas de mots de passe".',
+            ])->withInput();
+        }
+
+        if ($normalizedDevicePassword === null && $noDevicePassword && !$request->boolean('password_empty_confirmed')) {
+            return back()->withErrors([
+                'no_device_password' => 'Merci de confirmer explicitement l\'absence de mot de passe.',
             ])->withInput();
         }
 
@@ -1142,7 +1225,13 @@ class TicketController extends Controller
                     'id' => $ticket->category->id,
                     'name' => $ticket->category->name,
                 ] : null,
-                'device' => $this->serializeDevice($ticket->device),
+                'device' => $ticket->device ? array_merge(
+                    $this->serializeDevice($ticket->device) ?? [],
+                    [
+                        'access_password' => $ticket->device->access_password,
+                        'no_access_password' => (bool) $ticket->device->no_access_password,
+                    ]
+                ) : null,
             ],
             'categories' => $categories,
             'agents' => $agents,
@@ -1558,5 +1647,152 @@ class TicketController extends Controller
         $timelineEvent->save();
 
         return back()->with('success', 'Evenement restaure.');
+    }
+
+    public function bulkDistributionIndex(Request $request)
+    {
+        $this->ensureAdminOrAbort();
+
+        $tickets = Ticket::query()
+            ->with(['user:id,first_name,last_name', 'assignee:id,first_name,last_name'])
+            ->whereIn('status', ['open', 'in_progress', 'pending'])
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
+            ->orderBy('created_at')
+            ->limit(600)
+            ->get()
+            ->map(fn(Ticket $ticket) => [
+                'id' => $ticket->id,
+                'title' => $ticket->title,
+                'status' => $ticket->status,
+                'priority' => $ticket->priority,
+                'created_at' => $ticket->created_at?->toDateTimeString(),
+                'requester' => $ticket->user ? trim(($ticket->user->first_name ?? '') . ' ' . ($ticket->user->last_name ?? '')) : null,
+                'assignee_id' => $ticket->assignee_id,
+                'assignee_name' => $ticket->assignee ? trim(($ticket->assignee->first_name ?? '') . ' ' . ($ticket->assignee->last_name ?? '')) : null,
+            ])
+            ->values();
+
+        $agents = \App\Models\User::query()
+            ->whereHas('agent')
+            ->with('agent:id,user_id,is_admin')
+            ->withCount(['assignedTickets as active_tickets_count' => function ($query) {
+                $query->whereIn('status', ['open', 'in_progress', 'pending']);
+            }])
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'email'])
+            ->map(fn($user) => [
+                'id' => $user->id,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'email' => $user->email,
+                'is_admin' => (bool) ($user->agent?->is_admin ?? false),
+                'active_tickets_count' => (int) ($user->active_tickets_count ?? 0),
+            ])
+            ->values();
+
+        return Inertia::render('Tickets/BulkAssign', [
+            'tickets' => $tickets,
+            'agents' => $agents,
+        ]);
+    }
+
+    public function bulkDistributionAssign(Request $request)
+    {
+        $this->ensureAdminOrAbort();
+
+        $data = $request->validate([
+            'mode' => 'required|in:single,round_robin,manual',
+            'ticket_ids' => 'nullable|array|min:1',
+            'ticket_ids.*' => 'integer|exists:tickets,id',
+            'single_agent_id' => 'nullable|integer|exists:users,id',
+            'agent_ids' => 'nullable|array|min:1',
+            'agent_ids.*' => 'integer|exists:users,id',
+            'manual_assignments' => 'nullable|array|min:1',
+            'manual_assignments.*.ticket_id' => 'required_with:manual_assignments|integer|exists:tickets,id',
+            'manual_assignments.*.assignee_id' => 'required_with:manual_assignments|integer|exists:users,id',
+        ]);
+
+        $mode = (string) $data['mode'];
+        $updates = [];
+
+        if ($mode === 'single') {
+            $ticketIds = collect($data['ticket_ids'] ?? [])->unique()->values()->all();
+            $assigneeId = $data['single_agent_id'] ?? null;
+
+            if (empty($ticketIds) || empty($assigneeId)) {
+                return back()->withErrors(['distribution' => 'Selection incomplete pour l\'attribution simple.']);
+            }
+
+            $updates = collect($ticketIds)->map(fn($ticketId) => [
+                'ticket_id' => (int) $ticketId,
+                'assignee_id' => (int) $assigneeId,
+            ])->all();
+        }
+
+        if ($mode === 'round_robin') {
+            $ticketIds = collect($data['ticket_ids'] ?? [])->unique()->values()->all();
+            $agentIds = collect($data['agent_ids'] ?? [])->unique()->values()->all();
+
+            if (empty($ticketIds) || empty($agentIds)) {
+                return back()->withErrors(['distribution' => 'Selection incomplete pour la repartition equilibree.']);
+            }
+
+            $updates = collect($ticketIds)->values()->map(function ($ticketId, $index) use ($agentIds) {
+                $agentId = $agentIds[$index % count($agentIds)];
+
+                return [
+                    'ticket_id' => (int) $ticketId,
+                    'assignee_id' => (int) $agentId,
+                ];
+            })->all();
+        }
+
+        if ($mode === 'manual') {
+            $manualAssignments = collect($data['manual_assignments'] ?? [])
+                ->filter(fn($row) => !empty($row['ticket_id']) && !empty($row['assignee_id']))
+                ->unique('ticket_id')
+                ->values();
+
+            if ($manualAssignments->isEmpty()) {
+                return back()->withErrors(['distribution' => 'Aucune attribution manuelle valide.']);
+            }
+
+            $updates = $manualAssignments
+                ->map(fn($row) => [
+                    'ticket_id' => (int) $row['ticket_id'],
+                    'assignee_id' => (int) $row['assignee_id'],
+                ])
+                ->all();
+        }
+
+        $updatedCount = 0;
+
+        foreach ($updates as $row) {
+            $ticket = Ticket::find($row['ticket_id']);
+            if (!$ticket) {
+                continue;
+            }
+
+            $before = $ticket->assignee_id;
+            if ((int) ($before ?? 0) === (int) $row['assignee_id']) {
+                continue;
+            }
+
+            $ticket->assignee_id = $row['assignee_id'];
+            $ticket->save();
+            $updatedCount++;
+
+            $this->logTechnicianTimeline(
+                $ticket,
+                'assignee_changed',
+                'Attribution en masse depuis administration',
+                [
+                    'before' => $this->formatTimelineValue('assignee_id', $before),
+                    'after' => $this->formatTimelineValue('assignee_id', $row['assignee_id']),
+                ]
+            );
+        }
+
+        return back()->with('success', $updatedCount . ' ticket(s) attribue(s).');
     }
 }

@@ -1,5 +1,4 @@
 import { useForm, Head } from '@inertiajs/react'
-import Heading from '@/components/heading'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
@@ -7,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -66,6 +65,10 @@ export default function CreateTicket({
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showPasswordConfirmDialog, setShowPasswordConfirmDialog] = useState(false)
+  const [pendingPrintAfterPasswordConfirm, setPendingPrintAfterPasswordConfirm] = useState(false)
+  const [showQuickDeviceDialog, setShowQuickDeviceDialog] = useState(false)
+  const [showQuickCommandeDialog, setShowQuickCommandeDialog] = useState(false)
   const [newUserData, setNewUserData] = useState({
     first_name: '',
     last_name: '',
@@ -81,9 +84,11 @@ export default function CreateTicket({
     message: defaultMessage,
     device_password: '',
     no_device_password: false,
+    password_empty_confirmed: false,
     category_id: '',
     ticket_kind: defaultTicketKind,
     special_only: specialOnly ? '1' : '0',
+    assign_to_me: false,
     user_selection: 'existing',
     user_id: '',
     user_email: '',
@@ -102,8 +107,68 @@ export default function CreateTicket({
     quick_device_asset_tag: '',
     quick_device_purchase_date: '',
     quick_device_warranty_end_date: '',
+    quick_add_commande: false,
+    quick_commande_nom: '',
+    quick_commande_fournisseur: '',
+    quick_commande_command_number: '',
+    quick_commande_invoice_id: '',
+    quick_commande_statut: 'new',
     print_label: '0',
   })
+
+  const draftStorageKey = specialOnly ? 'supportpc.ticket-create.draft.special' : 'supportpc.ticket-create.draft.standard'
+
+  useEffect(() => {
+    const rawDraft = window.localStorage.getItem(draftStorageKey)
+    if (!rawDraft) {
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(rawDraft) as {
+        form?: Partial<typeof data>
+        searchQuery?: string
+        selectedUserId?: number | null
+        newUserData?: typeof newUserData
+      }
+
+      if (parsed.form) {
+        setData((current) => ({
+          ...current,
+          ...parsed.form,
+        }))
+      }
+
+      if (typeof parsed.searchQuery === 'string') {
+        setSearchQuery(parsed.searchQuery)
+      }
+
+      if (parsed.newUserData) {
+        setNewUserData(parsed.newUserData)
+      }
+
+      if (isAgent && parsed.selectedUserId) {
+        const restoredUser = users.find((user) => user.id === parsed.selectedUserId) ?? null
+        if (restoredUser) {
+          setSelectedUser(restoredUser)
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(draftStorageKey)
+    }
+  }, [draftStorageKey, isAgent, setData, users])
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        form: data,
+        searchQuery,
+        selectedUserId: selectedUser?.id ?? null,
+        newUserData,
+      }),
+    )
+  }, [data, draftStorageKey, newUserData, searchQuery, selectedUser])
 
   const isSpecialTicket = data.ticket_kind === 'bug' || data.ticket_kind === 'improvement'
   const pageTitle = specialOnly ? 'Bug et amélioration' : 'Créer un ticket'
@@ -123,14 +188,48 @@ export default function CreateTicket({
 
   const submit = (e: React.SyntheticEvent, printLabel = false) => {
     e.preventDefault()
+
+    if (!data.device_password.trim() && !data.no_device_password) {
+      setPendingPrintAfterPasswordConfirm(printLabel)
+      setShowPasswordConfirmDialog(true)
+      return
+    }
+
     const useExistingUser = Boolean(selectedUser && data.user_selection !== 'new')
     transform((current) => ({
       ...current,
       user_selection: useExistingUser ? 'existing' : current.user_selection,
       user_id: useExistingUser ? selectedUser?.id.toString() ?? '' : current.user_id,
+      password_empty_confirmed: current.no_device_password,
       print_label: printLabel ? '1' : '0',
     }))
     post('/tickets', {
+      onSuccess: () => {
+        window.localStorage.removeItem(draftStorageKey)
+      },
+      onFinish: () => transform((current) => current),
+    })
+  }
+
+  const confirmNoPasswordAndSubmit = () => {
+    setData('no_device_password', true)
+    setData('password_empty_confirmed', true)
+    setShowPasswordConfirmDialog(false)
+
+    const useExistingUser = Boolean(selectedUser && data.user_selection !== 'new')
+    transform((current) => ({
+      ...current,
+      user_selection: useExistingUser ? 'existing' : current.user_selection,
+      user_id: useExistingUser ? selectedUser?.id.toString() ?? '' : current.user_id,
+      no_device_password: true,
+      password_empty_confirmed: true,
+      print_label: pendingPrintAfterPasswordConfirm ? '1' : '0',
+    }))
+
+    post('/tickets', {
+      onSuccess: () => {
+        window.localStorage.removeItem(draftStorageKey)
+      },
       onFinish: () => transform((current) => current),
     })
   }
@@ -169,17 +268,32 @@ export default function CreateTicket({
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={pageTitle} />
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Heading title={pageTitle} description={pageDescription} />
+      <div className="mx-auto max-w-6xl space-y-6 pb-24">
+        <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/40 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/10 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-20 left-1/3 h-44 w-44 rounded-full bg-secondary/20 blur-3xl" />
+          <div className="relative space-y-4">
+            <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              {specialOnly ? 'Espace qualité produit' : 'Centre de support'}
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{pageTitle}</h1>
+            <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{pageDescription}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Description claire</span>
+              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Contexte complet</span>
+              <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-foreground">Prise en charge plus rapide</span>
+            </div>
+          </div>
+        </section>
 
-        <Card className="border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle>{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
+        <Card className="overflow-hidden border-border/70 shadow-sm">
+          <CardHeader className="border-b bg-muted/25">
+            <CardTitle className="text-xl">{specialOnly ? 'Nouveau ticket spécial' : 'Nouveau ticket'}</CardTitle>
           </CardHeader>
 
-          <CardContent>
-            <form onSubmit={(e) => submit(e, false)} className="space-y-6 pt-6">
-              <div className="rounded-lg border border-border/70 bg-background p-4">
+          <CardContent className="pt-6">
+            <form onSubmit={(e) => submit(e, false)} className="space-y-6">
+              <div className="rounded-xl border border-border/70 bg-gradient-to-r from-muted/20 via-background to-muted/20 p-4">
                 <p className="text-sm font-medium text-foreground">Formulaire de création</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Renseignez le maximum d&apos;informations utiles pour accélérer la prise en charge.
@@ -188,13 +302,13 @@ export default function CreateTicket({
 
               {/* Section pour sélectionner/créer un utilisateur (agents uniquement) */}
               {isAgent && !specialOnly && (
-                <div className="space-y-4 rounded-lg border border-border/70 bg-muted/10 p-4">
+                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-5">
                   <h3 className="text-lg font-semibold">1. Demandeur du ticket</h3>
 
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="search_user">Rechercher ou créer un utilisateur</Label>
-                      <div className="flex gap-2 mt-2">
+                      <div className="mt-2 flex gap-2">
                         <div className="flex-1">
                           <Input
                             id="search_user"
@@ -339,7 +453,7 @@ export default function CreateTicket({
 
                     {/* Utilisateur sélectionné */}
                     {selectedUser && (
-                      <div className="rounded-md border border-border bg-muted/40 p-3 text-foreground">
+                      <div className="rounded-lg border border-border bg-muted/40 p-3 text-foreground">
                         <p className="font-medium">{selectedUser.name}</p>
                         <p className="text-sm text-muted-foreground">{selectedUser.email || 'Pas d\'email'}</p>
                         <Button
@@ -369,7 +483,7 @@ export default function CreateTicket({
 
                     {/* Liste des résultats */}
                     {searchQuery && !selectedUser && filteredUsers.length > 0 && (
-                      <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background text-foreground">
+                      <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-background text-foreground">
                         {filteredUsers.map((user) => (
                           <button
                             key={user.id}
@@ -400,8 +514,20 @@ export default function CreateTicket({
                 </div>
               )}
 
-              <div className="space-y-2 rounded-lg border border-border/70 p-4">
+              <div className="space-y-3 rounded-xl border border-border/70 p-5">
                 <h3 className="text-lg font-semibold">{isAgent && !specialOnly ? '2. Détails du ticket' : '1. Détails du ticket'}</h3>
+
+                {isAgent && (
+                  <label className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(data.assign_to_me)}
+                      onChange={(e) => setData('assign_to_me', e.target.checked)}
+                    />
+                    Je prends ce ticket en charge des sa creation
+                  </label>
+                )}
+
                 <Label htmlFor="title">Sujet</Label>
                 <Input
                   id="title"
@@ -437,7 +563,7 @@ export default function CreateTicket({
                   <textarea
                     id="message"
                     rows={6}
-                    className="form-control mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="form-control mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     value={data.message}
                     onChange={(e) => setData('message', e.target.value)}
                     required
@@ -448,7 +574,7 @@ export default function CreateTicket({
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/70 bg-muted/10 p-4">
+              <div className="space-y-2 rounded-xl border border-border/70 bg-muted/10 p-5">
                 <Label htmlFor="device_password">MDP appareil</Label>
                 <Input
                   id="device_password"
@@ -459,6 +585,7 @@ export default function CreateTicket({
                     setData('device_password', value)
                     if (value.trim() !== '' && data.no_device_password) {
                       setData('no_device_password', false)
+                      setData('password_empty_confirmed', false)
                     }
                   }}
                   disabled={data.no_device_password}
@@ -472,6 +599,7 @@ export default function CreateTicket({
                     onChange={(e) => {
                       const checked = e.target.checked
                       setData('no_device_password', checked)
+                      setData('password_empty_confirmed', checked)
                       if (checked) {
                         setData('device_password', '')
                       }
@@ -480,13 +608,13 @@ export default function CreateTicket({
                   Je n&apos;ai pas de mots de passe
                 </label>
 
-                <p className="text-xs text-muted-foreground">Ce champ peut rester au niveau du ticket même sans appareil lié.</p>
+                <p className="text-xs text-muted-foreground">Ce mot de passe reste sur le ticket. Si un appareil est lié, il sera aussi synchronisé dessus.</p>
 
                 {errors.device_password && <div className="text-sm text-destructive">{errors.device_password}</div>}
                 {errors.no_device_password && <div className="text-sm text-destructive">{errors.no_device_password}</div>}
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/70 p-4">
+              <div className="space-y-2 rounded-xl border border-border/70 p-5">
                 <Label htmlFor="category_id">Catégorie</Label>
                 <select
                   id="category_id"
@@ -504,7 +632,7 @@ export default function CreateTicket({
               </div>
 
               {!specialOnly && (
-                <div className="space-y-4 rounded-lg border border-border/70 bg-muted/10 p-4">
+                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-5">
                   <h3 className="text-lg font-semibold">{isAgent ? '3. Appareil concerné' : '2. Appareil concerné'}</h3>
                   <div>
                     <Label htmlFor="device_id">Appareil lié (optionnel)</Label>
@@ -523,99 +651,277 @@ export default function CreateTicket({
                     {errors.device_id && <div className="text-sm text-destructive">{errors.device_id}</div>}
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={data.quick_add_device}
-                      onChange={(e) => setData('quick_add_device', e.target.checked)}
-                    />
-                    Ajouter rapidement un nouvel appareil pour ce ticket
-                  </label>
-
-                  {data.quick_add_device && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div>
-                        <Label htmlFor="quick_device_type">Type appareil</Label>
-                        <select
-                          id="quick_device_type"
-                          className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={data.quick_device_type}
-                          onChange={(e) => setData('quick_device_type', e.target.value)}
+                  {isAgent && (
+                    <div className="rounded-lg border border-border bg-background/70 p-3">
+                      <p className="text-sm font-medium text-foreground">Actions rapides</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Ajoutez des éléments annexes depuis des fenêtres superposées, sans quitter la création du ticket.</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setData('quick_add_device', true)
+                            setShowQuickDeviceDialog(true)
+                          }}
                         >
-                          <option value="computer">Ordinateur</option>
-                          <option value="phone">Telephone</option>
-                          <option value="tablet">Tablette</option>
-                          <option value="other">Autre</option>
-                        </select>
+                          Ajouter un appareil
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setData('quick_add_commande', true)
+                            setShowQuickCommandeDialog(true)
+                          }}
+                        >
+                          Ajouter une commande
+                        </Button>
+                        <Button
+                          asChild
+                          type="button"
+                          variant="secondary"
+                        >
+                          <a href="/commandes/create" target="_blank" rel="noreferrer">Formulaire commande complet</a>
+                        </Button>
                       </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_brand">Marque</Label>
-                        <Input
-                          id="quick_device_brand"
-                          value={data.quick_device_brand}
-                          onChange={(e) => setData('quick_device_brand', e.target.value)}
-                          placeholder="Dell, Apple..."
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_model">Modele *</Label>
-                        <Input
-                          id="quick_device_model"
-                          value={data.quick_device_model}
-                          onChange={(e) => setData('quick_device_model', e.target.value)}
-                          placeholder="Latitude, iPhone..."
-                        />
-                        {errors.quick_device_model && <div className="text-sm text-destructive">{errors.quick_device_model}</div>}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_serial_number">Numero de serie</Label>
-                        <Input
-                          id="quick_device_serial_number"
-                          value={data.quick_device_serial_number}
-                          onChange={(e) => setData('quick_device_serial_number', e.target.value)}
-                        />
-                        {errors.quick_device_serial_number && <div className="text-sm text-destructive">{errors.quick_device_serial_number}</div>}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_asset_tag">Numero de suivi</Label>
-                        <Input
-                          id="quick_device_asset_tag"
-                          value={data.quick_device_asset_tag}
-                          onChange={(e) => setData('quick_device_asset_tag', e.target.value)}
-                        />
-                        {errors.quick_device_asset_tag && <div className="text-sm text-destructive">{errors.quick_device_asset_tag}</div>}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_purchase_date">Date d'achat</Label>
-                        <Input
-                          id="quick_device_purchase_date"
-                          type="date"
-                          value={data.quick_device_purchase_date}
-                          onChange={(e) => setData('quick_device_purchase_date', e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="quick_device_warranty_end_date">Fin de garantie</Label>
-                        <Input
-                          id="quick_device_warranty_end_date"
-                          type="date"
-                          value={data.quick_device_warranty_end_date}
-                          onChange={(e) => setData('quick_device_warranty_end_date', e.target.value)}
-                        />
-                        {errors.quick_device_warranty_end_date && <div className="text-sm text-destructive">{errors.quick_device_warranty_end_date}</div>}
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {data.quick_add_device && data.quick_device_model.trim() !== '' ? 'Appareil rapide prêt à être créé.' : 'Aucun appareil rapide configuré.'}
+                        {' · '}
+                        {data.quick_add_commande && data.quick_commande_nom.trim() !== '' ? 'Commande rapide prête à être créée.' : 'Aucune commande rapide configurée.'}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="sticky bottom-4 z-10 flex flex-wrap gap-2 rounded-lg border border-border/70 bg-background/95 p-3 backdrop-blur">
+              <Dialog open={showQuickDeviceDialog} onOpenChange={setShowQuickDeviceDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ajouter un appareil rapide</DialogTitle>
+                    <DialogDescription>
+                      Cet appareil sera créé puis lié automatiquement au ticket après validation.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="quick_device_type">Type appareil</Label>
+                      <select
+                        id="quick_device_type"
+                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={data.quick_device_type}
+                        onChange={(e) => setData('quick_device_type', e.target.value)}
+                      >
+                        <option value="computer">Ordinateur</option>
+                        <option value="phone">Telephone</option>
+                        <option value="tablet">Tablette</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_brand">Marque</Label>
+                      <Input
+                        id="quick_device_brand"
+                        value={data.quick_device_brand}
+                        onChange={(e) => setData('quick_device_brand', e.target.value)}
+                        placeholder="Dell, Apple..."
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_model">Modele *</Label>
+                      <Input
+                        id="quick_device_model"
+                        value={data.quick_device_model}
+                        onChange={(e) => setData('quick_device_model', e.target.value)}
+                        placeholder="Latitude, iPhone..."
+                      />
+                      {errors.quick_device_model && <div className="text-sm text-destructive">{errors.quick_device_model}</div>}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_serial_number">Numero de serie</Label>
+                      <Input
+                        id="quick_device_serial_number"
+                        value={data.quick_device_serial_number}
+                        onChange={(e) => setData('quick_device_serial_number', e.target.value)}
+                      />
+                      {errors.quick_device_serial_number && <div className="text-sm text-destructive">{errors.quick_device_serial_number}</div>}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_asset_tag">Numero de suivi</Label>
+                      <Input
+                        id="quick_device_asset_tag"
+                        value={data.quick_device_asset_tag}
+                        onChange={(e) => setData('quick_device_asset_tag', e.target.value)}
+                      />
+                      {errors.quick_device_asset_tag && <div className="text-sm text-destructive">{errors.quick_device_asset_tag}</div>}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_purchase_date">Date d'achat</Label>
+                      <Input
+                        id="quick_device_purchase_date"
+                        type="date"
+                        value={data.quick_device_purchase_date}
+                        onChange={(e) => setData('quick_device_purchase_date', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_device_warranty_end_date">Fin de garantie</Label>
+                      <Input
+                        id="quick_device_warranty_end_date"
+                        type="date"
+                        value={data.quick_device_warranty_end_date}
+                        onChange={(e) => setData('quick_device_warranty_end_date', e.target.value)}
+                      />
+                      {errors.quick_device_warranty_end_date && <div className="text-sm text-destructive">{errors.quick_device_warranty_end_date}</div>}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setData('quick_add_device', false)
+                        setData('quick_device_type', 'computer')
+                        setData('quick_device_brand', '')
+                        setData('quick_device_model', '')
+                        setData('quick_device_serial_number', '')
+                        setData('quick_device_asset_tag', '')
+                        setData('quick_device_purchase_date', '')
+                        setData('quick_device_warranty_end_date', '')
+                        setShowQuickDeviceDialog(false)
+                      }}
+                    >
+                      Retirer
+                    </Button>
+                    <Button type="button" onClick={() => setShowQuickDeviceDialog(false)}>
+                      Valider
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={showQuickCommandeDialog} onOpenChange={setShowQuickCommandeDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ajouter une commande rapide</DialogTitle>
+                    <DialogDescription>
+                      Cette commande sera créée et liée au ticket après enregistrement.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <Label htmlFor="quick_commande_nom">Nom commande *</Label>
+                      <Input
+                        id="quick_commande_nom"
+                        value={data.quick_commande_nom}
+                        onChange={(e) => setData('quick_commande_nom', e.target.value)}
+                        placeholder="Ex: SSD 1To SN850"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_commande_fournisseur">Fournisseur</Label>
+                      <Input
+                        id="quick_commande_fournisseur"
+                        value={data.quick_commande_fournisseur}
+                        onChange={(e) => setData('quick_commande_fournisseur', e.target.value)}
+                        placeholder="LDLC, Amazon..."
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_commande_command_number">Numero commande</Label>
+                      <Input
+                        id="quick_commande_command_number"
+                        value={data.quick_commande_command_number}
+                        onChange={(e) => setData('quick_commande_command_number', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_commande_invoice_id">Numero facture</Label>
+                      <Input
+                        id="quick_commande_invoice_id"
+                        value={data.quick_commande_invoice_id}
+                        onChange={(e) => setData('quick_commande_invoice_id', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="quick_commande_statut">Statut commande</Label>
+                      <select
+                        id="quick_commande_statut"
+                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={data.quick_commande_statut}
+                        onChange={(e) => setData('quick_commande_statut', e.target.value)}
+                      >
+                        <option value="new">Nouveau</option>
+                        <option value="panier">Panier</option>
+                        <option value="commandé">Commande</option>
+                        <option value="réceptionner">Reception</option>
+                        <option value="traité">Traite</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setData('quick_add_commande', false)
+                        setData('quick_commande_nom', '')
+                        setData('quick_commande_fournisseur', '')
+                        setData('quick_commande_command_number', '')
+                        setData('quick_commande_invoice_id', '')
+                        setData('quick_commande_statut', 'new')
+                        setShowQuickCommandeDialog(false)
+                      }}
+                    >
+                      Retirer
+                    </Button>
+                    <Button type="button" onClick={() => setShowQuickCommandeDialog(false)}>
+                      Valider
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={showPasswordConfirmDialog} onOpenChange={setShowPasswordConfirmDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Confirmer l'absence de mot de passe</DialogTitle>
+                    <DialogDescription>
+                      Le champ MDP est vide. Confirmez-vous que le client ne fournit aucun mot de passe pour ce ticket ?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setPendingPrintAfterPasswordConfirm(false)
+                        setShowPasswordConfirmDialog(false)
+                      }}
+                    >
+                      Retour
+                    </Button>
+                    <Button type="button" onClick={confirmNoPasswordAndSubmit}>
+                      Confirmer et créer
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <div className="sticky bottom-2 z-10 flex flex-wrap gap-2 rounded-xl border border-border/70 bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
                 <Button type="submit" disabled={processing || (isAgent && !specialOnly && !selectedUser)} variant="default">
                   {isSpecialTicket ? 'Créer le ticket spécial' : 'Créer'}
                 </Button>

@@ -236,6 +236,9 @@ export default function DevicesIndex({
                       <td className="px-4 py-3 text-sm">{device.tickets_count}</td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex items-center gap-2">
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/devices/${device.id}`}>Fiche</Link>
+                          </Button>
                           {device.user && (
                             <Button asChild variant="outline" size="sm">
                               <Link href={`/users/${device.user.id}/edit#tickets-client`}>Voir client</Link>
@@ -265,9 +268,14 @@ export default function DevicesIndex({
                     <Badge variant="outline">Tickets: {device.tickets_count}</Badge>
                   </div>
                   <div className="mt-2">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/tickets?device_id=${device.id}&show_all=1`}>Voir tickets</Link>
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/devices/${device.id}`}>Fiche</Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/tickets?device_id=${device.id}&show_all=1`}>Voir tickets</Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

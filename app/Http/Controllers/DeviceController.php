@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Device;
+use App\Models\DeviceEvent;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +12,15 @@ use Inertia\Inertia;
 
 class DeviceController extends Controller
 {
+    private function canViewDevice(User $viewer, Device $device): bool
+    {
+        if ($viewer->agent) {
+            return true;
+        }
+
+        return (int) $viewer->id === (int) $device->user_id;
+    }
+
     public function index(Request $request)
     {
         $currentUser = Auth::user();
@@ -107,6 +118,135 @@ class DeviceController extends Controller
                 'sort' => $sort,
             ],
         ]);
+    }
+
+    public function show(Device $device)
+    {
+        $viewer = Auth::user();
+        if (!$viewer) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        if (!$this->canViewDevice($viewer, $device)) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        $device->load(['user:id,first_name,last_name,email,phone', 'events.technician:id,first_name,last_name']);
+
+        $ticketQuery = Ticket::query()
+            ->with(['assignee:id,first_name,last_name'])
+            ->where('device_id', $device->id)
+            ->orderByDesc('created_at');
+
+        $tickets = $ticketQuery
+            ->limit(200)
+            ->get()
+            ->map(fn(Ticket $ticket) => [
+                'id' => $ticket->id,
+                'title' => $ticket->title,
+                'status' => $ticket->status,
+                'priority' => $ticket->priority,
+                'assignee' => $ticket->assignee ? trim(($ticket->assignee->first_name ?? '') . ' ' . ($ticket->assignee->last_name ?? '')) : null,
+                'created_at' => $ticket->created_at?->toDateTimeString(),
+                'updated_at' => $ticket->updated_at?->toDateTimeString(),
+            ])
+            ->values();
+
+        $events = DeviceEvent::query()
+            ->with(['technician:id,first_name,last_name'])
+            ->where('device_id', $device->id)
+            ->orderByDesc('happened_at')
+            ->limit(300)
+            ->get()
+            ->map(fn(DeviceEvent $event) => [
+                'id' => $event->id,
+                'event_type' => $event->event_type,
+                'summary' => $event->summary,
+                'details' => $event->details,
+                'happened_at' => $event->happened_at?->toDateTimeString(),
+                'ticket_id' => $event->ticket_id,
+                'technician' => $event->technician
+                    ? trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? ''))
+                    : null,
+            ])
+            ->values();
+
+        $stats = [
+            'tickets_total' => Ticket::where('device_id', $device->id)->count(),
+            'tickets_open' => Ticket::where('device_id', $device->id)->whereIn('status', ['open', 'in_progress', 'pending'])->count(),
+            'events_total' => DeviceEvent::where('device_id', $device->id)->count(),
+            'last_event_at' => DeviceEvent::where('device_id', $device->id)->max('happened_at'),
+            'first_ticket_at' => Ticket::where('device_id', $device->id)->min('created_at'),
+        ];
+
+        return Inertia::render('Devices/Show', [
+            'device' => [
+                'id' => $device->id,
+                'device_type' => $device->device_type,
+                'brand' => $device->brand,
+                'model' => $device->model,
+                'display_name' => $device->display_name,
+                'serial_number' => $device->serial_number,
+                'asset_tag' => $device->asset_tag,
+                'status' => $device->status,
+                'purchase_date' => $device->purchase_date?->toDateString(),
+                'warranty_start_date' => $device->warranty_start_date?->toDateString(),
+                'warranty_end_date' => $device->warranty_end_date?->toDateString(),
+                'vendor_name' => $device->vendor_name,
+                'imei' => $device->imei,
+                'sim_number' => $device->sim_number,
+                'phone_number' => $device->phone_number,
+                'os_name' => $device->os_name,
+                'ram_gb' => $device->ram_gb,
+                'storage_gb' => $device->storage_gb,
+                'cpu' => $device->cpu,
+                'notes' => $device->notes,
+                'access_password' => $device->access_password,
+                'no_access_password' => (bool) $device->no_access_password,
+                'user' => $device->user ? [
+                    'id' => $device->user->id,
+                    'name' => trim(($device->user->first_name ?? '') . ' ' . ($device->user->last_name ?? '')),
+                    'email' => $device->user->email,
+                    'phone' => $device->user->phone,
+                ] : null,
+            ],
+            'tickets' => $tickets,
+            'events' => $events,
+            'stats' => $stats,
+            'isAgent' => (bool) $viewer->agent,
+        ]);
+    }
+
+    public function storeEvent(Request $request, Device $device)
+    {
+        $viewer = Auth::user();
+        if (!$viewer) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        if (!$viewer->agent) {
+            abort(403, 'Action reservee aux agents.');
+        }
+
+        $data = $request->validate([
+            'event_type' => 'required|in:battery_replaced,screen_replaced,storage_upgraded,diagnostic,maintenance,note',
+            'summary' => 'required|string|max:500',
+            'details' => 'nullable|string|max:3000',
+            'happened_at' => 'nullable|date',
+            'ticket_id' => 'nullable|integer|exists:tickets,id',
+        ]);
+
+        DeviceEvent::create([
+            'device_id' => $device->id,
+            'ticket_id' => $data['ticket_id'] ?? null,
+            'technician_id' => $viewer->id,
+            'event_type' => $data['event_type'],
+            'summary' => $data['summary'],
+            'details' => !empty($data['details']) ? ['note' => $data['details']] : null,
+            'happened_at' => $data['happened_at'] ?? now(),
+        ]);
+
+        return back()->with('success', 'Evenement ajoute au suivi appareil.');
     }
 
     public function store(Request $request, User $user)

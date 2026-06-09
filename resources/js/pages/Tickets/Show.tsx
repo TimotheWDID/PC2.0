@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -166,6 +166,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [internalNote, setInternalNote] = useState(ticket.user?.internal_note ?? '');
+  const [showTicketPassword, setShowTicketPassword] = useState(false);
+  const [showDevicePassword, setShowDevicePassword] = useState(false);
   const [timelineSearch, setTimelineSearch] = useState('');
   const [timelineTypeFilter, setTimelineTypeFilter] = useState('all');
   const [timelineTechnicianFilter, setTimelineTechnicianFilter] = useState('all');
@@ -1090,7 +1092,24 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       </div>
                       <div>
                         <span className="text-muted-foreground">MDP appareil:</span>{' '}
-                        <strong>{ticket.device_password ?? (ticket.no_device_password ? 'Je n\'ai pas de mots de passe' : '-')}</strong>
+                        <strong>
+                          {ticket.no_device_password
+                            ? 'Aucun mot de passe fourni'
+                            : ticket.device_password
+                              ? (showTicketPassword ? ticket.device_password : '••••••••••')
+                              : '-'}
+                        </strong>
+                        {!ticket.no_device_password && ticket.device_password && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="ml-1 h-6 px-2"
+                            onClick={() => setShowTicketPassword((current) => !current)}
+                          >
+                            {showTicketPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -1180,10 +1199,39 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <History className="h-4 w-4" />
                       Suivi appareil
                     </CardTitle>
-                    <Badge variant="outline">{ticket.device.display_name}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{ticket.device.display_name}</Badge>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/devices/${ticket.device.id}`}>Fiche appareil</Link>
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
+                  <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mot de passe appareil stocke</p>
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <strong>
+                        {ticket.device.no_access_password
+                          ? 'Aucun mot de passe fourni'
+                          : ticket.device.access_password
+                            ? (showDevicePassword ? ticket.device.access_password : '••••••••••')
+                            : '-'}
+                      </strong>
+                      {!ticket.device.no_access_password && ticket.device.access_password && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2"
+                          onClick={() => setShowDevicePassword((current) => !current)}
+                        >
+                          {showDevicePassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
                   {isAgent && (
                     <form onSubmit={handleCreateDeviceEvent} className="space-y-3 rounded-md border p-3">
                       <div className="grid gap-3 sm:grid-cols-2">

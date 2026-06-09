@@ -8,6 +8,11 @@ Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->na
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
 Route::middleware('auth')->group(function () {
+    Route::middleware('admin')->group(function () {
+        Route::get('tickets/bulk-distribution', [TicketController::class, 'bulkDistributionIndex'])->name('tickets.bulkDistribution.index');
+        Route::post('tickets/bulk-distribution', [TicketController::class, 'bulkDistributionAssign'])->name('tickets.bulkDistribution.assign');
+    });
+
     Route::get('tickets/bugs-improvements', [TicketController::class, 'specialIndex'])->name('tickets.special.index');
     Route::get('tickets/bugs-improvements/create', [TicketController::class, 'specialCreate'])->name('tickets.special.create');
 
