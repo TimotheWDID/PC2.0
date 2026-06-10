@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { router } from '@inertiajs/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Send, Loader2, Trash2 } from 'lucide-react';
+import { Send, Loader2, Trash2, MessageSquare } from 'lucide-react';
 import axios from 'axios';
 import { formatDateTimeFr } from '@/lib/datetime';
 
@@ -34,9 +31,9 @@ interface TicketChatProps {
 export default function TicketChat({ ticketId, currentUserId, isAgent = false }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [sendingMode, setSendingMode] = useState<'public' | 'internal'>('public');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = (force = false) => {
@@ -72,21 +69,19 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
     return () => clearInterval(interval);
   }, [ticketId]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const sendMessage = async (internal: boolean) => {
     if (!newMessage.trim()) return;
 
+    setSendingMode(internal ? 'internal' : 'public');
     setIsSending(true);
     try {
       const response = await axios.post(`/tickets/${ticketId}/messages`, {
         content: newMessage,
-        is_internal: isInternal,
+        is_internal: internal,
       });
 
       setMessages([...messages, response.data.message]);
       setNewMessage('');
-      setIsInternal(false);
       setTimeout(() => scrollToBottom(true), 50);
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
@@ -94,6 +89,11 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await sendMessage(false);
   };
 
   const handleDeleteMessage = async (messageId: number) => {
@@ -116,14 +116,17 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base sm:text-lg">Discussion</CardTitle>
+      <CardHeader className="pb-3 bg-muted/10">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <MessageSquare className="h-4 w-4" />
+          Discussion
+        </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="space-y-3">
           {/* Messages Area */}
           <div
-            className="h-[42vh] max-h-[26rem] min-h-52 overflow-y-auto rounded-lg border bg-muted/10 p-3 sm:h-96 sm:p-4"
+            className="h-[34vh] max-h-[22rem] min-h-44 overflow-y-auto rounded-lg border bg-muted/10 p-3 sm:h-96 sm:max-h-[26rem] sm:min-h-52 sm:p-4"
             ref={messagesContainerRef}
           >
             {isLoading && visibleMessages.length === 0 ? (
@@ -190,15 +193,29 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
               rows={2}
               disabled={isSending}
             />
-            {isAgent && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox id="is-internal" checked={isInternal} onCheckedChange={() => setIsInternal(!isInternal)} />
-                <Label htmlFor="is-internal" className="cursor-pointer">Marquer comme note interne (non visible client)</Label>
-              </div>
-            )}
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              {isAgent && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSending || !newMessage.trim()}
+                  onClick={() => sendMessage(true)}
+                >
+                  {isSending && sendingMode === 'internal' ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Envoi interne...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Envoyer en interne
+                    </>
+                  )}
+                </Button>
+              )}
               <Button type="submit" disabled={isSending || !newMessage.trim()}>
-                {isSending ? (
+                {isSending && sendingMode === 'public' ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Envoi...

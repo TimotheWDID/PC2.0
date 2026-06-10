@@ -13,18 +13,26 @@ class CategorySeeder extends Seeder
     public function run(): void
     {
         $categories = [
-            ['name' => 'Matériel informatique', 'slug' => 'materiel-informatique'],
-            ['name' => 'Logiciel', 'slug' => 'logiciel'],
-            ['name' => 'Réseau', 'slug' => 'reseau'],
-            ['name' => 'Impression', 'slug' => 'impression'],
-            ['name' => 'Téléphonie', 'slug' => 'telephonie'],
-            ['name' => 'Accès et sécurité', 'slug' => 'acces-securite'],
-            ['name' => 'Email', 'slug' => 'email'],
-            ['name' => 'Autre', 'slug' => 'autre'],
+            ['name' => 'Réparation ordinateur', 'slug' => 'reparation-ordinateur'],
+            ['name' => 'Réparation téléphone', 'slug' => 'reparation-telephone'],
+            ['name' => 'Réparation tablette', 'slug' => 'reparation-tablette'],
+            ['name' => 'SAV', 'slug' => 'sav'],
+            ['name' => 'Vente', 'slug' => 'vente'],
+            ['name' => 'Logiciel / configuration', 'slug' => 'logiciel-configuration'],
+            ['name' => 'Réseau / Wi-Fi', 'slug' => 'reseau-wifi'],
+            ['name' => 'Impression / périphériques', 'slug' => 'impression-peripheriques'],
+            ['name' => 'Sécurité / accès', 'slug' => 'securite-acces'],
+            ['name' => 'Divers', 'slug' => 'divers'],
         ];
 
         foreach ($categories as $category) {
-            Category::create($category);
+            Category::query()->updateOrCreate(
+                ['slug' => $category['slug']],
+                [
+                    'name' => $category['name'],
+                    'is_visible' => true,
+                ]
+            );
         }
     }
 }

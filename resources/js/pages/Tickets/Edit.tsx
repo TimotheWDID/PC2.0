@@ -101,7 +101,14 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
                   <SelectContent>
                     <SelectItem value="0">Aucun</SelectItem>
                     {agents && agents.map((agent: any) => (
-                      <SelectItem key={agent.id} value={agent.id.toString()}>{agent.name}</SelectItem>
+                      <SelectItem key={agent.id} value={agent.id.toString()}>
+                        <span className="inline-flex flex-col items-start gap-0.5">
+                          <span>{agent.name}</span>
+                          {agent.specialities?.length ? (
+                            <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
+                          ) : null}
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

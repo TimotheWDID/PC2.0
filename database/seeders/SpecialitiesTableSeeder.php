@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\Speciality;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class SpecialitiesTableSeeder extends Seeder
 {
@@ -12,8 +12,26 @@ class SpecialitiesTableSeeder extends Seeder
      */
     public function run(): void
     {
-        // use upsert to avoid duplicate key errors if seeder runs multiple times
-        DB::table('specialities')->updateOrInsert(['name' => 'Phone'], ['created_at' => now(), 'updated_at' => now()]);
-        DB::table('specialities')->updateOrInsert(['name' => 'PC'], ['created_at' => now(), 'updated_at' => now()]);
+        $specialities = [
+            'Vente',
+            'Montage PC',
+            'Réparation PC',
+            'Réparation téléphone',
+            'Réparation tablette',
+            'Réparation imprimante',
+            'Réinstallation système',
+            'SAV / diagnostic',
+            'SAV',
+            'Logiciel / configuration',
+            'Réseau / Wi-Fi',
+            'Impression / périphériques',
+            'Vente / conseil',
+            'Sécurité / accès',
+            'Divers',
+        ];
+
+        foreach ($specialities as $name) {
+            Speciality::query()->updateOrCreate(['name' => $name]);
+        }
     }
 }

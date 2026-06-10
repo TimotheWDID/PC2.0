@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import Heading from '@/components/heading';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -40,6 +39,48 @@ const translatePriority = (priority: string): string => {
 
 const formatDateTime = (value?: string | null): string => {
   return formatDateTimeFr(value, { timeZone: 'Europe/Paris' });
+};
+
+const formatElapsedFromNow = (value?: string | null): string => {
+  if (!value) {
+    return '-';
+  }
+
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) {
+    return '-';
+  }
+
+  const diffMs = Date.now() - target.getTime();
+  if (diffMs < 0) {
+    return 'A venir';
+  }
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} h`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} j`;
+};
+
+const toUtcNaiveDateTime = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const localDate = new Date(value);
+  if (Number.isNaN(localDate.getTime())) {
+    return null;
+  }
+
+  return localDate.toISOString().slice(0, 19).replace('T', ' ');
 };
 
 const formatTimelineDetailValue = (value: unknown): string => {
@@ -172,6 +213,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [timelineTypeFilter, setTimelineTypeFilter] = useState('all');
   const [timelineTechnicianFilter, setTimelineTechnicianFilter] = useState('all');
   const [showRemovedEvents, setShowRemovedEvents] = useState(false);
+  const [isTimelinePanelOpen, setIsTimelinePanelOpen] = useState(false);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [manualEventForm, setManualEventForm] = useState({
     event_type: 'manual_note',
@@ -199,6 +241,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     purchase_date: '',
     warranty_end_date: '',
   });
+
+  const ticketActionBtnClass = 'h-8 px-2 text-[11px] whitespace-normal text-foreground';
 
   const timelineTemplatesByType = useMemo(() => {
     const map = new Map<string, { label: string; enabled: boolean; summary: string; details: string }>();
@@ -251,6 +295,10 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     };
   }, [manualEventOptions]);
 
+  const requesterHref = ticket.user ? `/users/${ticket.user.id}/edit#tickets-client` : null;
+  const assigneeHref = ticket.assignee ? `/users/${ticket.assignee.id}/edit` : null;
+  const deviceHref = ticket.device ? `/devices/${ticket.device.id}` : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     router.put(`/tickets/${ticket.id}`, formData, {
@@ -288,7 +336,13 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
   const handleCreateDeviceEvent = (e: React.FormEvent) => {
     e.preventDefault();
-    router.post(`/tickets/${ticket.id}/device-events`, deviceEventForm, {
+
+    const payload = {
+      ...deviceEventForm,
+      happened_at: toUtcNaiveDateTime(deviceEventForm.happened_at),
+    };
+
+    router.post(`/tickets/${ticket.id}/device-events`, payload, {
       preserveScroll: true,
       onSuccess: () => {
         setDeviceEventForm({
@@ -400,11 +454,117 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     });
   }, [timelineEvents, timelineSearch, timelineTypeFilter, timelineTechnicianFilter, showRemovedEvents]);
 
+  const latestTimelineEvents = useMemo(() => {
+    return timelineEvents.filter((event: any) => !event.is_removed).slice(0, 3);
+  }, [timelineEvents]);
+
+  const operationalInsights = useMemo(() => {
+    const lastTimelineAt = timelineEvents.find((event: any) => !event.is_removed)?.happened_at ?? null;
+    const lastDeviceAt = deviceEvents[0]?.happened_at ?? null;
+    const lastCommandeAt = commandes?.[0]?.created_at ?? null;
+
+    const latestActivityAt = [lastTimelineAt, lastDeviceAt, lastCommandeAt]
+      .filter(Boolean)
+      .map((value) => new Date(String(value)))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+
+    const latestActivityMs = latestActivityAt ? (Date.now() - latestActivityAt.getTime()) : null;
+    const latestActivityHours = latestActivityMs !== null ? Math.floor(latestActivityMs / (1000 * 60 * 60)) : null;
+
+    let slaLevel: 'ok' | 'watch' | 'critical' = 'ok';
+    if (latestActivityHours !== null && latestActivityHours >= 72) {
+      slaLevel = 'critical';
+    } else if (latestActivityHours !== null && latestActivityHours >= 24) {
+      slaLevel = 'watch';
+    }
+
+    if (formData.status === 'pending' && latestActivityHours !== null && latestActivityHours >= 24) {
+      slaLevel = 'critical';
+    }
+
+    const activeCommandesCount = (commandes ?? []).filter((commande: any) => {
+      const statut = String(commande.statut ?? '').toLowerCase();
+      return statut !== 'traite' && statut !== 'traité';
+    }).length;
+
+    return {
+      ticketAge: formatElapsedFromNow(ticket.created_at),
+      latestActivityAt: latestActivityAt ? latestActivityAt.toISOString() : null,
+      activeCommandesCount,
+      latestTimelineAt: lastTimelineAt,
+      latestActivityHours,
+      slaLevel,
+      technicianActionsCount: timelineEvents.filter((event: any) => !event.is_removed).length,
+      isAssigned: Boolean(ticket.assignee?.id),
+      isDeviceLinked: Boolean(ticket.device?.id),
+    };
+  }, [ticket.created_at, ticket.assignee?.id, ticket.device?.id, timelineEvents, deviceEvents, commandes, formData.status]);
+
+  const topInfoCards = useMemo(() => {
+    const isLockedLabel = ticket.is_locked ? 'Verrouille' : 'Actif';
+    const isResolvedLabel = ticket.is_resolved ? 'Resolu' : 'A traiter';
+
+    return [
+      {
+        title: 'Ticket',
+        icon: Ticket,
+        lines: [
+          `#${ticket.id}`,
+          `${translateStatus(formData.status)} · ${translatePriority(formData.priority)}`,
+          `Cree le ${formatDateTime(ticket.created_at)}`,
+          `${isResolvedLabel} · ${isLockedLabel} · Age: ${operationalInsights.ticketAge}`,
+        ],
+      },
+      {
+        title: 'Appareil',
+        icon: Cpu,
+        lines: [
+          ticket.device?.display_name ?? 'Aucun appareil lie',
+          ticket.device?.serial_number ? `S/N: ${ticket.device.serial_number}` : 'Numero de serie non renseigne',
+          ticket.device?.asset_tag ? `Suivi: ${ticket.device.asset_tag}` : 'Numero de suivi non renseigne',
+          ticket.no_device_password ? 'Mot de passe non fourni' : (ticket.device_password ? 'Mot de passe ticket enregistre' : 'Mot de passe non renseigne'),
+        ],
+      },
+      {
+        title: 'Commandes liees',
+        icon: ShoppingCart,
+        lines: [
+          `${commandes?.length ?? 0} commande(s) dont ${operationalInsights.activeCommandesCount} active(s)`,
+          commandes?.[0]?.nom ? `Derniere: ${commandes[0].nom}` : 'Aucune commande rattachee',
+          commandes?.[0]?.statut ? `Statut: ${commandes[0].statut}` : 'Statut: -',
+          commandes?.[0]?.fournisseur ? `Fournisseur: ${commandes[0].fournisseur}` : 'Fournisseur: -',
+        ],
+      },
+      {
+        title: 'SLA et contacts',
+        icon: ShieldCheck,
+        lines: [
+          `Dernier mouvement: ${formatElapsedFromNow(operationalInsights.latestActivityAt)}`,
+          ticket.user?.name ?? 'Demandeur inconnu',
+          ticket.contact_phone || ticket.user?.phone || 'Telephone non renseigne',
+          ticket.contact_email || ticket.user?.email || 'Email non renseigne',
+          ticket.assignee?.name ? `Assigne a ${ticket.assignee.name}` : 'Aucun technicien assigne',
+        ],
+      },
+    ];
+  }, [ticket, commandes, formData.status, formData.priority, operationalInsights]);
+
+  const mobileTopInfoCards = useMemo(() => {
+    return [
+      { title: 'Ticket', icon: Ticket, value: `#${ticket.id} · ${translateStatus(formData.status)}` },
+      { title: 'SLA', icon: ShieldCheck, value: operationalInsights.slaLevel === 'critical' ? 'Critique' : operationalInsights.slaLevel === 'watch' ? 'A surveiller' : 'OK' },
+      { title: 'Appareil', icon: Cpu, value: ticket.device?.display_name ?? 'Non lie' },
+      { title: 'Cmd actives', icon: ShoppingCart, value: String(operationalInsights.activeCommandesCount) },
+    ];
+  }, [ticket.id, ticket.device, formData.status, operationalInsights]);
+
   const handleCreateTimelineEvent = (e: React.FormEvent) => {
     e.preventDefault();
 
     const payload = {
       ...manualEventForm,
+      happened_at: toUtcNaiveDateTime(manualEventForm.happened_at),
       prerequisites: manualPrerequisites.filter((prereq) => prereq.name.trim() !== ''),
     };
 
@@ -478,10 +638,94 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     });
   };
 
+  const renderTimelineEventItem = (event: any, showActions = true) => (
+    <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
+      <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className={`text-sm font-medium ${event.is_removed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{event.summary}</p>
+          <p className="text-xs text-muted-foreground">{event.technician?.name ?? 'Technicien'} • {formatDateTime(event.happened_at)}</p>
+          {event.is_removed && (
+            <p className="text-xs text-muted-foreground">
+              {event.removed_by?.name ?? 'Technicien'} a retiré un événement le {formatDateTime(event.removed_at)}{event.removed_reason ? ` - ${event.removed_reason}` : ''}
+            </p>
+          )}
+          {!event.is_removed && event.restored_by?.name && (
+            <p className="text-xs text-primary">Événement restauré par {event.restored_by.name} le {formatDateTime(event.restored_at)}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {event.event_type && (
+            <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${getTimelineAccent(event.event_type).badge}`}>
+              {eventTypeLabels[event.event_type] ?? event.event_type}
+            </Badge>
+          )}
+          {showActions && (
+            !event.is_removed ? (
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => handleRemoveTimelineEvent(event.id)}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Retirer
+              </Button>
+            ) : (
+              <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => handleRestoreTimelineEvent(event.id)}>
+                <RotateCcw className="h-3.5 w-3.5 mr-1" />Restaurer
+              </Button>
+            )
+          )}
+        </div>
+      </div>
+      {Array.isArray(event.details?.changes) && event.details.changes.length > 0 && (
+        <div className="mt-2 space-y-1 rounded-md border bg-muted/30 p-2">
+          {event.details.changes.map((change: any, index: number) => (
+            <p key={`${event.id}-chg-${index}`} className="text-xs text-muted-foreground">
+              <strong className="text-foreground">{change.label ?? change.field}:</strong>{' '}
+              {formatTimelineDetailValue(change.before)} → {formatTimelineDetailValue(change.after)}
+            </p>
+          ))}
+        </div>
+      )}
+      {event.details?.preview && <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>}
+      {event.details?.note && <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>}
+      {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
+        <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
+          <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
+          <div className="mt-1 space-y-1">
+            {event.details.prerequisites.map((prereq: any, index: number) => (
+              <p key={`${event.id}-pre-${index}`} className="text-[11px] text-muted-foreground">{prereq.met ? 'OK' : 'A verifier'} - {prereq.name}</p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={ticket.title ?? 'Ticket'} />
-      <div className="w-full py-2 pb-24 sm:py-4 lg:pb-0">
+      <div className="w-full overflow-x-hidden px-2 py-2 pb-24 sm:px-0 sm:py-4 lg:pb-0">
+        {isAgent && (
+          <div className="sticky top-0 z-30 mb-3 grid w-full grid-cols-2 gap-1 border-y bg-background/95 py-1 backdrop-blur sm:hidden">
+            <Button type="button" size="sm" variant="outline" className="h-8 w-full text-[11px]" onClick={() => document.getElementById('ticket-discussion')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              Discussion
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 w-full text-[11px]" onClick={() => document.getElementById('ticket-suivi-tech')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              Suivi
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 w-full text-[11px]" onClick={() => document.getElementById('commandes-liees')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              Commandes
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 w-full text-[11px]"
+              disabled={!ticket.device}
+              onClick={() => document.getElementById('ticket-appareil')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              Appareil
+            </Button>
+          </div>
+        )}
+
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Link href="/tickets">
             <Button variant="outline" size="sm">
@@ -489,19 +733,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
             </Button>
           </Link>
         </div>
-        <div className="mb-4 space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">{ticket.title ?? 'Ticket'}</h1>
-          {ticket.priority && (
-            <p className="text-sm text-muted-foreground sm:text-lg">
-              Priorité: {translatePriority(ticket.priority)}
-            </p>
-          )}
+        <div className="mb-3 space-y-2">
+          <h1 className="break-words text-xl font-bold tracking-tight sm:text-4xl">{ticket.title ?? 'Ticket'}</h1>
 
           {isAgent ? (
-            <div className="grid gap-2 text-xs lg:grid-cols-2 xl:grid-cols-3">
+            <div className="hidden gap-2 text-xs sm:grid lg:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-md border bg-muted/30 px-2 py-2">
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Statut rapide</p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
                   {Object.entries(statutLabels).map(([value, label]) => {
                     const isCurrent = formData.status === value;
 
@@ -510,7 +749,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         key={`quick-status-${value}`}
                         variant="outline"
                         size="sm"
-                        className={`h-7 px-2 text-[11px] ${isCurrent ? statutUI[value]?.btnActive : statutUI[value]?.btn}`}
+                        className={`h-7 px-2 text-[11px] whitespace-normal ${isCurrent ? statutUI[value]?.btnActive : statutUI[value]?.btn}`}
                         onClick={() => {
                           if (!isCurrent) {
                             handleStatusChange(value);
@@ -527,7 +766,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
               <div className="rounded-md border bg-muted/30 px-2 py-2">
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Priorite rapide</p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
                   {Object.entries(priorityLabels).map(([value, label]) => {
                     const isCurrent = formData.priority === value;
 
@@ -536,7 +775,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         key={`quick-priority-${value}`}
                         variant="outline"
                         size="sm"
-                        className={`h-7 px-2 text-[11px] ${isCurrent ? priorityUI[value]?.btnActive : priorityUI[value]?.btn}`}
+                        className={`h-7 px-2 text-[11px] whitespace-normal ${isCurrent ? priorityUI[value]?.btnActive : priorityUI[value]?.btn}`}
                         onClick={() => {
                           if (!isCurrent) {
                             handlePriorityChange(value);
@@ -553,18 +792,28 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
               <div className="rounded-md border bg-muted/30 px-2 py-2">
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actions ticket</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setIsEditing(true)}>
+                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+                  <Button variant="outline" size="sm" className={ticketActionBtnClass} onClick={() => setIsEditing(true)}>
+                    <NotebookPen className="mr-1 h-3.5 w-3.5" />
                     Modifier ticket
                   </Button>
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setIsAddEventModalOpen(true)}>
+                  <Button variant="outline" size="sm" className={ticketActionBtnClass} onClick={() => setIsAddEventModalOpen(true)}>
+                    <Plus className="mr-1 h-3.5 w-3.5" />
                     Ajouter evenement
                   </Button>
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={openDeviceActionModal}>
+                  <Button variant="outline" size="sm" className={ticketActionBtnClass} onClick={openDeviceActionModal}>
+                    <Cpu className="mr-1 h-3.5 w-3.5" />
                     Appareil
                   </Button>
+                  <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
+                    <Button variant="outline" size="sm" className={`${ticketActionBtnClass} w-full sm:w-auto`}>
+                      <ShoppingCart className="mr-1 h-3.5 w-3.5" />
+                      Ajouter commande
+                    </Button>
+                  </Link>
                   <Link href={`/tickets/${ticket.id}/print-label`}>
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]">
+                    <Button variant="outline" size="sm" className={`${ticketActionBtnClass} w-full sm:w-auto`}>
+                      <Printer className="mr-1 h-3.5 w-3.5" />
                       Imprimer etiquette
                     </Button>
                   </Link>
@@ -587,188 +836,252 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
               </div>
               <div className="rounded-md border bg-muted/30 px-2 py-1.5">
                 <span className="text-muted-foreground">Assigné:</span>{' '}
-                <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
+                {assigneeHref ? (
+                  <Link href={assigneeHref} className="font-semibold text-primary underline-offset-4 hover:underline">
+                    {ticket.assignee?.name}
+                  </Link>
+                ) : (
+                  <strong>Non assigné</strong>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <div className="order-1 xl:order-2">
-            <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:hidden">
+          {mobileTopInfoCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <Card key={`m-${card.title}`} className="border-border/70 bg-muted/20">
+                <CardContent className="space-y-1 p-2.5">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Icon className="h-3.5 w-3.5" />
+                    {card.title}
+                  </p>
+                  <p className="truncate text-[11px] text-foreground">{card.value}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <div className="mb-4 hidden gap-2 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+          {topInfoCards.map((card) => {
+            const Icon = card.icon;
+
+            return (
+              <Card key={card.title} className="border-border/70 bg-muted/20">
+                <CardContent className="space-y-1.5 p-3">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                    {card.title}
+                  </p>
+                  {card.lines.map((line, index) => (
+                    <p key={`${card.title}-${index}`} className="truncate text-xs text-foreground sm:text-[13px]">{line}</p>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {isAgent && (
+          <div className="mb-2 flex flex-wrap gap-1.5 sm:hidden">
+            <Badge variant="outline" className="text-[10px]">Age: {operationalInsights.ticketAge}</Badge>
+            <Badge
+              className={`text-[10px] ${
+                operationalInsights.slaLevel === 'critical'
+                  ? 'bg-destructive text-destructive-foreground'
+                  : operationalInsights.slaLevel === 'watch'
+                    ? 'bg-[#e6892e] text-white'
+                    : 'bg-[#63d7ca] text-[#141d3a]'
+              }`}
+            >
+              {operationalInsights.slaLevel === 'critical' ? 'SLA critique' : operationalInsights.slaLevel === 'watch' ? 'SLA surveiller' : 'SLA OK'}
+            </Badge>
+            <Badge variant="outline" className="text-[10px]">Cmd: {operationalInsights.activeCommandesCount}</Badge>
+            <Badge variant="outline" className="text-[10px]">Tech: {operationalInsights.technicianActionsCount}</Badge>
+          </div>
+        )}
+
+        {isAgent && (
+          <div className="mb-4 hidden flex-wrap items-center gap-2 sm:flex">
+            <Badge variant="outline" className="text-[11px]">
+              Age ticket: {operationalInsights.ticketAge}
+            </Badge>
+            <Badge
+              className={
+                operationalInsights.slaLevel === 'critical'
+                  ? 'bg-destructive text-destructive-foreground'
+                  : operationalInsights.slaLevel === 'watch'
+                    ? 'bg-[#e6892e] text-white'
+                    : 'bg-[#63d7ca] text-[#141d3a]'
+              }
+            >
+              {operationalInsights.slaLevel === 'critical'
+                ? 'SLA critique'
+                : operationalInsights.slaLevel === 'watch'
+                  ? 'SLA a surveiller'
+                  : 'SLA OK'}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              Dernier mouvement: {formatElapsedFromNow(operationalInsights.latestActivityAt)}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              Actions tech: {operationalInsights.technicianActionsCount}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              Commandes actives: {operationalInsights.activeCommandesCount}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              {operationalInsights.isAssigned ? 'Technicien assigne' : 'Non assigne'}
+            </Badge>
+            <Badge variant="outline" className="text-[11px]">
+              {operationalInsights.isDeviceLinked ? 'Appareil lie' : 'Sans appareil'}
+            </Badge>
+          </div>
+        )}
+
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="order-2 min-w-0 flex flex-col gap-3 xl:order-1">
+            {isAgent ? (
+              <div className="grid gap-3 xl:grid-cols-2">
+                <div id="ticket-discussion" className="min-w-0 scroll-mt-20">
+                  <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+                </div>
+                <Card id="ticket-suivi-tech" className="w-full max-w-full scroll-mt-20 overflow-hidden">
+                  <CardHeader className="pb-3 bg-muted/10">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <History className="h-4 w-4" />
+                        Suivi techniciens
+                      </CardTitle>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setIsTimelinePanelOpen(true)}>
+                          Historique complet
+                        </Button>
+                        <Dialog
+                          open={isAddEventModalOpen}
+                          onOpenChange={(open) => {
+                            setIsAddEventModalOpen(open);
+                            if (open) { applyPrefillTemplate(manualEventForm.event_type); }
+                          }}
+                        >
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline">
+                              <Plus className="h-4 w-4 mr-1" />
+                              Ajouter
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="w-[calc(100vw-1rem)] max-w-xl sm:max-w-xl">
+                            <DialogHeader>
+                              <DialogTitle>Ajouter un evenement de suivi</DialogTitle>
+                              <DialogDescription>
+                                Cet evenement sera visible dans la timeline du ticket avec votre nom et l&apos;heure.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleCreateTimelineEvent} className="space-y-3">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label>Type d&apos;evenement</Label>
+                                  {hasPrefillTemplate && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-primary">
+                                      <Sparkles className="h-3.5 w-3.5" />Pre-rempli actif
+                                    </span>
+                                  )}
+                                </div>
+                                <Select
+                                  value={manualEventForm.event_type}
+                                  onValueChange={(value) => {
+                                    setManualEventForm((current) => ({ ...current, event_type: value }));
+                                    applyPrefillTemplate(value);
+                                  }}
+                                >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {manualEventOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        <span className="inline-flex items-center gap-1.5">
+                                          {option.enabled ? <Sparkles className="h-3.5 w-3.5 text-primary" /> : null}
+                                          <span>{option.label}</span>
+                                        </span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="ms-summary">Resume</Label>
+                                <Input id="ms-summary" value={manualEventForm.summary} onChange={(e) => setManualEventForm({ ...manualEventForm, summary: e.target.value })} placeholder="Ex: Diagnostic realise, alimentation HS identifiee" maxLength={500} required />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="ms-details">Details</Label>
+                                <Textarea id="ms-details" value={manualEventForm.details} onChange={(e) => setManualEventForm({ ...manualEventForm, details: e.target.value })} placeholder="Infos techniques, pieces changees, actions realisees..." rows={4} maxLength={3000} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="ms-happened-at">Date et heure (optionnel)</Label>
+                                <Input id="ms-happened-at" type="datetime-local" value={manualEventForm.happened_at} onChange={(e) => setManualEventForm({ ...manualEventForm, happened_at: e.target.value })} />
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label>Prerequis (optionnel)</Label>
+                                  <Button type="button" variant="ghost" size="sm" onClick={addManualPrerequisite}><Plus className="h-3.5 w-3.5 mr-1" />Ajouter prerequis</Button>
+                                </div>
+                                {manualPrerequisites.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">Aucun prerequis ajoute.</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {manualPrerequisites.map((prereq, index) => (
+                                      <div key={`msp-${index}`} className="flex items-center gap-2">
+                                        <Input value={prereq.name} onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })} placeholder="Ex: Fournisseur renseigne" maxLength={160} />
+                                        <Button type="button" variant={prereq.met ? 'default' : 'outline'} size="sm" onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}>{prereq.met ? 'OK' : 'A verifier'}</Button>
+                                        <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeManualPrerequisite(index)}><X className="h-3.5 w-3.5" /></Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>Annuler</Button>
+                                <Button type="submit">Ajouter</Button>
+                              </DialogFooter>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Apercu immediat des 3 dernieres actions technicien. Ouvrez l'historique pour la vue complete.</p>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {latestTimelineEvents.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Aucune action technicien enregistrée pour le moment.</div>
+                    ) : (
+                      <div className="space-y-4">
+                        {latestTimelineEvents.map((event: any) => renderTimelineEventItem(event, false))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+            )}
           </div>
 
-          {/* Ticket Details */}
-          <div className="order-2 flex flex-col gap-3 xl:order-1">
-            {isAgent && (
-              <Card className="order-2 xl:hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <History className="h-4 w-4" />
-                      Suivi techniciens
-                    </CardTitle>
-                    <Dialog
-                      open={isAddEventModalOpen}
-                      onOpenChange={(open) => {
-                        setIsAddEventModalOpen(open);
-
-                        if (open) {
-                          applyPrefillTemplate(manualEventForm.event_type);
-                        }
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Ajouter un evenement
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-xl">
-                        <DialogHeader>
-                          <DialogTitle>Ajouter un evenement de suivi</DialogTitle>
-                          <DialogDescription>
-                            Cet evenement sera visible dans la timeline du ticket avec votre nom et l&apos;heure.
-                          </DialogDescription>
-                        </DialogHeader>
-
-                        <form onSubmit={handleCreateTimelineEvent} className="space-y-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Type d&apos;evenement</Label>
-                              {hasPrefillTemplate && (
-                                <span className="inline-flex items-center gap-1 text-xs text-primary">
-                                  <Sparkles className="h-3.5 w-3.5" />
-                                  Pre-rempli actif
-                                </span>
-                              )}
-                            </div>
-                            <Select
-                              value={manualEventForm.event_type}
-                              onValueChange={(value) => {
-                                setManualEventForm((current) => ({ ...current, event_type: value }));
-                                applyPrefillTemplate(value);
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {manualEventOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    <span className="inline-flex items-center gap-1.5">
-                                      {option.enabled ? (
-                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                      ) : null}
-                                      <span>{option.label}</span>
-                                    </span>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-summary">Resume</Label>
-                            <Input
-                              id="manual-summary"
-                              value={manualEventForm.summary}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, summary: e.target.value })}
-                              placeholder="Ex: Diagnostic realise, alimentation HS identifiee"
-                              maxLength={500}
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-details">Details</Label>
-                            <Textarea
-                              id="manual-details"
-                              value={manualEventForm.details}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, details: e.target.value })}
-                              placeholder="Infos techniques, pieces changees, actions realisees..."
-                              rows={4}
-                              maxLength={3000}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-happened-at">Date et heure (optionnel)</Label>
-                            <Input
-                              id="manual-happened-at"
-                              type="datetime-local"
-                              value={manualEventForm.happened_at}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, happened_at: e.target.value })}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Prerequis (optionnel)</Label>
-                              <Button type="button" variant="ghost" size="sm" onClick={addManualPrerequisite}>
-                                <Plus className="h-3.5 w-3.5 mr-1" />
-                                Ajouter prerequis
-                              </Button>
-                            </div>
-
-                            {manualPrerequisites.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">Aucun prerequis ajoute.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {manualPrerequisites.map((prereq, index) => (
-                                  <div key={`manual-prereq-${index}`} className="flex items-center gap-2">
-                                    <Input
-                                      value={prereq.name}
-                                      onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })}
-                                      placeholder="Ex: Fournisseur renseigne"
-                                      maxLength={160}
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant={prereq.met ? 'default' : 'outline'}
-                                      size="sm"
-                                      onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}
-                                    >
-                                      {prereq.met ? 'OK' : 'A verifier'}
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive"
-                                      onClick={() => removeManualPrerequisite(index)}
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>
-                              Annuler
-                            </Button>
-                            <Button type="submit">Ajouter</Button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="mb-4 grid gap-2 md:grid-cols-3">
-                    <Input
-                      value={timelineSearch}
-                      onChange={(e) => setTimelineSearch(e.target.value)}
-                      placeholder="Rechercher dans le suivi..."
-                    />
-
+          {isAgent && (
+            <Dialog open={isTimelinePanelOpen} onOpenChange={setIsTimelinePanelOpen}>
+              <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-hidden sm:max-w-5xl">
+                <DialogHeader>
+                  <DialogTitle>Historique complet du suivi technicien</DialogTitle>
+                  <DialogDescription>
+                    Recherchez, filtrez, retirez ou restaurez les événements de suivi pour ce ticket.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                    <div className="grid gap-2 md:grid-cols-3">
+                    <Input value={timelineSearch} onChange={(e) => setTimelineSearch(e.target.value)} placeholder="Rechercher dans le suivi..." />
                     <Select value={timelineTypeFilter} onValueChange={setTimelineTypeFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Type d&apos;evenement" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Type d'evenement" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Tous les types</SelectItem>
                         {Object.keys(eventTypeLabels).map((eventType) => (
@@ -776,11 +1089,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         ))}
                       </SelectContent>
                     </Select>
-
                     <Select value={timelineTechnicianFilter} onValueChange={setTimelineTechnicianFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Technicien" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Technicien" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Tous les techniciens</SelectItem>
                         {timelineTechnicians.map((technician) => (
@@ -789,127 +1099,44 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">Afficher les événements retirés</Label>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setShowRemovedEvents((value) => !value)}>
                       {showRemovedEvents ? 'Masquer les retirés' : 'Voir les retirés'}
                     </Button>
                   </div>
-
                   {filteredTimelineEvents.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistrée pour le moment.</div>
+                    <div className="text-sm text-muted-foreground">Aucune action technicien trouvée.</div>
                   ) : (
-                    <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem]">
-                      {filteredTimelineEvents.map((event: any) => (
-                        <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
-                          <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className={`text-sm font-medium ${event.is_removed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                                {event.summary}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {event.technician?.name ?? 'Technicien'}{' '}
-                                • {formatDateTime(event.happened_at)}
-                              </p>
-                              {event.is_removed && (
-                                <p className="text-xs text-muted-foreground">
-                                  {event.removed_by?.name ?? 'Technicien'} a retiré un événement le {formatDateTime(event.removed_at)}
-                                  {event.removed_reason ? ` - ${event.removed_reason}` : ''}
-                                </p>
-                              )}
-                              {!event.is_removed && event.restored_by?.name && (
-                                <p className="text-xs text-primary">
-                                  Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {event.event_type && (
-                                <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${getTimelineAccent(event.event_type).badge}`}>
-                                  {eventTypeLabels[event.event_type] ?? event.event_type}
-                                </Badge>
-                              )}
-
-                              {!event.is_removed ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-destructive"
-                                  onClick={() => handleRemoveTimelineEvent(event.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                                  Retirer
-                                </Button>
-                              ) : (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2"
-                                  onClick={() => handleRestoreTimelineEvent(event.id)}
-                                >
-                                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                                  Restaurer
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {Array.isArray(event.details?.changes) && event.details.changes.length > 0 && (
-                            <div className="mt-2 space-y-1 rounded-md border bg-muted/30 p-2">
-                              {event.details.changes.map((change: any, index: number) => (
-                                <p key={`${event.id}-change-${index}`} className="text-xs text-muted-foreground">
-                                  <strong className="text-foreground">{change.label ?? change.field}:</strong>{' '}
-                                  {formatTimelineDetailValue(change.before)} → {formatTimelineDetailValue(change.after)}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {event.details?.preview && (
-                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>
-                          )}
-
-                          {event.details?.note && (
-                            <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>
-                          )}
-
-                          {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
-                            <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
-                              <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
-                              <div className="mt-1 space-y-1">
-                                {event.details.prerequisites.map((prereq: any, index: number) => (
-                                  <p key={`${event.id}-prereq-${index}`} className="text-[11px] text-muted-foreground">
-                                    {prereq.met ? 'OK' : 'A verifier'} - {prereq.name}
-                                  </p>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="max-h-[58vh] space-y-4 overflow-y-auto pr-1 sm:pr-2">
+                      {filteredTimelineEvents.map((event: any) => renderTimelineEventItem(event, true))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
-            <Card className="order-3 xl:order-1">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base sm:text-lg">Détails du ticket</CardTitle>
+          {/* Ticket Details */}
+          <div className="order-1 min-w-0 flex flex-col gap-3 xl:order-2">
+
+
+            <Card className="order-2 min-w-0 w-full max-w-full overflow-hidden xl:order-1">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-6 sm:pb-3 sm:pt-6">
+                <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Ticket className="h-4 w-4" />
+                    Détails du ticket
+                  </CardTitle>
                   {isAgent && !isEditing && (
-                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
                       Modifier
                     </Button>
                   )}
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-2.5 px-3 pb-3 pt-0 sm:space-y-3 sm:px-6 sm:pb-6">
                 {isAgent && isEditing ? (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
@@ -955,7 +1182,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         <SelectContent>
                           <SelectItem value="0">Aucun</SelectItem>
                           {agents?.map((agent: any) => (
-                            <SelectItem key={agent.id} value={agent.id.toString()}>{agent.name}</SelectItem>
+                            <SelectItem key={agent.id} value={agent.id.toString()}>
+                              <span className="inline-flex flex-col items-start gap-0.5">
+                                <span>{agent.name}</span>
+                                {agent.specialities?.length ? (
+                                  <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
+                                ) : null}
+                              </span>
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -986,7 +1220,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="contact_email">Email de contact</Label>
                         <Input
@@ -1024,7 +1258,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       </Select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -1060,37 +1294,59 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                   </form>
                 ) : (
                   <>
-                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-3 sm:p-4">
+                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-2.5 sm:p-4">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
                         Description du ticket
                       </p>
-                      <p className="whitespace-pre-line text-sm leading-relaxed text-foreground sm:text-base">
+                      <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground sm:text-base">
                         {ticket.message || 'Aucune description fournie.'}
                       </p>
                     </div>
 
-                    <div className="grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
-                      <div>
+                    <div className="grid gap-1.5 text-[12px] sm:grid-cols-2 sm:gap-2 sm:text-sm">
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Référence:</span>{' '}
                         <strong>#{ticket.id}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 break-words">
+                        <span className="text-muted-foreground">Numéro de facture:</span>{' '}
+                        <strong>{ticket.invoice_id || '-'}</strong>
+                      </div>
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Créé le:</span>{' '}
                         <strong>{formatDateTime(ticket.created_at)}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Demandeur:</span>{' '}
-                        <strong>{ticket.user?.name ?? '-'}</strong>
+                        {requesterHref ? (
+                          <Link href={requesterHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                            {ticket.user?.name}
+                          </Link>
+                        ) : (
+                          <strong>-</strong>
+                        )}
                       </div>
-                      <div>
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Agent assigné:</span>{' '}
-                        <strong>{ticket.assignee?.name ?? 'Non assigné'}</strong>
+                        {assigneeHref ? (
+                          <Link href={assigneeHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                            {ticket.assignee?.name}
+                          </Link>
+                        ) : (
+                          <strong>Non assigné</strong>
+                        )}
                       </div>
-                      <div>
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Appareil:</span>{' '}
-                        <strong>{ticket.device?.display_name ?? 'Aucun appareil lié'}</strong>
+                        {deviceHref ? (
+                          <Link href={deviceHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                            {ticket.device?.display_name}
+                          </Link>
+                        ) : (
+                          <strong>Aucun appareil lié</strong>
+                        )}
                       </div>
-                      <div>
+                      <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">MDP appareil:</span>{' '}
                         <strong>
                           {ticket.no_device_password
@@ -1134,13 +1390,6 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
                         {showMoreInfo && (
                           <div className="space-y-3 mt-3">
-                            {ticket.invoice_id && (
-                              <div className="text-sm">
-                                <span className="text-muted-foreground">Numéro de facture:</span>{' '}
-                                <strong>{ticket.invoice_id}</strong>
-                              </div>
-                            )}
-
                             {ticket.contact_email && (
                               <div className="flex items-center gap-2 text-sm">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
@@ -1192,7 +1441,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
             </Card>
 
             {ticket.device && (
-              <Card className="order-4 xl:order-2">
+              <Card id="ticket-appareil" className="order-3 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -1311,32 +1560,37 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
             {/* Commandes Section - Only for agents */}
             {isAgent && (
-              <Card className="order-4 xl:order-2">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-base">
+              <Card id="commandes-liees" className="order-1 min-w-0 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">
+                <CardHeader className="bg-muted/10 px-3 pb-2 pt-3 sm:px-6 sm:pb-3 sm:pt-6">
+                  <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                       <ShoppingCart className="h-4 w-4" />
                       Commandes liées
                     </CardTitle>
                     <Link href={`/commandes/create?ticket_id=${ticket.id}`}>
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
                         <Plus className="h-3 w-3 mr-1" />
                         Nouvelle
                       </Button>
                     </Link>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="min-w-0 px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
                   {commandes && commandes.length > 0 ? (
                     <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                       {commandes.map((commande: any) => (
                         <div
                           key={commande.id}
-                          className="flex items-center justify-between p-2 border rounded hover:bg-muted/50 transition-colors text-sm"
+                          className="flex flex-col gap-1.5 rounded border p-1.5 text-xs transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:p-2 sm:text-sm"
                         >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-medium truncate">{commande.nom}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-0.5 flex items-center gap-1.5 sm:gap-2">
+                              <Link
+                                href={`/commandes/${commande.id}`}
+                                className="truncate break-all font-medium text-foreground underline-offset-4 hover:text-primary hover:underline"
+                              >
+                                {commande.nom}
+                              </Link>
                               <Badge className={
                                 commande.statut === 'traité' ? 'status-badge-traite text-xs' :
                                 commande.statut === 'réceptionner' ? 'status-badge-reception text-xs' :
@@ -1351,20 +1605,22 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                  'Traité'}
                               </Badge>
                             </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              <span className="font-mono">{commande.command_number}</span>
+                            <div className="truncate text-[11px] text-muted-foreground sm:text-xs">
+                              <Link href={`/commandes/${commande.id}`} className="break-all font-mono text-primary underline-offset-4 hover:underline">
+                                {commande.command_number}
+                              </Link>
                               {' • '}
-                              <span>{commande.fournisseur}</span>
+                              <span className="break-words">{commande.fournisseur}</span>
                             </div>
                           </div>
-                          <div className="flex gap-1 ml-2">
+                          <div className="flex gap-1 self-end sm:ml-2 sm:self-auto">
                             <Link href={`/commandes/${commande.id}`}>
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                              <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] sm:h-7 sm:px-2 sm:text-xs">
                                 Voir
                               </Button>
                             </Link>
                             <Link href={`/commandes/${commande.id}/edit`}>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 sm:h-7 sm:w-7">
                                 <Edit className="h-3 w-3" />
                               </Button>
                             </Link>
@@ -1388,344 +1644,69 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
               </Card>
             )}
 
-            {isAgent && (
-              <Card className="hidden xl:block xl:order-3">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <History className="h-4 w-4" />
-                      Suivi techniciens
-                    </CardTitle>
-                    <Dialog
-                      open={isAddEventModalOpen}
-                      onOpenChange={(open) => {
-                        setIsAddEventModalOpen(open);
 
-                        if (open) {
-                          applyPrefillTemplate(manualEventForm.event_type);
-                        }
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Ajouter un evenement
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-xl">
-                        <DialogHeader>
-                          <DialogTitle>Ajouter un evenement de suivi</DialogTitle>
-                          <DialogDescription>
-                            Cet evenement sera visible dans la timeline du ticket avec votre nom et l&apos;heure.
-                          </DialogDescription>
-                        </DialogHeader>
-
-                        <form onSubmit={handleCreateTimelineEvent} className="space-y-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Type d&apos;evenement</Label>
-                              {hasPrefillTemplate && (
-                                <span className="inline-flex items-center gap-1 text-xs text-primary">
-                                  <Sparkles className="h-3.5 w-3.5" />
-                                  Pre-rempli actif
-                                </span>
-                              )}
-                            </div>
-                            <Select
-                              value={manualEventForm.event_type}
-                              onValueChange={(value) => {
-                                setManualEventForm((current) => ({ ...current, event_type: value }));
-                                applyPrefillTemplate(value);
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {manualEventOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    <span className="inline-flex items-center gap-1.5">
-                                      {option.enabled ? (
-                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                      ) : null}
-                                      <span>{option.label}</span>
-                                    </span>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-summary">Resume</Label>
-                            <Input
-                              id="manual-summary"
-                              value={manualEventForm.summary}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, summary: e.target.value })}
-                              placeholder="Ex: Diagnostic realise, alimentation HS identifiee"
-                              maxLength={500}
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-details">Details</Label>
-                            <Textarea
-                              id="manual-details"
-                              value={manualEventForm.details}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, details: e.target.value })}
-                              placeholder="Infos techniques, pieces changees, actions realisees..."
-                              rows={4}
-                              maxLength={3000}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="manual-happened-at">Date et heure (optionnel)</Label>
-                            <Input
-                              id="manual-happened-at"
-                              type="datetime-local"
-                              value={manualEventForm.happened_at}
-                              onChange={(e) => setManualEventForm({ ...manualEventForm, happened_at: e.target.value })}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Prerequis (optionnel)</Label>
-                              <Button type="button" variant="ghost" size="sm" onClick={addManualPrerequisite}>
-                                <Plus className="h-3.5 w-3.5 mr-1" />
-                                Ajouter prerequis
-                              </Button>
-                            </div>
-
-                            {manualPrerequisites.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">Aucun prerequis ajoute.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {manualPrerequisites.map((prereq, index) => (
-                                  <div key={`manual-prereq-${index}`} className="flex items-center gap-2">
-                                    <Input
-                                      value={prereq.name}
-                                      onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })}
-                                      placeholder="Ex: Fournisseur renseigne"
-                                      maxLength={160}
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant={prereq.met ? 'default' : 'outline'}
-                                      size="sm"
-                                      onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}
-                                    >
-                                      {prereq.met ? 'OK' : 'A verifier'}
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive"
-                                      onClick={() => removeManualPrerequisite(index)}
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>
-                              Annuler
-                            </Button>
-                            <Button type="submit">Ajouter</Button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="mb-4 grid gap-2 md:grid-cols-3">
-                    <Input
-                      value={timelineSearch}
-                      onChange={(e) => setTimelineSearch(e.target.value)}
-                      placeholder="Rechercher dans le suivi..."
-                    />
-
-                    <Select value={timelineTypeFilter} onValueChange={setTimelineTypeFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Type d&apos;evenement" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tous les types</SelectItem>
-                        {Object.keys(eventTypeLabels).map((eventType) => (
-                          <SelectItem key={eventType} value={eventType}>{eventTypeLabels[eventType]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={timelineTechnicianFilter} onValueChange={setTimelineTechnicianFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Technicien" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tous les techniciens</SelectItem>
-                        {timelineTechnicians.map((technician) => (
-                          <SelectItem key={technician.id} value={technician.id}>{technician.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="mb-3 flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Afficher les evenements retires</Label>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowRemovedEvents((value) => !value)}>
-                      {showRemovedEvents ? 'Masquer retires' : 'Voir retires'}
-                    </Button>
-                  </div>
-
-                  {filteredTimelineEvents.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Aucune action technicien enregistree pour le moment.</div>
-                  ) : (
-                    <div className="max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem]">
-                      {filteredTimelineEvents.map((event: any) => (
-                        <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
-                          <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className={`text-sm font-medium ${event.is_removed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                                {event.summary}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {event.technician?.name ?? 'Technicien'}{' '}
-                                • {formatDateTime(event.happened_at)}
-                              </p>
-                              {event.is_removed && (
-                                <p className="text-xs text-muted-foreground">
-                                  {event.removed_by?.name ?? 'Technicien'} a retire un evenement le {formatDateTime(event.removed_at)}
-                                  {event.removed_reason ? ` - ${event.removed_reason}` : ''}
-                                </p>
-                              )}
-                              {!event.is_removed && event.restored_by?.name && (
-                                <p className="text-xs text-primary">
-                                  Evenement restaure par {event.restored_by.name} le {formatDateTime(event.restored_at)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {event.event_type && (
-                                <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${getTimelineAccent(event.event_type).badge}`}>
-                                  {eventTypeLabels[event.event_type] ?? event.event_type}
-                                </Badge>
-                              )}
-
-                              {!event.is_removed ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-destructive"
-                                  onClick={() => handleRemoveTimelineEvent(event.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                                  Retirer
-                                </Button>
-                              ) : (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2"
-                                  onClick={() => handleRestoreTimelineEvent(event.id)}
-                                >
-                                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                                  Restaurer
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {Array.isArray(event.details?.changes) && event.details.changes.length > 0 && (
-                            <div className="mt-2 space-y-1 rounded-md border bg-muted/30 p-2">
-                              {event.details.changes.map((change: any, index: number) => (
-                                <p key={`${event.id}-change-${index}`} className="text-xs text-muted-foreground">
-                                  <strong className="text-foreground">{change.label ?? change.field}:</strong>{' '}
-                                  {formatTimelineDetailValue(change.before)} → {formatTimelineDetailValue(change.after)}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {event.details?.preview && (
-                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>
-                          )}
-
-                          {event.details?.note && (
-                            <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>
-                          )}
-
-                          {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
-                            <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
-                              <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
-                              <div className="mt-1 space-y-1">
-                                {event.details.prerequisites.map((prereq: any, index: number) => (
-                                  <p key={`${event.id}-prereq-${index}`} className="text-[11px] text-muted-foreground">
-                                    {prereq.met ? 'OK' : 'A verifier'} - {prereq.name}
-                                  </p>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
 
           </div>
         </div>
 
         {/* User and Assignee Information - Side by side */}
-        <div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2 md:[&>*]:h-full">
           {/* User Information */}
-          {ticket.user && (
-            <Card>
+          <Card className="h-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Demandeur
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Demandeur
+                  </CardTitle>
+                  {requesterHref && (
+                    <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                      <Link href={requesterHref}>Ouvrir la fiche</Link>
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{ticket.user.name}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <a href={`mailto:${ticket.user.email}`} className="text-primary hover:underline">
-                    {ticket.user.email}
-                  </a>
-                </div>
-                {ticket.user.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${ticket.user.phone}`} className="text-primary hover:underline">
-                      {ticket.user.phone}
-                    </a>
+                {ticket.user ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      {requesterHref ? (
+                        <Link href={requesterHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                          {ticket.user.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{ticket.user.name}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <a href={`mailto:${ticket.user.email}`} className="text-primary hover:underline">
+                        {ticket.user.email}
+                      </a>
+                    </div>
+                    {ticket.user.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <a href={`tel:${ticket.user.phone}`} className="text-primary hover:underline">
+                          {ticket.user.phone}
+                        </a>
+                      </div>
+                    )}
+                    {ticket.user.address && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">{ticket.user.address}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    Demandeur introuvable.
                   </div>
                 )}
-                {ticket.user.address && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{ticket.user.address}</span>
-                  </div>
-                )}
-                {isAgent && (
+                {isAgent && ticket.user && (
                   <div className="mt-4 pt-4 border-t space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">Note interne</Label>
@@ -1776,49 +1757,67 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 )}
               </CardContent>
             </Card>
-          )}
 
           {/* Assignee Information */}
-          {ticket.assignee && (
-            <Card>
+          <Card className="h-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="h-5 w-5" />
-                  Agent assigné
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <UserCheck className="h-5 w-5" />
+                    Agent assigné
+                  </CardTitle>
+                  {assigneeHref && (
+                    <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                      <Link href={assigneeHref}>Ouvrir la fiche</Link>
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{ticket.assignee.name}</span>
-                </div>
-                {ticket.assignee.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${ticket.assignee.phone}`} className="text-primary hover:underline">
-                      {ticket.assignee.phone}
-                    </a>
-                  </div>
-                )}
-                {isAgent && (
+                {ticket.assignee ? (
                   <>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <a href={`mailto:${ticket.assignee.email}`} className="text-primary hover:underline">
-                        {ticket.assignee.email}
-                      </a>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      {assigneeHref ? (
+                        <Link href={assigneeHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                          {ticket.assignee.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{ticket.assignee.name}</span>
+                      )}
                     </div>
-                    {ticket.assignee.address && (
+                    {ticket.assignee.phone && (
                       <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">{ticket.assignee.address}</span>
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <a href={`tel:${ticket.assignee.phone}`} className="text-primary hover:underline">
+                          {ticket.assignee.phone}
+                        </a>
                       </div>
                     )}
+                    {isAgent && (
+                      <>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <a href={`mailto:${ticket.assignee.email}`} className="text-primary hover:underline">
+                            {ticket.assignee.email}
+                          </a>
+                        </div>
+                        {ticket.assignee.address && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">{ticket.assignee.address}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </>
+                ) : (
+                  <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    Aucun agent assigné pour le moment.
+                  </div>
                 )}
               </CardContent>
             </Card>
-          )}
         </div>
 
         {isDeviceActionModalOpen && (

@@ -1,0 +1,1 @@
+import{j as t}from"./app-xC_PpuOo.js";function r(o){return t.jsx("img",{...o,src:"/images/LogoBold.svg",alt:"Logo SupportPC",style:{filter:o.className?.includes("text-white")?"brightness(0) invert(1)":"none"}})}export{r as A};

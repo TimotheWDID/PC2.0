@@ -5,6 +5,7 @@ import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
 import { useState, useMemo } from 'react'
@@ -16,9 +17,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-// use native textarea element instead of non-existing ui/textarea component
-// using native select element instead of ui/select
-
 type Category = {
   id: number
   name: string
@@ -43,7 +41,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: "Créer un ticket", href: '/tickets/create' },
 ]
 
-const selectClassName = 'mt-1 flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs transition-[color,box-shadow] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
 const sectionClassName = 'rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/20 p-5 shadow-sm md:p-6'
 const sectionHeaderClassName = 'mb-4 flex items-start gap-3'
 const stepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted/40 text-sm font-semibold text-foreground'
@@ -510,16 +507,15 @@ export default function CreateTicket({
                 {specialOnly ? (
                   <div>
                     <Label htmlFor="ticket_kind">Type de ticket spécial</Label>
-                    <select
-                      id="ticket_kind"
-                      name="ticket_kind"
-                      className={selectClassName}
-                      value={data.ticket_kind}
-                      onChange={(e) => setData('ticket_kind', e.target.value as 'bug' | 'improvement')}
-                    >
-                      <option value="bug">Signaler un bug</option>
-                      <option value="improvement">Proposer une amélioration</option>
-                    </select>
+                    <Select value={data.ticket_kind} onValueChange={(value) => setData('ticket_kind', value as 'bug' | 'improvement')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bug">Signaler un bug</SelectItem>
+                        <SelectItem value="improvement">Proposer une amélioration</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {errors.ticket_kind && <div className="text-sm text-destructive">{errors.ticket_kind}</div>}
                   </div>
                 ) : (
@@ -576,18 +572,17 @@ export default function CreateTicket({
 
               <div className={sectionClassName}>
                 <Label htmlFor="category_id">Catégorie</Label>
-                <select
-                  id="category_id"
-                  name="category_id"
-                  className={selectClassName}
-                  value={data.category_id}
-                  onChange={(e) => setData('category_id', e.target.value)}
-                >
-                  <option value="">-- Sélectionner --</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
+                <Select value={data.category_id || '0'} onValueChange={(value) => setData('category_id', value === '0' ? '' : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="-- Sélectionner --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">-- Sélectionner --</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">Optionnel, utile pour le tri et la priorisation.</p>
               </div>
 
@@ -602,18 +597,17 @@ export default function CreateTicket({
                   </div>
                   <div>
                     <Label htmlFor="device_id">Appareil lié (optionnel)</Label>
-                    <select
-                      id="device_id"
-                      name="device_id"
-                      className={selectClassName}
-                      value={data.device_id}
-                      onChange={(e) => setData('device_id', e.target.value)}
-                    >
-                      <option value="">-- Aucun appareil --</option>
-                      {(isAgent ? (selectedUser?.devices ?? []) : currentUserDevices).map((device) => (
-                        <option key={device.id} value={device.id}>{device.display_name}</option>
-                      ))}
-                    </select>
+                    <Select value={data.device_id || '0'} onValueChange={(value) => setData('device_id', value === '0' ? '' : value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="-- Aucun appareil --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">-- Aucun appareil --</SelectItem>
+                        {(isAgent ? (selectedUser?.devices ?? []) : currentUserDevices).map((device) => (
+                          <SelectItem key={device.id} value={device.id.toString()}>{device.display_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.device_id && <div className="text-sm text-destructive">{errors.device_id}</div>}
                   </div>
 
@@ -672,17 +666,17 @@ export default function CreateTicket({
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
                       <Label htmlFor="quick_device_type">Type appareil</Label>
-                      <select
-                        id="quick_device_type"
-                        className={selectClassName}
-                        value={data.quick_device_type}
-                        onChange={(e) => setData('quick_device_type', e.target.value)}
-                      >
-                        <option value="computer">Ordinateur</option>
-                        <option value="phone">Telephone</option>
-                        <option value="tablet">Tablette</option>
-                        <option value="other">Autre</option>
-                      </select>
+                      <Select value={data.quick_device_type} onValueChange={(value) => setData('quick_device_type', value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="computer">Ordinateur</SelectItem>
+                          <SelectItem value="phone">Telephone</SelectItem>
+                          <SelectItem value="tablet">Tablette</SelectItem>
+                          <SelectItem value="other">Autre</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
@@ -823,18 +817,18 @@ export default function CreateTicket({
 
                     <div>
                       <Label htmlFor="quick_commande_statut">Statut commande</Label>
-                      <select
-                        id="quick_commande_statut"
-                        className={selectClassName}
-                        value={data.quick_commande_statut}
-                        onChange={(e) => setData('quick_commande_statut', e.target.value)}
-                      >
-                        <option value="new">Nouveau</option>
-                        <option value="panier">Panier</option>
-                        <option value="commandé">Commande</option>
-                        <option value="réceptionner">Reception</option>
-                        <option value="traité">Traite</option>
-                      </select>
+                      <Select value={data.quick_commande_statut} onValueChange={(value) => setData('quick_commande_statut', value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="new">Nouveau</SelectItem>
+                          <SelectItem value="panier">Panier</SelectItem>
+                          <SelectItem value="commandé">Commande</SelectItem>
+                          <SelectItem value="réceptionner">Reception</SelectItem>
+                          <SelectItem value="traité">Traite</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 

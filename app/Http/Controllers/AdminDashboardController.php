@@ -5,7 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Agent;
 use App\Models\Commande;
 use App\Models\Ticket;
+use App\Models\TicketTimelineEvent;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -58,44 +62,145 @@ class AdminDashboardController extends Controller
         return trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: null;
     }
 
+    private function applyDateRange(Builder $query, ?Carbon $startDate, ?Carbon $endDate, string $column = 'created_at'): Builder
+    {
+        if ($startDate) {
+            $query->where($column, '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->where($column, '<=', $endDate);
+        }
+
+        return $query;
+    }
+
+    private function applyAgentFilter(Builder $query, ?int $agentUserId, string $column = 'assignee_id'): Builder
+    {
+        if ($agentUserId) {
+            $query->where($column, $agentUserId);
+        }
+
+        return $query;
+    }
+
+    private function applyCommandeAgentFilter(Builder $query, ?int $agentUserId): Builder
+    {
+        if ($agentUserId) {
+            $query->whereHas('ticket', fn (Builder $ticketQuery) => $ticketQuery->where('assignee_id', $agentUserId));
+        }
+
+        return $query;
+    }
+
+    private function formatFilterLabel(?Carbon $startDate, ?Carbon $endDate, ?string $agentName = null): ?string
+    {
+        $parts = [];
+
+        $format = static fn (Carbon $date) => $date->copy()->locale('fr')->isoFormat('DD/MM/YYYY');
+
+        if ($startDate && $endDate && $startDate->isSameDay($endDate)) {
+            $parts[] = 'le ' . $format($startDate);
+        } elseif ($startDate && $endDate) {
+            $parts[] = 'du ' . $format($startDate) . ' au ' . $format($endDate);
+        } elseif ($startDate) {
+            $parts[] = 'depuis le ' . $format($startDate);
+        } elseif ($endDate) {
+            $parts[] = 'jusqu\'au ' . $format($endDate);
+        }
+
+        if ($agentName) {
+            $parts[] = 'agent ' . $agentName;
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(' · ', $parts);
+    }
+
     // ─── Main action ──────────────────────────────────────────────────────────
 
-    public function index()
+    public function index(Request $request)
     {
+        $validated = $request->validate([
+            'date' => ['nullable', 'date'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'agent_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $singleDate = $validated['date'] ?? null;
+        $startDate = isset($validated['start_date'])
+            ? Carbon::parse($validated['start_date'])->startOfDay()
+            : ($singleDate ? Carbon::parse($singleDate)->startOfDay() : null);
+        $endDate = isset($validated['end_date'])
+            ? Carbon::parse($validated['end_date'])->endOfDay()
+            : ($singleDate ? Carbon::parse($singleDate)->endOfDay() : null);
+        $agentUserId = isset($validated['agent_id']) ? (int) $validated['agent_id'] : null;
+
+        $ticketBaseQuery = $this->applyAgentFilter(
+            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $agentUserId
+        );
+
         // ── 1. Global ticket counters ─────────────────────────────────────────
         $globalStats = [
-            'total'        => Ticket::count(),
-            'open'         => Ticket::where('status', 'open')->count(),
-            'in_progress'  => Ticket::where('status', 'in_progress')->count(),
-            'pending'      => Ticket::where('status', 'pending')->count(),
-            'resolved'     => Ticket::where('status', 'resolved')->count(),
-            'closed'       => Ticket::where('status', 'closed')->count(),
-            'unassigned'   => Ticket::whereNull('assignee_id')
+            'total'        => (clone $ticketBaseQuery)->where('status', '!=', 'closed')->count(),
+            'open'         => (clone $ticketBaseQuery)->where('status', 'open')->count(),
+            'in_progress'  => (clone $ticketBaseQuery)->where('status', 'in_progress')->count(),
+            'pending'      => (clone $ticketBaseQuery)->where('status', 'pending')->count(),
+            'resolved'     => (clone $ticketBaseQuery)->where('status', 'resolved')->count(),
+            'closed'       => (clone $ticketBaseQuery)->where('status', 'closed')->count(),
+            'unassigned'   => (clone $ticketBaseQuery)->whereNull('assignee_id')
                                     ->whereNotIn('status', ['resolved', 'closed'])
                                     ->count(),
-            'high_priority'=> Ticket::where('priority', 'high')
+            'high_priority'=> (clone $ticketBaseQuery)->where('priority', 'high')
                                     ->whereNotIn('status', ['resolved', 'closed'])
                                     ->count(),
-            'today'        => Ticket::whereDate('created_at', today())->count(),
-            'this_week'    => Ticket::where('created_at', '>=', now()->startOfWeek())->count(),
-            'this_month'   => Ticket::where('created_at', '>=', now()->startOfMonth())->count(),
+            'today'        => (clone $ticketBaseQuery)->whereDate('created_at', today())->count(),
+            'this_week'    => (clone $ticketBaseQuery)->where('created_at', '>=', now()->startOfWeek())->count(),
+            'this_month'   => (clone $ticketBaseQuery)->where('created_at', '>=', now()->startOfMonth())->count(),
         ];
 
         // ── 2. Per-agent stats ────────────────────────────────────────────────
         $agents = Agent::with(['user', 'specialities'])->get();
+        $agentOptions = $agents
+            ->map(function (Agent $agent) {
+                return [
+                    'id' => $agent->user_id,
+                    'name' => $this->formatUserName($agent->user) ?? $agent->user?->email ?? ('Agent #' . $agent->id),
+                ];
+            })
+            ->filter(fn (array $agent) => $agent['id'])
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->toArray();
+        $selectedAgentName = collect($agentOptions)->firstWhere('id', $agentUserId)['name'] ?? null;
 
-        $agentStats = $agents->map(function (Agent $agent) {
+        $hasDateFilter = (bool) ($startDate || $endDate);
+
+        $agentStats = $agents->map(function (Agent $agent) use ($startDate, $endDate, $hasDateFilter) {
             $userId = $agent->user_id;
-            $base   = Ticket::where('assignee_id', $userId);
+            $base   = $this->applyDateRange(Ticket::query(), $startDate, $endDate)
+                ->where('assignee_id', $userId);
 
             $assignedTotal   = (clone $base)->count();
             $assignedOpen    = (clone $base)->where('status', 'open')->count();
             $assignedPending = (clone $base)->where('status', 'pending')->count();
             $assignedInProg  = (clone $base)->where('status', 'in_progress')->count();
-            $resolvedMonth   = (clone $base)
-                                ->whereIn('status', ['resolved', 'closed'])
-                                ->where('updated_at', '>=', now()->startOfMonth())
-                                ->count();
+            $resolvedMonthQuery = Ticket::query()
+                ->where('assignee_id', $userId)
+                ->whereIn('status', ['resolved', 'closed']);
+
+            if ($hasDateFilter) {
+                $resolvedMonthQuery = $this->applyDateRange($resolvedMonthQuery, $startDate, $endDate, 'updated_at');
+            } else {
+                $resolvedMonthQuery->where('updated_at', '>=', now()->startOfMonth());
+            }
+
+            $resolvedMonth = $resolvedMonthQuery->count();
             $resolvedTotal   = (clone $base)->whereIn('status', ['resolved', 'closed'])->count();
 
             // High-priority active tickets
@@ -148,8 +253,19 @@ class AdminDashboardController extends Controller
             ];
         })->values()->toArray();
 
+        if ($agentUserId) {
+            $agentStats = array_values(array_filter(
+                $agentStats,
+                fn (array $agent) => (int) $agent['user_id'] === $agentUserId
+            ));
+        }
+
         // ── 3. Alerts: unassigned tickets (open/in_progress) ─────────────────
-        $unassignedTickets = Ticket::whereNull('assignee_id')
+        $unassignedTickets = $this->applyAgentFilter(
+            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $agentUserId
+        )
+            ->whereNull('assignee_id')
             ->whereNotIn('status', ['resolved', 'closed'])
             ->with(['user:id,first_name,last_name', 'category:id,name'])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
@@ -171,7 +287,11 @@ class AdminDashboardController extends Controller
             });
 
         // ── 4. Alerts: stalled tickets (open/in_progress, not updated 3+ days) ──
-        $stalledTickets = Ticket::whereIn('status', ['open', 'in_progress'])
+        $stalledTickets = $this->applyAgentFilter(
+            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $agentUserId
+        )
+            ->whereIn('status', ['open', 'in_progress'])
             ->where('updated_at', '<=', now()->subDays(3))
             ->with([
                 'user:id,first_name,last_name',
@@ -196,7 +316,11 @@ class AdminDashboardController extends Controller
             });
 
         // ── 5. Alerts: pending tickets too long (>24h) ─────────────────────
-        $pendingTooLongTickets = Ticket::where('status', 'pending')
+        $pendingTooLongTickets = $this->applyAgentFilter(
+            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $agentUserId
+        )
+            ->where('status', 'pending')
             ->where('updated_at', '<=', now()->subHours(24))
             ->with([
                 'user:id,first_name,last_name',
@@ -221,7 +345,11 @@ class AdminDashboardController extends Controller
             });
 
         // ── 6. Recent tickets ─────────────────────────────────────────────────
-        $recentTickets = Ticket::with([
+        $recentTickets = $this->applyAgentFilter(
+            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $agentUserId
+        )
+            ->with([
             'user:id,first_name,last_name',
             'assignee:id,first_name,last_name',
             'category:id,name',
@@ -245,40 +373,127 @@ class AdminDashboardController extends Controller
                 ];
             });
 
-        // ── 7. Tickets by day (last 14 days) for chart ───────────────────────
-        $ticketsByDay = Ticket::select(
-                DB::raw('DATE(created_at) as day'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get()
-            ->keyBy('day')
-            ->map(fn ($row) => (int) $row->count);
+        // ── 7. Tickets by day — snapshot per status via history + created count ──────
+        $chartStartDate = $startDate
+            ? $startDate->copy()
+            : ($endDate ? $endDate->copy()->subDays(13)->startOfDay() : now()->subDays(13)->startOfDay());
+        $chartEndDate = $endDate
+            ? $endDate->copy()
+            : ($startDate ? min($startDate->copy()->addDays(13)->endOfDay(), now()->endOfDay()) : now()->endOfDay());
 
-        $ticketsByDayFormatted = [];
-        for ($i = 13; $i >= 0; $i--) {
-            $date = now()->subDays($i)->format('Y-m-d');
-            $label = now()->subDays($i)->locale('fr')->isoFormat('DD MMM');
-            $ticketsByDayFormatted[] = [
-                'date'  => $date,
-                'label' => $label,
-                'count' => $ticketsByDay[$date] ?? 0,
+        if ($chartStartDate->greaterThan($chartEndDate)) {
+            [$chartStartDate, $chartEndDate] = [$chartEndDate->copy()->startOfDay(), $chartStartDate->copy()->endOfDay()];
+        }
+
+        // All tickets that existed at any point on or before the end of the window
+        $allTickets = $this->applyAgentFilter(Ticket::query(), $agentUserId)
+            ->where('created_at', '<=', $chartEndDate)
+            ->select('id', 'created_at', 'status')
+            ->get();
+
+        $ticketIds = $allTickets->pluck('id')->all();
+
+        // Status-changed events for those tickets, sorted ASC by happened_at
+        $statusEventsGrouped = TicketTimelineEvent::whereIn('ticket_id', $ticketIds)
+            ->where('event_type', 'status_changed')
+            ->orderBy('ticket_id')
+            ->orderBy('happened_at')
+            ->select('ticket_id', 'happened_at', 'details')
+            ->get()
+            ->groupBy('ticket_id');
+
+        // Build per-ticket history (sorted ASC already)
+        $ticketHistories = [];
+        foreach ($allTickets as $ticket) {
+            $events = $statusEventsGrouped->get($ticket->id, collect());
+            $history = [];
+            foreach ($events as $event) {
+                $details = is_array($event->details) ? $event->details : [];
+                if (isset($details['after'])) {
+                    $history[] = ['at' => $event->happened_at, 'after' => $details['after']];
+                }
+            }
+            $firstEvent    = $events->first();
+            $initialStatus = $firstEvent
+                ? ((is_array($firstEvent->details) ? ($firstEvent->details['before'] ?? null) : null) ?? 'open')
+                : $ticket->status;
+
+            $ticketHistories[] = [
+                'created_at'     => $ticket->created_at,
+                'initial_status' => $initialStatus,
+                'history'        => $history,
             ];
         }
 
+        // Tickets created per day (with full filters for consistency)
+        $createdByDay = $this->applyAgentFilter(Ticket::query(), $agentUserId)
+            ->select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as count'))
+            ->whereBetween('created_at', [$chartStartDate, $chartEndDate])
+            ->groupBy('day')
+            ->get()
+            ->keyBy('day')
+            ->map(fn ($r) => (int) $r->count);
+
+        // Build per-day snapshots by walking each ticket's status history
+        $statusKeys = ['open', 'in_progress', 'pending', 'resolved', 'closed'];
+        $ticketsByDayFormatted = [];
+        $cursor       = $chartStartDate->copy()->startOfDay();
+        $chartLastDay = $chartEndDate->copy()->startOfDay();
+        while ($cursor->lte($chartLastDay)) {
+            $dayEnd = $cursor->copy()->endOfDay();
+            $date   = $cursor->format('Y-m-d');
+            $counts = array_fill_keys($statusKeys, 0);
+
+            foreach ($ticketHistories as $ticketData) {
+                if ($ticketData['created_at']->gt($dayEnd)) {
+                    continue; // ticket did not exist yet on this day
+                }
+                $statusAtDay = $ticketData['initial_status'];
+                foreach ($ticketData['history'] as $event) {
+                    if ($event['at']->lte($dayEnd)) {
+                        $statusAtDay = $event['after'];
+                    } else {
+                        break; // history sorted ASC, no need to continue
+                    }
+                }
+                if (isset($counts[$statusAtDay])) {
+                    $counts[$statusAtDay]++;
+                }
+            }
+
+            $ticketsByDayFormatted[] = [
+                'date'        => $date,
+                'label'       => $cursor->copy()->locale('fr')->isoFormat('DD MMM'),
+                'open'        => $counts['open'],
+                'in_progress' => $counts['in_progress'],
+                'pending'     => $counts['pending'],
+                'resolved'    => $counts['resolved'],
+                'closed'      => $counts['closed'],
+                'created'     => $createdByDay[$date] ?? 0,
+            ];
+            $cursor->addDay();
+        }
+
         // ── 8. Commandes overview ─────────────────────────────────────────────
+        $commandeBaseQuery = $this->applyCommandeAgentFilter(
+            $this->applyDateRange(Commande::query(), $startDate, $endDate),
+            $agentUserId
+        );
+
         $commandeStats = [
-            'total'   => Commande::count(),
-            'new'     => Commande::where('statut', 'new')->count(),
-            'panier'  => Commande::where('statut', 'panier')->count(),
-            'ordered' => Commande::where('statut', 'ordered')->count(),
-            'received'=> Commande::where('statut', 'received')->count(),
+            'total'   => (clone $commandeBaseQuery)->count(),
+            'new'     => (clone $commandeBaseQuery)->where('statut', 'new')->count(),
+            'panier'  => (clone $commandeBaseQuery)->where('statut', 'panier')->count(),
+            'ordered' => (clone $commandeBaseQuery)->where('statut', 'ordered')->count(),
+            'received'=> (clone $commandeBaseQuery)->where('statut', 'received')->count(),
         ];
 
         // Commandes stalled (new or panier, not updated in 2+ days)
-        $stalledCommandes = Commande::whereIn('statut', ['new', 'panier'])
+        $stalledCommandes = $this->applyCommandeAgentFilter(
+            $this->applyDateRange(Commande::query(), $startDate, $endDate),
+            $agentUserId
+        )
+            ->whereIn('statut', ['new', 'panier'])
             ->where('updated_at', '<=', now()->subDays(2))
             ->with(['ticket:id,title,status'])
             ->orderBy('updated_at')
@@ -314,6 +529,15 @@ class AdminDashboardController extends Controller
             'commandeStats'         => $commandeStats,
             'stalledCommandes'      => $stalledCommandes,
             'totalAlerts'           => $totalAlerts,
+            'agentOptions'          => $agentOptions,
+            'filters'               => [
+                'date' => $singleDate,
+                'start_date' => $validated['start_date'] ?? null,
+                'end_date' => $validated['end_date'] ?? null,
+                'agent_id' => $agentUserId,
+                'has_filter' => (bool) ($singleDate || isset($validated['start_date']) || isset($validated['end_date']) || $agentUserId),
+                'label' => $this->formatFilterLabel($startDate, $endDate, $selectedAgentName),
+            ],
         ]);
     }
 }

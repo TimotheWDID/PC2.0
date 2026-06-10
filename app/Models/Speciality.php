@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Speciality extends Model
@@ -12,12 +11,7 @@ class Speciality extends Model
         'name',
     ];
 
-    public function agents(): HasMany
-    {
-        return $this->hasMany(Agent::class);
-    }
-
-    public function agentModels(): BelongsToMany
+    public function agents(): BelongsToMany
     {
         return $this->belongsToMany(Agent::class, 'agent_speciality');
     }

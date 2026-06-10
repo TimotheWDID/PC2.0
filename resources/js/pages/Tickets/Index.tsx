@@ -35,10 +35,12 @@ type Ticket = {
   id: number;
   title: string | null;
   ticket_kind?: 'standard' | 'bug' | 'improvement' | null;
+  category?: { id: number; name: string } | null;
+  suggested_specialities?: string[];
   status: string | null;
   created_at: string | null;
   user?: { id: number; name: string } | null;
-  assignee?: { id: number; name: string } | null;
+  assignee?: { id: number; name: string; specialities?: string[] } | null;
   device?: {
     id: number;
     display_name: string;
@@ -66,6 +68,18 @@ type LinkableCommande = {
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
 ]
+
+const renderSpecialityBadges = (items?: string[] | null) => {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
+  return items.map((item) => (
+    <Badge key={item} variant="outline" className="mr-1 mt-1 text-[11px]">
+      {item}
+    </Badge>
+  ));
+};
 
 export default function Index({
   tickets,
@@ -179,6 +193,7 @@ export default function Index({
   const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
     id: (t) => t.id,
     title: (t) => t.title ?? '',
+    category: (t) => t.category?.name ?? '',
     user: (t) => t.user?.name ?? '',
     device: (t) => t.device?.display_name ?? '',
     status: (t) => t.status ?? '',
@@ -402,7 +417,13 @@ export default function Index({
                     </div>
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <p>Demandeur: {t.user?.name ?? '-'}</p>
+                      <p>Catégorie: <span className="font-medium text-foreground">{t.category?.name ?? '-'}</span></p>
                       <p>Agent attitre: {t.assignee?.name ?? '-'}</p>
+                      {t.assignee?.specialities?.length ? (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {renderSpecialityBadges(t.assignee.specialities)}
+                        </div>
+                      ) : null}
                       <p>Appareil: {t.device?.display_name ?? '-'}</p>
                       <p>Créé le: {formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</p>
                     </div>
@@ -454,6 +475,7 @@ export default function Index({
             <tr>
               <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Sujet" sortKey="title" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Catégorie" sortKey="category" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Demandeur" sortKey="user" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Appareil" sortKey="device" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Statut" sortKey="status" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
@@ -475,6 +497,18 @@ export default function Index({
                           )}
                         </div>
                       </td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">
+                        {t.category?.name ? (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="secondary">{t.category.name}</Badge>
+                            {t.suggested_specialities?.length ? t.suggested_specialities.map((speciality) => (
+                              <Badge key={speciality} variant="outline" className="text-[11px]">
+                                {speciality}
+                              </Badge>
+                            )) : null}
+                          </div>
+                        ) : '-'}
+                      </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.user?.name ?? '-'}</td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{t.device?.display_name ?? '-'}</td>
                       <td className="px-4 py-4">
@@ -482,7 +516,14 @@ export default function Index({
                       </td>
                       <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                         {t.assignee?.name ? (
-                          <span className="text-muted-foreground">{t.assignee.name}</span>
+                          <div className="text-muted-foreground">
+                            <div>{t.assignee.name}</div>
+                            {t.assignee.specialities?.length ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {renderSpecialityBadges(t.assignee.specialities)}
+                              </div>
+                            ) : null}
+                          </div>
                         ) : isAgent ? (
                           <Button
                             type="button"
@@ -527,7 +568,7 @@ export default function Index({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
+                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
                   </tr>
                 )}
           </tbody>

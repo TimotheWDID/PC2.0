@@ -10,10 +10,12 @@ class Agent extends Model
     protected $fillable = [
         'user_id',
         'is_admin',
+        'is_active',
     ];
 
     protected $casts = [
         'is_admin' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function user(): BelongsTo

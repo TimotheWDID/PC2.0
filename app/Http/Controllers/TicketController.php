@@ -25,6 +25,19 @@ class TicketController extends Controller
         'improvement' => 'Amelioration',
     ];
 
+    private const CATEGORY_SPECIALITY_LINKS = [
+        'Réparation ordinateur' => ['Montage PC', 'Réparation PC', 'Réinstallation système', 'Logiciel / configuration', 'Réseau / Wi-Fi'],
+        'Réparation téléphone' => ['Réparation téléphone', 'SAV / diagnostic', 'Divers'],
+        'Réparation tablette' => ['Réparation tablette', 'SAV / diagnostic', 'Divers'],
+        'SAV' => ['SAV', 'SAV / diagnostic', 'Divers'],
+        'Vente' => ['Vente', 'Vente / conseil', 'Divers'],
+        'Logiciel / configuration' => ['Logiciel / configuration', 'SAV / diagnostic'],
+        'Réseau / Wi-Fi' => ['Réseau / Wi-Fi', 'Sécurité / accès'],
+        'Impression / périphériques' => ['Réparation imprimante', 'Impression / périphériques', 'SAV / diagnostic'],
+        'Sécurité / accès' => ['Sécurité / accès', 'Logiciel / configuration'],
+        'Divers' => ['Divers'],
+    ];
+
     private const TRACKED_TICKET_FIELDS = [
         'title',
         'message',
@@ -78,6 +91,21 @@ class TicketController extends Controller
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->all();
+    }
+
+    private function getSuggestedSpecialitiesForCategory(?string $categoryName): array
+    {
+        if (!$categoryName) {
+            return [];
+        }
+
+        foreach (self::CATEGORY_SPECIALITY_LINKS as $name => $specialities) {
+            if (Str::lower($name) === Str::lower($categoryName)) {
+                return array_values(array_unique($specialities));
+            }
+        }
+
+        return [];
     }
 
     private function getOrCreateSpecialCategoryId(string $ticketKind): ?int
@@ -201,8 +229,11 @@ class TicketController extends Controller
     {
         $request->merge([
             'special_only' => 1,
-            'show_all' => 1,
         ]);
+
+        if (!$request->has('show_all')) {
+            $request->merge(['show_all' => 0]);
+        }
 
         return $this->index($request);
     }
@@ -312,7 +343,7 @@ class TicketController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Ticket::query()->with(['user', 'category', 'device', 'assignee']);
+        $query = Ticket::query()->with(['user', 'category', 'device', 'assignee.agent.specialities']);
         $user = Auth::user();
         $supportsTicketKind = $this->supportsTicketKind();
         $specialCategoryIds = $this->getSpecialCategoryIds();
@@ -393,6 +424,7 @@ class TicketController extends Controller
         $tickets = $rawTickets->map(function ($t) use ($linkedCommandes, $supportsTicketKind, $userDeviceMap) {
             $commande = $linkedCommandes->get($t->id);
             $userDevices = $userDeviceMap->get($t->user_id, collect());
+            $suggestedSpecialities = $this->getSuggestedSpecialitiesForCategory($t->category?->name);
 
             return [
                 'id' => $t->id,
@@ -402,6 +434,11 @@ class TicketController extends Controller
                     : $this->inferTicketKindFromCategoryName($t->category?->name),
                 'status' => $t->status ?? null,
                 'created_at' => $t->created_at ? $t->created_at->toDateTimeString() : null,
+                'category' => $t->category ? [
+                    'id' => $t->category->id,
+                    'name' => $t->category->name,
+                ] : null,
+                'suggested_specialities' => $suggestedSpecialities,
                 'user' => $t->user ? [
                     'id' => $t->user->id,
                     'name' => $t->user->first_name . ' ' . $t->user->last_name,
@@ -409,6 +446,7 @@ class TicketController extends Controller
                 'assignee' => $t->assignee ? [
                     'id' => $t->assignee->id,
                     'name' => $t->assignee->first_name . ' ' . $t->assignee->last_name,
+                    'specialities' => $t->assignee->agent?->specialities?->pluck('name')->values()->all() ?? [],
                 ] : null,
                 'device' => $t->device ? [
                     'id' => $t->device->id,
@@ -611,7 +649,7 @@ class TicketController extends Controller
      */
     public function create(Request $request)
     {
-        $categories = Category::all()->map(fn($c) => [
+        $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
         ]);
@@ -670,7 +708,7 @@ class TicketController extends Controller
      */
     public function kioskCreate(Request $request)
     {
-        $categories = Category::all()->map(fn($c) => [
+        $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
         ]);
@@ -1093,15 +1131,24 @@ class TicketController extends Controller
         $ticket->load(['user.devices', 'assignee', 'category', 'device']);
         $viewer = Auth::user();
 
-        $categories = Category::all()->map(fn($c) => [
+        $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
         ]);
 
-        $agents = \App\Models\User::whereHas('agent')->get()->map(fn($u) => [
-            'id' => $u->id,
-            'name' => $u->first_name . ' ' . $u->last_name,
-        ]);
+        $suggestedSpecialities = $this->getSuggestedSpecialitiesForCategory($ticket->category?->name);
+        $agents = \App\Models\User::whereHas('agent', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->with('agent.specialities')
+            ->get()
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'name' => $u->first_name . ' ' . $u->last_name,
+                'specialities' => $u->agent?->specialities?->pluck('name')->values()->all() ?? [],
+            ])
+            ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))
+            ->values();
 
         // Récupérer les commandes liées à ce ticket
         $commandes = \App\Models\Commande::where('ticket_id', $ticket->id)
@@ -1251,15 +1298,24 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
         $ticket->load('user.devices');
-        $categories = Category::all()->map(fn($c) => [
+        $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
             'name' => $c->name,
         ]);
 
-        $agents = \App\Models\User::whereHas('agent')->get()->map(fn($u) => [
-            'id' => $u->id,
-            'name' => $u->first_name . ' ' . $u->last_name,
-        ]);
+        $suggestedSpecialities = $this->getSuggestedSpecialitiesForCategory($ticket->category?->name);
+        $agents = \App\Models\User::whereHas('agent', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->with('agent.specialities')
+            ->get()
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'name' => $u->first_name . ' ' . $u->last_name,
+                'specialities' => $u->agent?->specialities?->pluck('name')->values()->all() ?? [],
+            ])
+            ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))
+            ->values();
 
         return Inertia::render('Tickets/Edit', [
             'ticket' => [
@@ -1314,11 +1370,31 @@ class TicketController extends Controller
             'is_locked' => 'nullable|boolean',
         ]);
 
+        $assigneeId = array_key_exists('assignee_id', $data) ? (int) $data['assignee_id'] : null;
+        if ($assigneeId === 0) {
+            $assigneeId = null;
+        }
+
+        if (!is_null($assigneeId)) {
+            $isActiveAgent = \App\Models\User::query()
+                ->where('id', $assigneeId)
+                ->whereHas('agent', function ($query) {
+                    $query->where('is_active', true);
+                })
+                ->exists();
+
+            if (!$isActiveAgent) {
+                return back()->withErrors([
+                    'assignee_id' => 'Cet agent est desactive ou invalide.',
+                ])->withInput();
+            }
+        }
+
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
         $ticket->priority = $request->input('priority', $ticket->priority);
         $ticket->status = $request->input('status', $ticket->status);
-        $ticket->assignee_id = $data['assignee_id'] ?? null;
+        $ticket->assignee_id = $assigneeId;
         $ticket->device_id = $data['device_id'] ?? null;
         $ticket->invoice_id = $data['invoice_id'] ?? null;
         $ticket->notify_by = $data['notify_by'] ?? 'None';
@@ -1326,11 +1402,6 @@ class TicketController extends Controller
         $ticket->contact_email = $data['contact_email'] ?? null;
         $ticket->is_resolved = $data['is_resolved'] ?? false;
         $ticket->is_locked = $data['is_locked'] ?? false;
-
-        // Si assignee_id est 0 (Aucun), le mettre à null
-        if ($ticket->assignee_id == 0) {
-            $ticket->assignee_id = null;
-        }
 
         if (!empty($ticket->device_id)) {
             $device = Device::query()
@@ -1473,6 +1544,13 @@ class TicketController extends Controller
     public function selfAssign(string $id)
     {
         $agentUser = $this->ensureAgentOrAbort();
+
+        if (!($agentUser->agent?->is_active ?? false)) {
+            return back()->withErrors([
+                'assignee_id' => 'Votre compte agent est desactive.',
+            ]);
+        }
+
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
@@ -1673,8 +1751,10 @@ class TicketController extends Controller
             ->values();
 
         $agents = \App\Models\User::query()
-            ->whereHas('agent')
-            ->with('agent:id,user_id,is_admin')
+            ->whereHas('agent', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->with('agent:id,user_id,is_admin,is_active')
             ->withCount(['assignedTickets as active_tickets_count' => function ($query) {
                 $query->whereIn('status', ['open', 'in_progress', 'pending']);
             }])
@@ -1763,6 +1843,36 @@ class TicketController extends Controller
                     'assignee_id' => (int) $row['assignee_id'],
                 ])
                 ->all();
+        }
+
+        $assigneeIds = collect($updates)
+            ->pluck('assignee_id')
+            ->filter(fn($id) => !empty($id))
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($assigneeIds->isNotEmpty()) {
+            $validActiveAssigneeIds = \App\Models\User::query()
+                ->whereIn('id', $assigneeIds->all())
+                ->whereHas('agent', function ($query) {
+                    $query->where('is_active', true);
+                })
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+
+            $validAssigneeLookup = array_fill_keys($validActiveAssigneeIds, true);
+
+            $invalidAssignees = $assigneeIds
+                ->reject(fn($id) => isset($validAssigneeLookup[(int) $id]))
+                ->values();
+
+            if ($invalidAssignees->isNotEmpty()) {
+                return back()->withErrors([
+                    'distribution' => 'Un ou plusieurs agents selectionnes sont desactives ou invalides.',
+                ]);
+            }
         }
 
         $updatedCount = 0;
