@@ -10,6 +10,10 @@ class TicketTimelineEvent extends Model
 {
     use SoftDeletes;
 
+    protected $touches = [
+        'ticket',
+    ];
+
     protected $fillable = [
         'ticket_id',
         'technician_id',
