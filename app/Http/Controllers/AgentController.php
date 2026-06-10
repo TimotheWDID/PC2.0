@@ -95,6 +95,7 @@ class AgentController extends Controller
         $agentSpecialityIds = $agent->specialities->pluck('id')->toArray();
 
         $activeTicketCount = Ticket::query()
+            ->standardOnly()
             ->where('assignee_id', $agent->user_id)
             ->whereIn('status', ['open', 'in_progress', 'pending'])
             ->count();
@@ -133,6 +134,7 @@ class AgentController extends Controller
         $unassignedCount = 0;
         if ($wasActive && !$isActive) {
             $unassignedCount = Ticket::query()
+                ->standardOnly()
                 ->where('assignee_id', $agent->user_id)
                 ->whereIn('status', ['open', 'in_progress', 'pending'])
                 ->update(['assignee_id' => null]);

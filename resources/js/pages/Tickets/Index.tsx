@@ -345,7 +345,7 @@ export default function Index({
               <Input placeholder="Rechercher par ID, sujet, demandeur ou appareil" value={query} onChange={(e) => setQuery(e.target.value)} />
               <Input placeholder="Filtrer par n° serie / suivi" value={deviceSearch} onChange={(e) => setDeviceSearch(e.target.value)} />
               {specialOnly ? (
-                <Link href="/tickets/bugs-improvements/create?ticket_kind=bug">
+                <Link href="/internal-tickets/create?category=bug">
                   <Button variant="default" className="w-full sm:w-auto">Signaler un bug / Proposer une amélioration</Button>
                 </Link>
               ) : (

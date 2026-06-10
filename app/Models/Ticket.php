@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +16,11 @@ use App\Models\TicketTimelineEvent;
 
 class Ticket extends Model
 {
+    private const SPECIAL_CATEGORY_NAMES = [
+        'Bug',
+        'Amelioration',
+    ];
+
     protected $fillable = [
         'uuid',
         'user_id',
@@ -81,5 +87,31 @@ class Ticket extends Model
     public function categories(): BelongsToMany
     {
         return $this->belongsToMany(Category::class, 'category_ticket');
+    }
+
+    public function scopeStandardOnly(Builder $query): Builder
+    {
+        return $query->where(function (Builder $builder) {
+            $builder
+                ->whereNull('ticket_kind')
+                ->orWhere('ticket_kind', 'standard');
+        })->where(function (Builder $builder) {
+            $builder
+                ->whereNull('category_id')
+                ->orWhereDoesntHave('category', function (Builder $categoryQuery) {
+                    $categoryQuery->whereIn('name', self::SPECIAL_CATEGORY_NAMES);
+                });
+        });
+    }
+
+    public function scopeSpecialOnly(Builder $query): Builder
+    {
+        return $query->where(function (Builder $builder) {
+            $builder
+                ->whereIn('ticket_kind', ['bug', 'improvement'])
+                ->orWhereHas('category', function (Builder $categoryQuery) {
+                    $categoryQuery->whereIn('name', self::SPECIAL_CATEGORY_NAMES);
+                });
+        });
     }
 }

@@ -141,7 +141,7 @@ class AdminDashboardController extends Controller
         $agentUserId = isset($validated['agent_id']) ? (int) $validated['agent_id'] : null;
 
         $ticketBaseQuery = $this->applyAgentFilter(
-            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate),
             $agentUserId
         );
 
@@ -183,7 +183,7 @@ class AdminDashboardController extends Controller
 
         $agentStats = $agents->map(function (Agent $agent) use ($startDate, $endDate, $hasDateFilter) {
             $userId = $agent->user_id;
-            $base   = $this->applyDateRange(Ticket::query(), $startDate, $endDate)
+            $base   = $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate)
                 ->where('assignee_id', $userId);
 
             $assignedTotal   = (clone $base)->count();
@@ -191,6 +191,7 @@ class AdminDashboardController extends Controller
             $assignedPending = (clone $base)->where('status', 'pending')->count();
             $assignedInProg  = (clone $base)->where('status', 'in_progress')->count();
             $resolvedMonthQuery = Ticket::query()
+                ->standardOnly()
                 ->where('assignee_id', $userId)
                 ->whereIn('status', ['resolved', 'closed']);
 
@@ -262,7 +263,7 @@ class AdminDashboardController extends Controller
 
         // ── 3. Alerts: unassigned tickets (open/in_progress) ─────────────────
         $unassignedTickets = $this->applyAgentFilter(
-            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate),
             $agentUserId
         )
             ->whereNull('assignee_id')
@@ -288,7 +289,7 @@ class AdminDashboardController extends Controller
 
         // ── 4. Alerts: stalled tickets (open/in_progress, not updated 3+ days) ──
         $stalledTickets = $this->applyAgentFilter(
-            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate),
             $agentUserId
         )
             ->whereIn('status', ['open', 'in_progress'])
@@ -317,7 +318,7 @@ class AdminDashboardController extends Controller
 
         // ── 5. Alerts: pending tickets too long (>24h) ─────────────────────
         $pendingTooLongTickets = $this->applyAgentFilter(
-            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate),
             $agentUserId
         )
             ->where('status', 'pending')
@@ -346,7 +347,7 @@ class AdminDashboardController extends Controller
 
         // ── 6. Recent tickets ─────────────────────────────────────────────────
         $recentTickets = $this->applyAgentFilter(
-            $this->applyDateRange(Ticket::query(), $startDate, $endDate),
+            $this->applyDateRange(Ticket::query()->standardOnly(), $startDate, $endDate),
             $agentUserId
         )
             ->with([
@@ -386,7 +387,7 @@ class AdminDashboardController extends Controller
         }
 
         // All tickets that existed at any point on or before the end of the window
-        $allTickets = $this->applyAgentFilter(Ticket::query(), $agentUserId)
+        $allTickets = $this->applyAgentFilter(Ticket::query()->standardOnly(), $agentUserId)
             ->where('created_at', '<=', $chartEndDate)
             ->select('id', 'created_at', 'status')
             ->get();
@@ -426,7 +427,7 @@ class AdminDashboardController extends Controller
         }
 
         // Tickets created per day (with full filters for consistency)
-        $createdByDay = $this->applyAgentFilter(Ticket::query(), $agentUserId)
+        $createdByDay = $this->applyAgentFilter(Ticket::query()->standardOnly(), $agentUserId)
             ->select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as count'))
             ->whereBetween('created_at', [$chartStartDate, $chartEndDate])
             ->groupBy('day')

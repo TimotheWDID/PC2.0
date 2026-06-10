@@ -33,13 +33,12 @@ export default function AlertError({
         ].join('\n');
 
         const params = new URLSearchParams({
-            special_only: '1',
-            ticket_kind: 'bug',
+            category: 'bug',
             report_title: reportTitle,
             report_message: reportMessage,
         });
 
-        return `/tickets/bugs-improvements/create?${params.toString()}`;
+        return `/internal-tickets/create?${params.toString()}`;
     }, [errors, reportContext]);
 
     return (

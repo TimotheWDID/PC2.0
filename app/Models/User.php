@@ -94,4 +94,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Ticket::class, 'assignee_id');
     }
+
+    public function internalTickets(): HasMany
+    {
+        return $this->hasMany(InternalTicket::class);
+    }
 }

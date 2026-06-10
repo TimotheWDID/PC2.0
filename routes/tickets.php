@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\InternalTicketController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\MessageController;
 
@@ -13,8 +14,18 @@ Route::middleware('auth')->group(function () {
         Route::post('tickets/bulk-distribution', [TicketController::class, 'bulkDistributionAssign'])->name('tickets.bulkDistribution.assign');
     });
 
-    Route::get('tickets/bugs-improvements', [TicketController::class, 'specialIndex'])->name('tickets.special.index');
-    Route::get('tickets/bugs-improvements/create', [TicketController::class, 'specialCreate'])->name('tickets.special.create');
+    Route::get('internal-tickets', [InternalTicketController::class, 'index'])->name('internalTickets.index');
+    Route::get('internal-tickets/create', [InternalTicketController::class, 'create'])->name('internalTickets.create');
+    Route::post('internal-tickets', [InternalTicketController::class, 'store'])->name('internalTickets.store');
+    Route::get('internal-tickets/{internalTicket}', [InternalTicketController::class, 'show'])->name('internalTickets.show');
+    Route::patch('internal-tickets/{internalTicket}/process', [InternalTicketController::class, 'process'])->name('internalTickets.process');
+
+    Route::get('tickets/bugs-improvements', fn () => redirect()->route('internalTickets.index'))->name('tickets.special.index');
+    Route::get('tickets/bugs-improvements/create', function () {
+        $query = request()->query();
+
+        return redirect()->route('internalTickets.create', $query);
+    })->name('tickets.special.create');
 
     Route::get('tickets/print-settings', [TicketController::class, 'printSettings'])
         ->middleware('admin')

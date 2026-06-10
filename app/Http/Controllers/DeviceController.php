@@ -134,6 +134,7 @@ class DeviceController extends Controller
         $device->load(['user:id,first_name,last_name,email,phone', 'events.technician:id,first_name,last_name']);
 
         $ticketQuery = Ticket::query()
+            ->standardOnly()
             ->with(['assignee:id,first_name,last_name'])
             ->where('device_id', $device->id)
             ->orderByDesc('created_at');
@@ -172,11 +173,11 @@ class DeviceController extends Controller
             ->values();
 
         $stats = [
-            'tickets_total' => Ticket::where('device_id', $device->id)->count(),
-            'tickets_open' => Ticket::where('device_id', $device->id)->whereIn('status', ['open', 'in_progress', 'pending'])->count(),
+            'tickets_total' => Ticket::query()->standardOnly()->where('device_id', $device->id)->count(),
+            'tickets_open' => Ticket::query()->standardOnly()->where('device_id', $device->id)->whereIn('status', ['open', 'in_progress', 'pending'])->count(),
             'events_total' => DeviceEvent::where('device_id', $device->id)->count(),
             'last_event_at' => DeviceEvent::where('device_id', $device->id)->max('happened_at'),
-            'first_ticket_at' => Ticket::where('device_id', $device->id)->min('created_at'),
+            'first_ticket_at' => Ticket::query()->standardOnly()->where('device_id', $device->id)->min('created_at'),
         ];
 
         return Inertia::render('Devices/Show', [

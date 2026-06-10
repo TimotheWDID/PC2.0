@@ -257,6 +257,7 @@ class DashboardController extends Controller
 
         if ($isAgent) {
             $agentTickets = Ticket::query()
+                ->standardOnly()
                 ->where('assignee_id', $user->id)
                 ->with([
                     'user:id,first_name,last_name',
@@ -475,6 +476,7 @@ class DashboardController extends Controller
             ]);
         } else {
             $userTicketsQuery = Ticket::query()
+                ->standardOnly()
                 ->where('user_id', $user->id)
                 ->with([
                     'user:id,first_name,last_name',
@@ -566,7 +568,7 @@ class DashboardController extends Controller
                     ],
                     [
                         'label' => 'Bugs et améliorations',
-                        'href' => '/tickets/bugs-improvements/create',
+                        'href' => '/internal-tickets/create?category=bug',
                         'description' => 'Signaler un problème ou une idée.',
                     ],
                 ],

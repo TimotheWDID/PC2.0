@@ -21,20 +21,11 @@ if (csrfToken) {
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    resolve: (name) =>
-        (function () {
-            const pages = import.meta.glob('./pages/**/*.tsx');
-            // debug: log available pages keys and requested name to help resolve Page not found issues
-            try {
-                // eslint-disable-next-line no-console
-                console.debug('Inertia available pages:', Object.keys(pages));
-                // eslint-disable-next-line no-console
-                console.debug('Inertia resolving component for:', `./pages/${name}.tsx`);
-            } catch (e) {
-                // ignore
-            }
-            return resolvePageComponent(`./pages/${name}.tsx`, pages);
-        })(),
+    resolve: (name) => {
+        const pages = import.meta.glob('./pages/**/*.tsx');
+
+        return resolvePageComponent(`./pages/${name}.tsx`, pages);
+    },
     setup({ el, App, props }) {
         const root = createRoot(el);
 

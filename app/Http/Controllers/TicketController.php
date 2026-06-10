@@ -365,25 +365,9 @@ class TicketController extends Controller
         }
 
         if ($specialOnly) {
-            if ($supportsTicketKind) {
-                $query->whereIn('ticket_kind', ['bug', 'improvement']);
-            } else {
-                if (!empty($specialCategoryIds)) {
-                    $query->whereIn('category_id', $specialCategoryIds);
-                } else {
-                    $query->whereRaw('1 = 0');
-                }
-            }
+            $query->specialOnly();
         } else {
-            if ($supportsTicketKind) {
-                $query->where(function ($q) {
-                    $q->whereNull('ticket_kind')->orWhere('ticket_kind', 'standard');
-                });
-            } elseif (!empty($specialCategoryIds)) {
-                $query->where(function ($q) use ($specialCategoryIds) {
-                    $q->whereNull('category_id')->orWhereNotIn('category_id', $specialCategoryIds);
-                });
-            }
+            $query->standardOnly();
         }
 
         // Filter by status if provided
@@ -1732,6 +1716,7 @@ class TicketController extends Controller
         $this->ensureAdminOrAbort();
 
         $tickets = Ticket::query()
+            ->standardOnly()
             ->with(['user:id,first_name,last_name', 'assignee:id,first_name,last_name'])
             ->whereIn('status', ['open', 'in_progress', 'pending'])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
@@ -1756,6 +1741,7 @@ class TicketController extends Controller
             })
             ->with('agent:id,user_id,is_admin,is_active')
             ->withCount(['assignedTickets as active_tickets_count' => function ($query) {
+                $query->standardOnly();
                 $query->whereIn('status', ['open', 'in_progress', 'pending']);
             }])
             ->orderBy('first_name')

@@ -58,8 +58,8 @@ const mainNavItems: NavItem[] = [
         icon: HardHat,
     },
     {
-        title: 'Bugs',
-        href: '/tickets/bugs-improvements',
+        title: 'Interne',
+        href: '/internal-tickets',
         icon: BookOpen,
     },
     {
@@ -77,7 +77,7 @@ const footerNavItems: NavItem[] = [
     },
     {
         title: 'Signaler',
-        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+        href: '/internal-tickets/create?category=bug',
         icon: BookOpen,
     },
 ];
@@ -113,7 +113,7 @@ const nonAgentNavItems: NavItem[] = [
 const nonAgentFooterNavItems: NavItem[] = [
     {
         title: 'Signaler',
-        href: '/tickets/bugs-improvements/create?ticket_kind=bug',
+        href: '/internal-tickets/create?category=bug',
         icon: Wrench,
     },
 ];
