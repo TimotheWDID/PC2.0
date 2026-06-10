@@ -209,7 +209,7 @@ export default function Show({ commande }: { commande: Commande }) {
                 <div className="text-sm font-medium text-muted-foreground">Ticket associé</div>
                 <div className="text-lg">
                   {commande.ticket ? (
-                    <Link href={`/tickets/${commande.ticket.id}`} className="text-primary hover:underline">
+                    <Link href={`/tickets/${commande.ticket.id}`} className="link-readable">
                       #{commande.ticket.id} - {commande.ticket.title}
                     </Link>
                   ) : '-'}

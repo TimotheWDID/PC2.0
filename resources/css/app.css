@@ -174,6 +174,28 @@
 }
 
 @layer components {
+    .link-readable {
+        color: color-mix(in oklab, var(--color-primary) 68%, white);
+        text-decoration: underline;
+        text-underline-offset: 0.25rem;
+        text-decoration-color: color-mix(in oklab, var(--color-primary) 44%, transparent);
+        transition: color 0.2s ease, text-decoration-color 0.2s ease;
+    }
+
+    .link-readable:hover {
+        color: color-mix(in oklab, var(--color-primary) 82%, white);
+        text-decoration-color: currentColor;
+    }
+
+    .dark .link-readable {
+        color: color-mix(in oklab, var(--color-primary) 56%, white);
+        text-decoration-color: color-mix(in oklab, var(--color-primary) 38%, transparent);
+    }
+
+    .dark .link-readable:hover {
+        color: color-mix(in oklab, var(--color-primary) 72%, white);
+    }
+
     .app-page-shell {
         @apply relative w-full px-3 py-4 sm:px-4 sm:py-5;
     }

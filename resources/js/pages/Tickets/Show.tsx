@@ -837,7 +837,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
               <div className="rounded-md border bg-muted/30 px-2 py-1.5">
                 <span className="text-muted-foreground">Assigné:</span>{' '}
                 {assigneeHref ? (
-                  <Link href={assigneeHref} className="font-semibold text-primary underline-offset-4 hover:underline">
+                  <Link href={assigneeHref} className="font-semibold link-readable">
                     {ticket.assignee?.name}
                   </Link>
                 ) : (
@@ -942,8 +942,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           </div>
         )}
 
-        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div className="order-2 min-w-0 flex flex-col gap-3 xl:order-1">
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="order-2 min-w-0 flex flex-col gap-3 xl:order-2">
             {isAgent ? (
               <div className="grid gap-3 xl:grid-cols-2">
                 <div id="ticket-discussion" className="min-w-0 scroll-mt-20">
@@ -1118,7 +1118,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           )}
 
           {/* Ticket Details */}
-          <div className="order-1 min-w-0 flex flex-col gap-3 xl:order-2">
+          <div className="order-1 min-w-0 flex flex-col gap-3 xl:order-1">
 
 
             <Card className="order-2 min-w-0 w-full max-w-full overflow-hidden xl:order-1">
@@ -1319,7 +1319,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Demandeur:</span>{' '}
                         {requesterHref ? (
-                          <Link href={requesterHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                          <Link href={requesterHref} className="break-all font-semibold link-readable">
                             {ticket.user?.name}
                           </Link>
                         ) : (
@@ -1329,7 +1329,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Agent assigné:</span>{' '}
                         {assigneeHref ? (
-                          <Link href={assigneeHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                          <Link href={assigneeHref} className="break-all font-semibold link-readable">
                             {ticket.assignee?.name}
                           </Link>
                         ) : (
@@ -1339,7 +1339,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <div className="min-w-0 break-words">
                         <span className="text-muted-foreground">Appareil:</span>{' '}
                         {deviceHref ? (
-                          <Link href={deviceHref} className="break-all font-semibold text-primary underline-offset-4 hover:underline">
+                          <Link href={deviceHref} className="break-all font-semibold link-readable">
                             {ticket.device?.display_name}
                           </Link>
                         ) : (
@@ -1394,7 +1394,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                               <div className="flex items-center gap-2 text-sm">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-muted-foreground">Contact:</span>
-                                <a href={`mailto:${ticket.contact_email}`} className="text-primary hover:underline">
+                                <a href={`mailto:${ticket.contact_email}`} className="link-readable">
                                   {ticket.contact_email}
                                 </a>
                               </div>
@@ -1404,7 +1404,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                               <div className="flex items-center gap-2 text-sm">
                                 <Phone className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-muted-foreground">Téléphone:</span>
-                                <a href={`tel:${ticket.contact_phone}`} className="text-primary hover:underline">
+                                <a href={`tel:${ticket.contact_phone}`} className="link-readable">
                                   {ticket.contact_phone}
                                 </a>
                               </div>
@@ -1606,7 +1606,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                               </Badge>
                             </div>
                             <div className="truncate text-[11px] text-muted-foreground sm:text-xs">
-                              <Link href={`/commandes/${commande.id}`} className="break-all font-mono text-primary underline-offset-4 hover:underline">
+                              <Link href={`/commandes/${commande.id}`} className="break-all font-mono link-readable">
                                 {commande.command_number}
                               </Link>
                               {' • '}
@@ -1673,7 +1673,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       {requesterHref ? (
-                        <Link href={requesterHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                        <Link href={requesterHref} className="font-medium link-readable">
                           {ticket.user.name}
                         </Link>
                       ) : (
@@ -1682,14 +1682,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <a href={`mailto:${ticket.user.email}`} className="text-primary hover:underline">
+                      <a href={`mailto:${ticket.user.email}`} className="link-readable">
                         {ticket.user.email}
                       </a>
                     </div>
                     {ticket.user.phone && (
                       <div className="flex items-center gap-2 text-sm">
                         <Phone className="h-4 w-4 text-muted-foreground" />
-                        <a href={`tel:${ticket.user.phone}`} className="text-primary hover:underline">
+                        <a href={`tel:${ticket.user.phone}`} className="link-readable">
                           {ticket.user.phone}
                         </a>
                       </div>
@@ -1779,7 +1779,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       {assigneeHref ? (
-                        <Link href={assigneeHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                        <Link href={assigneeHref} className="font-medium link-readable">
                           {ticket.assignee.name}
                         </Link>
                       ) : (
@@ -1789,7 +1789,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     {ticket.assignee.phone && (
                       <div className="flex items-center gap-2 text-sm">
                         <Phone className="h-4 w-4 text-muted-foreground" />
-                        <a href={`tel:${ticket.assignee.phone}`} className="text-primary hover:underline">
+                        <a href={`tel:${ticket.assignee.phone}`} className="link-readable">
                           {ticket.assignee.phone}
                         </a>
                       </div>
@@ -1798,7 +1798,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <>
                         <div className="flex items-center gap-2 text-sm">
                           <Mail className="h-4 w-4 text-muted-foreground" />
-                          <a href={`mailto:${ticket.assignee.email}`} className="text-primary hover:underline">
+                          <a href={`mailto:${ticket.assignee.email}`} className="link-readable">
                             {ticket.assignee.email}
                           </a>
                         </div>

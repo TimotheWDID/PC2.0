@@ -181,7 +181,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                         <Button size="sm" variant="secondary">Ouvrir</Button>
                       </Link>
                       {commande.ticket ? (
-                        <Link href={`/tickets/${commande.ticket.id}`} className="text-xs text-primary hover:underline">
+                        <Link href={`/tickets/${commande.ticket.id}`} className="text-xs link-readable">
                           Ticket #{commande.ticket.id}
                         </Link>
                       ) : (
@@ -232,7 +232,7 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                         </td>
                         <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                           {commande.ticket ? (
-                            <Link href={`/tickets/${commande.ticket.id}`} className="text-primary hover:underline">
+                               <Link href={`/tickets/${commande.ticket.id}`} className="link-readable">
                                  #{commande.ticket.id}
                             </Link>
                           ) : '-'}
