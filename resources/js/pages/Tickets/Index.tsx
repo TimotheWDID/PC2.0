@@ -39,6 +39,7 @@ type Ticket = {
   suggested_specialities?: string[];
   status: string | null;
   created_at: string | null;
+  updated_at: string | null;
   user?: { id: number; name: string } | null;
   assignee?: { id: number; name: string; specialities?: string[] } | null;
   device?: {
@@ -199,6 +200,7 @@ export default function Index({
     status: (t) => t.status ?? '',
     assignee: (t) => t.assignee?.name ?? '',
     created_at: (t) => t.created_at ?? '',
+    updated_at: (t) => t.updated_at ?? '',
   });
 
   const filteredLinkableCommandes = useMemo(() => {
@@ -426,6 +428,7 @@ export default function Index({
                       ) : null}
                       <p>Appareil: {t.device?.display_name ?? '-'}</p>
                       <p>Créé le: {formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</p>
+                      <p>Dernière modification: {formatDateTimeFr(t.updated_at, { timeZone: 'Europe/Paris' })}</p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {!t.assignee && isAgent && (
@@ -481,6 +484,7 @@ export default function Index({
               <SortableTh label="Statut" sortKey="status" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Agent attitre" sortKey="assignee" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <SortableTh label="Créé le" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+              <SortableTh label="Dernière modification" sortKey="updated_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
               <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
             </tr>
           </thead>
@@ -539,6 +543,7 @@ export default function Index({
                         )}
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{formatDateTimeFr(t.created_at, { timeZone: 'Europe/Paris' })}</td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">{formatDateTimeFr(t.updated_at, { timeZone: 'Europe/Paris' })}</td>
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap items-center gap-2">
                           {t.commande ? (
@@ -568,7 +573,7 @@ export default function Index({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
+                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun ticket trouvé.</td>
                   </tr>
                 )}
           </tbody>

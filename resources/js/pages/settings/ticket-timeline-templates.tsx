@@ -284,6 +284,7 @@ export default function TicketTimelineTemplatesSettings({
                         placeholder="Texte ajoute automatiquement quand ce type est selectionne."
                       />
                     </div>
+
                   </div>
                 ))}
 

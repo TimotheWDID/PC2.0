@@ -127,7 +127,7 @@ export function AppSidebar() {
     // (no navigation items or footer). Keep the logo in the header so the
     // layout remains stable and users can still return to the home route.
     const isAgent = !!user?.agent;
-    const isAdmin = !!(user?.is_admin || user?.agent?.is_admin);
+    const isAdmin = !!(user?.is_admin || user?.agent?.is_admin || preview?.canToggle);
 
     const setPreviewMode = (mode: 'admin' | 'agent' | 'user') => {
         if (!preview.canToggle || preview.mode === mode) {

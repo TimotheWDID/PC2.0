@@ -50,6 +50,11 @@ const agentAdminNavItems: NavItem[] = [
         icon: null,
     },
     {
+        title: 'Listes actions tickets',
+        href: '/settings/ticket-action-lists',
+        icon: null,
+    },
+    {
         title: 'Regles dashboard',
         href: '/settings/dashboard-insights',
         icon: null,
@@ -59,6 +64,7 @@ const agentAdminNavItems: NavItem[] = [
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { props } = usePage();
     const authUser = (props as any).auth?.user ?? null;
+    const preview = (props as any).preview ?? { canToggle: false };
 
     // When server-side rendering, we only render the layout on the client...
     if (typeof window === 'undefined') {
@@ -66,7 +72,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     }
 
     const currentPath = window.location.pathname;
-    const isAdmin = !!(authUser?.is_admin || authUser?.agent?.is_admin);
+    const isAdmin = !!(authUser?.is_admin || authUser?.agent?.is_admin || preview?.canToggle);
     const sidebarNavItems = isAdmin
         ? [...baseNavItems, ...agentAdminNavItems]
         : baseNavItems;

@@ -37,6 +37,8 @@ class TicketTimelineTemplateController extends Controller
             'templates.*.enabled' => ['required', 'boolean'],
             'templates.*.summary' => ['nullable', 'string', 'max:500'],
             'templates.*.details' => ['nullable', 'string', 'max:3000'],
+            'templates.*.tasks' => ['nullable', 'array', 'max:20'],
+            'templates.*.tasks.*' => ['required_with:templates.*.tasks', 'string', 'max:160'],
         ]);
 
         TicketTimelineTemplateSettings::save($validated);

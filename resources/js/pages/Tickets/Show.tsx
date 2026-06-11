@@ -5,6 +5,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -107,6 +108,8 @@ const builtInEventTypeLabels: Record<string, string> = {
   commande_updated_direct: 'Commande modifiee',
   commande_status_changed_direct: 'Statut commande',
   device_event_added: 'Intervention appareil',
+  task_completed: 'Action realisee',
+  task_reopened: 'Action reouverte',
 };
 
 const getTimelineAccent = (eventType: string) => {
@@ -183,7 +186,7 @@ const priorityUI: Record<string, { badge: string; btn: string; btnActive: string
   },
 };
 
-export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], timelineTemplateSettings = { templates: [] } }: any) {
+export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], timelineTemplateSettings = { templates: [] }, actionListSettings = { lists: [] } }: any) {
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
 
@@ -222,6 +225,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     happened_at: '',
   });
   const [manualPrerequisites, setManualPrerequisites] = useState<Array<{ name: string; met: boolean }>>([]);
+  const [manualActions, setManualActions] = useState<Array<{ label: string; done: boolean }>>([]);
   const [deviceEventForm, setDeviceEventForm] = useState({
     event_type: 'maintenance',
     summary: '',
@@ -444,6 +448,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
         event.removed_by?.name,
         event.details?.preview,
         event.details?.note,
+        event.details?.actions?.map((action: any) => `${action.label ?? ''} ${action.done_by_name ?? ''}`).join(' '),
         event.details?.changes?.map((change: any) => `${change.label ?? change.field} ${change.before ?? ''} ${change.after ?? ''}`).join(' '),
       ]
         .filter(Boolean)
@@ -566,6 +571,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
       ...manualEventForm,
       happened_at: toUtcNaiveDateTime(manualEventForm.happened_at),
       prerequisites: manualPrerequisites.filter((prereq) => prereq.name.trim() !== ''),
+      actions: manualActions.filter((action) => action.label.trim() !== ''),
     };
 
     router.post(`/tickets/${ticket.id}/timeline-events`, payload, {
@@ -579,6 +585,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           happened_at: '',
         });
         setManualPrerequisites([]);
+        setManualActions([]);
       },
     });
   };
@@ -598,6 +605,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
       summary: summary !== '' ? summary : current.summary,
       details: details !== '' ? details : current.details,
     }));
+
+    setManualActions([]);
 
     if (eventType === 'commande_modification_prerequis') {
       setManualPrerequisites([
@@ -621,6 +630,42 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     setManualPrerequisites((current) => current.filter((_, i) => i !== index));
   };
 
+  const addManualAction = () => {
+    setManualActions((current) => [...current, { label: '', done: false }]);
+  };
+
+  const updateManualAction = (index: number, patch: Partial<{ label: string; done: boolean }>) => {
+    setManualActions((current) =>
+      current.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const removeManualAction = (index: number) => {
+    setManualActions((current) => current.filter((_, i) => i !== index));
+  };
+
+  const predefinedTaskLists = useMemo(() => {
+    return (actionListSettings?.lists ?? [])
+      .map((list: any) => ({
+        key: String(list?.key ?? ''),
+        label: String(list?.label ?? list?.key ?? ''),
+        tasks: Array.isArray(list?.tasks)
+          ? list.tasks.map((task: unknown) => String(task ?? '').trim()).filter((task: string) => task !== '')
+          : [],
+      }))
+      .filter((list: any) => list.key !== '' && list.tasks.length > 0);
+  }, [actionListSettings]);
+
+  const applyPredefinedTaskList = (listKey: string) => {
+    const list = predefinedTaskLists.find((item) => item.key === listKey);
+
+    if (!list || !Array.isArray(list.tasks) || list.tasks.length === 0) {
+      return;
+    }
+
+    setManualActions(list.tasks.map((task) => ({ label: task, done: false })));
+  };
+
   const handleRemoveTimelineEvent = (eventId: number) => {
     const reason = window.prompt('Raison du retrait (optionnel):') ?? '';
 
@@ -633,6 +678,15 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const handleRestoreTimelineEvent = (eventId: number) => {
     router.post(`/tickets/${ticket.id}/timeline-events/${eventId}/restore`, {
       _method: 'patch',
+    }, {
+      preserveScroll: true,
+    });
+  };
+
+  const handleToggleTimelineAction = (eventId: number, actionIndex: number, done: boolean) => {
+    router.patch(`/tickets/${ticket.id}/timeline-events/${eventId}/actions`, {
+      action_index: actionIndex,
+      done,
     }, {
       preserveScroll: true,
     });
@@ -685,6 +739,36 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
       )}
       {event.details?.preview && <p className="mt-2 text-xs text-muted-foreground line-clamp-2">"{event.details.preview}"</p>}
       {event.details?.note && <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{event.details.note}</p>}
+      {Array.isArray(event.details?.actions) && event.details.actions.length > 0 && (
+        <div className="mt-2 rounded-md border border-border/70 bg-muted/20 p-2">
+          <p className="text-[11px] font-medium text-foreground">Actions a realiser</p>
+          <div className="mt-1 space-y-1.5">
+            {event.details.actions.map((action: any, index: number) => (
+              <div key={`${event.id}-act-${index}`} className="text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {isAgent && !event.is_removed ? (
+                      <Checkbox
+                        checked={Boolean(action.done)}
+                        onCheckedChange={(value) => handleToggleTimelineAction(event.id, index, Boolean(value))}
+                        id={`timeline-action-${event.id}-${index}`}
+                      />
+                    ) : (
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${action.done ? 'bg-primary' : 'bg-muted-foreground/50'}`} />
+                    )}
+                    <p>{action.done ? 'FAIT' : 'A FAIRE'} - {action.label}</p>
+                  </div>
+                </div>
+                {action.done && (
+                  <p className="text-[11px] text-primary">
+                    Realisee par {action.done_by_name ?? event.technician?.name ?? 'Technicien'} le {formatDateTime(action.done_at ?? event.happened_at)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {Array.isArray(event.details?.prerequisites) && event.details.prerequisites.length > 0 && (
         <div className="mt-2 rounded-md border border-[#e6892e]/40 bg-[#e6892e]/10 p-2">
           <p className="text-[11px] font-medium text-[#b55f00] dark:text-[#ffb86b]">Prerequis commande</p>
@@ -957,6 +1041,11 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         Suivi techniciens
                       </CardTitle>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Link href="/tickets/technician-todos">
+                          <Button size="sm" variant="outline">
+                            Actions a faire
+                          </Button>
+                        </Link>
                         <Button size="sm" variant="outline" onClick={() => setIsTimelinePanelOpen(true)}>
                           Historique complet
                         </Button>
@@ -1036,6 +1125,45 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                         <Input value={prereq.name} onChange={(e) => updateManualPrerequisite(index, { name: e.target.value })} placeholder="Ex: Fournisseur renseigne" maxLength={160} />
                                         <Button type="button" variant={prereq.met ? 'default' : 'outline'} size="sm" onClick={() => updateManualPrerequisite(index, { met: !prereq.met })}>{prereq.met ? 'OK' : 'A verifier'}</Button>
                                         <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeManualPrerequisite(index)}><X className="h-3.5 w-3.5" /></Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label>Actions a realiser (optionnel)</Label>
+                                  <Button type="button" variant="ghost" size="sm" onClick={addManualAction}><Plus className="h-3.5 w-3.5 mr-1" />Ajouter action</Button>
+                                </div>
+                                {predefinedTaskLists.length > 0 && (
+                                  <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Listes predefinies</Label>
+                                    <Select onValueChange={applyPredefinedTaskList}>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Charger une liste de taches predefinie" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {predefinedTaskLists.map((option) => (
+                                          <SelectItem key={`task-list-${option.key}`} value={option.key}>
+                                            {option.label} ({option.tasks.length})
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                                {manualActions.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">Aucune action ajoutee.</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {manualActions.map((action, index) => (
+                                      <div key={`msa-${index}`} className="flex items-center gap-2">
+                                        <Input value={action.label} onChange={(e) => updateManualAction(index, { label: e.target.value })} placeholder="Ex: Remplacer le connecteur de charge" maxLength={160} />
+                                        <div className="flex items-center gap-1 rounded-md border px-2 py-1">
+                                          <Checkbox checked={action.done} onCheckedChange={(value) => updateManualAction(index, { done: Boolean(value) })} id={`manual-action-done-${index}`} />
+                                          <Label htmlFor={`manual-action-done-${index}`} className="text-xs">Fait</Label>
+                                        </div>
+                                        <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeManualAction(index)}><X className="h-3.5 w-3.5" /></Button>
                                       </div>
                                     ))}
                                   </div>

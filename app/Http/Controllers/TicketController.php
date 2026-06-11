@@ -12,11 +12,13 @@ use App\Models\TicketTimelineEvent;
 use Coderflex\LaravelTicket\Models\Category;
 use Illuminate\Support\Facades\Auth;
 use App\Support\TicketLabelSettings;
+use App\Support\TicketActionListSettings;
 use App\Support\TicketTimelineTemplateSettings;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Inertia\Response;
 
 class TicketController extends Controller
 {
@@ -418,6 +420,7 @@ class TicketController extends Controller
                     : $this->inferTicketKindFromCategoryName($t->category?->name),
                 'status' => $t->status ?? null,
                 'created_at' => $t->created_at ? $t->created_at->toDateTimeString() : null,
+                'updated_at' => $t->updated_at ? $t->updated_at->toDateTimeString() : null,
                 'category' => $t->category ? [
                     'id' => $t->category->id,
                     'name' => $t->category->name,
@@ -1271,6 +1274,7 @@ class TicketController extends Controller
             'timelineEvents' => $timelineEvents,
             'deviceEvents' => $deviceEvents,
             'timelineTemplateSettings' => $this->isAgentContext() ? TicketTimelineTemplateSettings::load() : ['templates' => []],
+            'actionListSettings' => $this->isAgentContext() ? TicketActionListSettings::load() : ['lists' => []],
         ]);
     }
 
@@ -1585,6 +1589,9 @@ class TicketController extends Controller
             'prerequisites' => 'nullable|array|max:20',
             'prerequisites.*.name' => 'required_with:prerequisites|string|max:160',
             'prerequisites.*.met' => 'nullable|boolean',
+            'actions' => 'nullable|array|max:30',
+            'actions.*.label' => 'required_with:actions|string|max:160',
+            'actions.*.done' => 'nullable|boolean',
         ]);
 
         $details = [];
@@ -1603,16 +1610,65 @@ class TicketController extends Controller
                 ->all();
         }
 
+        $happenedAt = $data['happened_at'] ?? now();
+        $normalizedActions = collect($data['actions'] ?? [])
+            ->filter(fn($action) => is_array($action) && !empty(trim((string) ($action['label'] ?? ''))))
+            ->map(function ($action) use ($user, $happenedAt) {
+                $isDone = (bool) ($action['done'] ?? false);
+                $doneAt = null;
+
+                if ($isDone) {
+                    if ($happenedAt instanceof \DateTimeInterface) {
+                        $doneAt = $happenedAt->format('Y-m-d H:i:s');
+                    } elseif (is_string($happenedAt)) {
+                        $doneAt = $happenedAt;
+                    } else {
+                        $doneAt = now()->toDateTimeString();
+                    }
+                }
+
+                return [
+                    'id' => (string) Str::uuid(),
+                    'label' => trim((string) ($action['label'] ?? '')),
+                    'done' => $isDone,
+                    'done_by_id' => $isDone ? $user->id : null,
+                    'done_by_name' => $isDone ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : null,
+                    'done_at' => $doneAt,
+                ];
+            })
+            ->values();
+
+        if ($normalizedActions->isNotEmpty()) {
+            $details['actions'] = $normalizedActions->all();
+        }
+
         $details['source'] = 'manual';
 
-        TicketTimelineEvent::create([
+        $manualEvent = TicketTimelineEvent::create([
             'ticket_id' => $ticket->id,
             'technician_id' => $user->id,
             'event_type' => $data['event_type'],
             'summary' => $data['summary'],
             'details' => !empty($details) ? $details : null,
-            'happened_at' => $data['happened_at'] ?? now(),
+            'happened_at' => $happenedAt,
         ]);
+
+        $normalizedActions
+            ->filter(fn(array $action) => (bool) ($action['done'] ?? false))
+            ->each(function (array $action) use ($ticket, $user, $manualEvent, $happenedAt) {
+                TicketTimelineEvent::create([
+                    'ticket_id' => $ticket->id,
+                    'technician_id' => $user->id,
+                    'event_type' => 'task_completed',
+                    'summary' => 'Action realisee: ' . $action['label'],
+                    'details' => [
+                        'source' => 'manual_action_completion',
+                        'action_label' => $action['label'],
+                        'parent_event_id' => $manualEvent->id,
+                    ],
+                    'happened_at' => $happenedAt,
+                ]);
+            });
 
         return back()->with('success', 'Evenement ajoute au suivi du ticket.');
     }
@@ -1709,6 +1765,163 @@ class TicketController extends Controller
         $timelineEvent->save();
 
         return back()->with('success', 'Evenement restaure.');
+    }
+
+    public function updateTimelineAction(Request $request, string $id, string $event)
+    {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeTicketAccess($ticket);
+
+        $user = $this->ensureAgentOrAbort();
+
+        $data = $request->validate([
+            'action_index' => 'required|integer|min:0|max:200',
+            'done' => 'required|boolean',
+        ]);
+
+        $timelineEvent = TicketTimelineEvent::where('ticket_id', $ticket->id)->findOrFail($event);
+
+        if ($timelineEvent->trashed()) {
+            return back()->withErrors(['event' => 'Impossible de modifier une action sur un evenement retire.']);
+        }
+
+        $details = is_array($timelineEvent->details) ? $timelineEvent->details : [];
+        $actions = collect($details['actions'] ?? [])->values();
+        $actionIndex = (int) $data['action_index'];
+
+        if (!$actions->has($actionIndex)) {
+            return back()->withErrors(['action_index' => 'Action introuvable dans cet evenement.']);
+        }
+
+        $action = $actions->get($actionIndex);
+        if (!is_array($action)) {
+            return back()->withErrors(['action_index' => 'Action invalide.']);
+        }
+
+        $nextDone = (bool) $data['done'];
+        $previousDone = (bool) ($action['done'] ?? false);
+
+        if ($previousDone === $nextDone) {
+            return back();
+        }
+
+        $actionLabel = trim((string) ($action['label'] ?? 'Action'));
+        $action['id'] = (string) ($action['id'] ?? Str::uuid());
+        $action['done'] = $nextDone;
+        $action['done_by_id'] = $nextDone ? $user->id : null;
+        $action['done_by_name'] = $nextDone ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : null;
+        $action['done_at'] = $nextDone ? now()->toDateTimeString() : null;
+
+        $actions->put($actionIndex, $action);
+        $details['actions'] = $actions->all();
+        $timelineEvent->details = $details;
+        $timelineEvent->save();
+
+        if ($nextDone) {
+            TicketTimelineEvent::create([
+                'ticket_id' => $ticket->id,
+                'technician_id' => $user->id,
+                'event_type' => 'task_completed',
+                'summary' => 'Action realisee: ' . $actionLabel,
+                'details' => [
+                    'source' => 'manual_action_completion',
+                    'action_id' => $action['id'],
+                    'action_label' => $actionLabel,
+                    'parent_event_id' => $timelineEvent->id,
+                ],
+                'happened_at' => now(),
+            ]);
+        } else {
+            TicketTimelineEvent::create([
+                'ticket_id' => $ticket->id,
+                'technician_id' => $user->id,
+                'event_type' => 'task_reopened',
+                'summary' => 'Action repassee a faire: ' . $actionLabel,
+                'details' => [
+                    'source' => 'manual_action_reopened',
+                    'action_id' => $action['id'],
+                    'action_label' => $actionLabel,
+                    'parent_event_id' => $timelineEvent->id,
+                ],
+                'happened_at' => now(),
+            ]);
+        }
+
+        return back()->with('success', $nextDone ? 'Action marquee comme realisee.' : 'Action marquee comme non realisee.');
+    }
+
+    public function technicianTodos(): Response
+    {
+        $this->ensureAgentOrAbort();
+
+        $allowedStatuses = ['open', 'in_progress', 'pending'];
+
+        $rows = TicketTimelineEvent::query()
+            ->with([
+                'ticket:id,title,status,priority,assignee_id',
+                'ticket.assignee:id,first_name,last_name',
+                'technician:id,first_name,last_name',
+            ])
+            ->whereHas('ticket', function ($query) use ($allowedStatuses) {
+                $query->whereIn('status', $allowedStatuses);
+            })
+            ->orderByDesc('happened_at')
+            ->limit(1000)
+            ->get()
+            ->flatMap(function (TicketTimelineEvent $event) {
+                $details = is_array($event->details) ? $event->details : [];
+                $actions = collect($details['actions'] ?? [])->values();
+
+                if ($actions->isEmpty() || !$event->ticket) {
+                    return [];
+                }
+
+                return $actions
+                    ->map(function ($action, $index) use ($event) {
+                        if (!is_array($action)) {
+                            return null;
+                        }
+
+                        $label = trim((string) ($action['label'] ?? ''));
+                        if ($label === '' || (bool) ($action['done'] ?? false)) {
+                            return null;
+                        }
+
+                        return [
+                            'ticket' => [
+                                'id' => $event->ticket->id,
+                                'title' => $event->ticket->title,
+                                'status' => $event->ticket->status,
+                                'priority' => $event->ticket->priority,
+                                'assignee_name' => $event->ticket->assignee
+                                    ? trim(($event->ticket->assignee->first_name ?? '') . ' ' . ($event->ticket->assignee->last_name ?? ''))
+                                    : null,
+                            ],
+                            'event' => [
+                                'id' => $event->id,
+                                'summary' => $event->summary,
+                                'happened_at' => $event->happened_at?->toDateTimeString(),
+                                'technician_name' => $event->technician
+                                    ? trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? ''))
+                                    : null,
+                            ],
+                            'action' => [
+                                'index' => $index,
+                                'id' => (string) ($action['id'] ?? ''),
+                                'label' => $label,
+                            ],
+                        ];
+                    })
+                    ->filter()
+                    ->values()
+                    ->all();
+            })
+            ->values()
+            ->all();
+
+        return Inertia::render('Tickets/TechnicianTodos', [
+            'todoRows' => $rows,
+        ]);
     }
 
     public function bulkDistributionIndex(Request $request)

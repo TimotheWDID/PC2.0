@@ -109,6 +109,12 @@ class TicketTimelineTemplateSettings
                 'enabled' => (bool) ($template['enabled'] ?? false),
                 'summary' => trim((string) ($template['summary'] ?? '')),
                 'details' => trim((string) ($template['details'] ?? '')),
+                'tasks' => collect($template['tasks'] ?? [])
+                    ->filter(fn($task) => is_string($task) && trim($task) !== '')
+                    ->map(fn($task) => trim((string) $task))
+                    ->values()
+                    ->slice(0, 20)
+                    ->all(),
             ];
         }
 
@@ -125,6 +131,7 @@ class TicketTimelineTemplateSettings
                 'enabled' => false,
                 'summary' => '',
                 'details' => '',
+                'tasks' => [],
             ];
         }
 

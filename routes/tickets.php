@@ -30,6 +30,7 @@ Route::middleware('auth')->group(function () {
     Route::get('tickets/print-settings', [TicketController::class, 'printSettings'])
         ->middleware('admin')
         ->name('tickets.printSettings');
+    Route::get('tickets/technician-todos', [TicketController::class, 'technicianTodos'])->name('tickets.technicianTodos');
     Route::get('tickets/{ticket}/print-label', [TicketController::class, 'printLabel'])->name('tickets.printLabel');
 
     Route::resource('tickets', TicketController::class)->whereNumber('ticket');
@@ -44,6 +45,7 @@ Route::middleware('auth')->group(function () {
     // Add a manual timeline event to a ticket
     Route::post('tickets/{ticket}/timeline-events', [TicketController::class, 'storeTimelineEvent'])->name('tickets.timelineEvents.store');
     Route::post('tickets/{ticket}/device-events', [TicketController::class, 'storeDeviceEvent'])->name('tickets.deviceEvents.store');
+    Route::patch('tickets/{ticket}/timeline-events/{event}/actions', [TicketController::class, 'updateTimelineAction'])->name('tickets.timelineActions.update');
     Route::delete('tickets/{ticket}/timeline-events/{event}', [TicketController::class, 'removeTimelineEvent'])->name('tickets.timelineEvents.remove');
     Route::patch('tickets/{ticket}/timeline-events/{event}/restore', [TicketController::class, 'restoreTimelineEvent'])->name('tickets.timelineEvents.restore');
 

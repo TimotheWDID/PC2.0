@@ -6,6 +6,7 @@ use App\Http\Controllers\Settings\PreviewModeController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Settings\TicketLabelController;
+use App\Http\Controllers\Settings\TicketActionListController;
 use App\Http\Controllers\Settings\TicketTimelineTemplateController;
 use App\Http\Controllers\Settings\DashboardInsightController;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +54,13 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/ticket-timeline-templates', [TicketTimelineTemplateController::class, 'update'])
         ->middleware('admin')
         ->name('ticket-timeline-templates.update');
+
+    Route::get('settings/ticket-action-lists', [TicketActionListController::class, 'edit'])
+        ->middleware('admin')
+        ->name('ticket-action-lists.edit');
+    Route::put('settings/ticket-action-lists', [TicketActionListController::class, 'update'])
+        ->middleware('admin')
+        ->name('ticket-action-lists.update');
 
     Route::get('settings/dashboard-insights', [DashboardInsightController::class, 'edit'])
         ->middleware('admin')
