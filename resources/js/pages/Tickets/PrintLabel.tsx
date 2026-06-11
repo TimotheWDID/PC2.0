@@ -471,6 +471,62 @@ export default function PrintLabel({
                       {ticketMessage}
                     </div>
                   )}
+
+                  {/* Cases de suivi manuel integrees aux details */}
+                  <div
+                    style={{
+                      marginTop: `${Math.max(0.4, innerGapMm)}mm`,
+                      paddingTop: `${Math.max(0.25, innerGapMm * 0.7)}mm`,
+                      borderTop: '0.25px solid #999',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      columnGap: `${Math.max(0.7, innerGapMm * 1.6)}mm`,
+                      rowGap: `${Math.max(0.3, innerGapMm * 0.8)}mm`,
+                      fontSize: `${5.6 * layoutScale * fontBoost}pt`,
+                      lineHeight: '1.1',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: `${Math.max(0.35, innerGapMm)}mm` }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          height: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          border: '0.35px solid #000',
+                          display: 'inline-block',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span>En cours</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: `${Math.max(0.35, innerGapMm)}mm` }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          height: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          border: '0.35px solid #000',
+                          display: 'inline-block',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span>En attente</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: `${Math.max(0.35, innerGapMm)}mm` }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          height: `${Math.max(1.6, 2.1 * layoutScale)}mm`,
+                          border: '0.35px solid #000',
+                          display: 'inline-block',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span>Fini</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
