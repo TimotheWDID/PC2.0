@@ -28,6 +28,7 @@ class User extends Authenticatable
         'phone',
         'address',
         'internal_note',
+        'hiboutik_id',
         'ticket_label_settings',
         'default_notification_preference',
     ];

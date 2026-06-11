@@ -9,6 +9,7 @@ use App\Http\Controllers\Settings\TicketLabelController;
 use App\Http\Controllers\Settings\TicketActionListController;
 use App\Http\Controllers\Settings\TicketTimelineTemplateController;
 use App\Http\Controllers\Settings\DashboardInsightController;
+use App\Http\Controllers\Settings\EditableDataController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -68,6 +69,26 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/dashboard-insights', [DashboardInsightController::class, 'update'])
         ->middleware('admin')
         ->name('dashboard-insights.update');
+
+    Route::get('settings/application', function () {
+        return redirect('/app-settings');
+    })->middleware('admin')->name('application-settings.edit');
+
+    Route::get('settings/editable-data', [EditableDataController::class, 'edit'])
+        ->middleware('admin')
+        ->name('editable-data.edit');
+    Route::post('settings/editable-data/categories', [EditableDataController::class, 'storeCategory'])
+        ->middleware('admin')
+        ->name('editable-data.categories.store');
+    Route::delete('settings/editable-data/categories/{category}', [EditableDataController::class, 'destroyCategory'])
+        ->middleware('admin')
+        ->name('editable-data.categories.destroy');
+    Route::post('settings/editable-data/specialities', [EditableDataController::class, 'storeSpeciality'])
+        ->middleware('admin')
+        ->name('editable-data.specialities.store');
+    Route::delete('settings/editable-data/specialities/{speciality}', [EditableDataController::class, 'destroySpeciality'])
+        ->middleware('admin')
+        ->name('editable-data.specialities.destroy');
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
         ->name('two-factor.show');

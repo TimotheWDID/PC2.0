@@ -39,26 +39,6 @@ const baseNavItems: NavItem[] = [
 ];
 
 const agentAdminNavItems: NavItem[] = [
-    {
-        title: 'Etiquette tickets',
-        href: '/settings/ticket-label',
-        icon: null,
-    },
-    {
-        title: 'Modeles suivi tickets',
-        href: '/settings/ticket-timeline-templates',
-        icon: null,
-    },
-    {
-        title: 'Listes actions tickets',
-        href: '/settings/ticket-action-lists',
-        icon: null,
-    },
-    {
-        title: 'Regles dashboard',
-        href: '/settings/dashboard-insights',
-        icon: null,
-    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

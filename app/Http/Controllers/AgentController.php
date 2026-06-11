@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Speciality;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class AgentController extends Controller
@@ -110,7 +111,7 @@ class AgentController extends Controller
 
     public function update(Request $request, $id)
     {
-        $agent = Agent::findOrFail($id);
+        $agent = Agent::with('user')->findOrFail($id);
         $wasActive = (bool) ($agent->is_active ?? true);
 
         $data = $request->validate([
@@ -118,10 +119,38 @@ class AgentController extends Controller
             'speciality_ids.*' => 'exists:specialities,id',
             'is_admin' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255|unique:users,email,' . $agent->user_id,
+            'phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:1024',
+            'internal_note' => 'nullable|string',
+            'hiboutik_id' => 'nullable|string|max:255',
+            'default_notification_preference' => 'required|in:SMS,Email,None',
+            'password' => 'nullable|string|min:8|confirmed',
         ]);
 
         // sync many-to-many specialities
         $agent->specialities()->sync($data['speciality_ids'] ?? []);
+
+        $userUpdateData = [
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'address' => $data['address'] ?? null,
+            'internal_note' => $data['internal_note'] ?? null,
+            'hiboutik_id' => $data['hiboutik_id'] ?? null,
+            'default_notification_preference' => $data['default_notification_preference'],
+        ];
+
+        if (!empty($data['password'])) {
+            $userUpdateData['password'] = Hash::make($data['password']);
+        }
+
+        if ($agent->user) {
+            $agent->user->update($userUpdateData);
+        }
 
         $isAdmin = $request->has('is_admin') ? $request->boolean('is_admin') : (bool) $agent->is_admin;
         $isActive = $request->has('is_active') ? $request->boolean('is_active') : (bool) ($agent->is_active ?? true);

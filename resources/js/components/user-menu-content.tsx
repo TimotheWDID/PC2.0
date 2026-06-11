@@ -9,8 +9,8 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import { type User } from '@/types';
-import { Link, router } from '@inertiajs/react';
-import { LogOut, Settings } from 'lucide-react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { LogOut, Settings, Wrench } from 'lucide-react';
 
 interface UserMenuContentProps {
     user?: User | null;
@@ -18,6 +18,9 @@ interface UserMenuContentProps {
 
 export function UserMenuContent({ user }: UserMenuContentProps) {
     const cleanup = useMobileNavigation();
+    const page = usePage();
+    const authUser = (page.props as any).auth?.user ?? null;
+    const isAdmin = !!(authUser?.is_admin || authUser?.agent?.is_admin);
 
     const handleLogout = () => {
         cleanup();
@@ -45,6 +48,21 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                         Paramètres
                     </Link>
                 </DropdownMenuItem>
+
+                {isAdmin && (
+                    <DropdownMenuItem asChild>
+                        <Link
+                            className="block w-full"
+                            href="/app-settings"
+                            as="button"
+                            prefetch
+                            onClick={cleanup}
+                        >
+                            <Wrench className="mr-2" />
+                            Paramètres application
+                        </Link>
+                    </DropdownMenuItem>
+                )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
