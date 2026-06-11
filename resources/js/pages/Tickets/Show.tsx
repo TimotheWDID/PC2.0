@@ -946,7 +946,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           <h1 className="break-words text-xl font-bold tracking-tight sm:text-4xl">{ticket.title ?? 'Ticket'}</h1>
 
           {isAgent ? (
-            <div className="hidden gap-2 text-xs sm:grid lg:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 text-xs lg:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-md border bg-muted/30 px-2 py-2">
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Statut rapide</p>
                 <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
@@ -1170,11 +1170,6 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         Suivi techniciens
                       </CardTitle>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Link href="/tickets/technician-todos">
-                          <Button size="sm" variant="outline">
-                            Actions a faire
-                          </Button>
-                        </Link>
                         <Button size="sm" variant="outline" onClick={() => setIsTimelinePanelOpen(true)}>
                           Historique complet
                         </Button>
