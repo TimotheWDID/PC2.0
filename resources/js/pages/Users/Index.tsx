@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import { SortableTh, useSortableData } from '@/components/sortable-table';
+import { Loader2 } from 'lucide-react';
 
 type User = {
   id: number;
@@ -26,6 +27,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function Index({ users }: { users: User[] }) {
   const [query, setQuery] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const page = usePage();
   const auth = (page.props as any).auth;
   const isAdmin = !!(auth?.user?.is_admin || auth?.user?.agent?.is_admin);
@@ -92,7 +94,16 @@ export default function Index({ users }: { users: User[] }) {
                           <form action={`/users/${u.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet utilisateur ?')) e.preventDefault(); }}>
                             <input type="hidden" name="_method" value="DELETE" />
                             <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                            <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
+                            <Button
+                              type="submit"
+                              variant="destructive"
+                              size="sm"
+                              disabled={deletingUserId === u.id}
+                              onClick={() => setDeletingUserId(u.id)}
+                            >
+                              {deletingUserId === u.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                              Supprimer
+                            </Button>
                           </form>
                         </>
                       )}
@@ -138,7 +149,16 @@ export default function Index({ users }: { users: User[] }) {
                               <form action={`/users/${u.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet utilisateur ?')) e.preventDefault(); }}>
                                 <input type="hidden" name="_method" value="DELETE" />
                                 <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                                <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
+                                <Button
+                                  type="submit"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={deletingUserId === u.id}
+                                  onClick={() => setDeletingUserId(u.id)}
+                                >
+                                  {deletingUserId === u.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                  Supprimer
+                                </Button>
                               </form>
                               </>
                             )}

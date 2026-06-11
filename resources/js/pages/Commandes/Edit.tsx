@@ -41,6 +41,7 @@ type Commande = {
 };
 
 import MobileNativeNav from '@/components/mobile-native-nav';
+import { Loader2 } from 'lucide-react';
 
 const breadcrumbs = (commandeId: number): BreadcrumbItem[] => [
   { title: 'Commandes', href: '/commandes' },
@@ -80,6 +81,7 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
   const [ticketSearchQuery, setTicketSearchQuery] = useState('');
   const [showTicketDropdown, setShowTicketDropdown] = useState(false);
   const [showTicketDetails, setShowTicketDetails] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return users;
@@ -158,10 +160,18 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
   };
 
   const handleStatusChange = (newStatus: string) => {
+    if (pendingStatus !== null) {
+      return;
+    }
+
+    setPendingStatus(newStatus);
     router.patch(`/commandes/${commande.id}/status`, { statut: newStatus }, {
       preserveScroll: true,
       onSuccess: () => {
         setData('statut', newStatus);
+      },
+      onFinish: () => {
+        setPendingStatus(null);
       },
     });
   };
@@ -490,9 +500,10 @@ export default function Edit({ commande, users, tickets }: { commande: Commande;
                     <Button
                       variant={isCurrent ? 'default' : 'outline'}
                       onClick={() => handleStatusChange(value)}
-                      disabled={isCurrent || isDisabled}
+                      disabled={isCurrent || isDisabled || pendingStatus !== null}
                       className={`w-full ${isDisabled && !isCurrent ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
+                      {pendingStatus === value ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                       {label}
                     </Button>
                     {isDisabled && !isCurrent && (

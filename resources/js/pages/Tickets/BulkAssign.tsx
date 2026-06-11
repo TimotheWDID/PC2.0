@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Loader2 } from 'lucide-react'
 
 type TicketRow = {
   id: number
@@ -39,6 +40,7 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
   const [singleAgentId, setSingleAgentId] = useState('')
   const [roundRobinAgentIds, setRoundRobinAgentIds] = useState<number[]>([])
   const [manualAssignments, setManualAssignments] = useState<Record<number, string>>({})
+  const [pendingMode, setPendingMode] = useState<'single' | 'round_robin' | 'manual' | null>(null)
 
   const filteredTickets = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -61,19 +63,29 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
 
   const assignSingle = () => {
     if (!singleAgentId || selectedTicketIds.length === 0) return
+    if (pendingMode !== null) return
+
+    setPendingMode('single')
     router.post('/tickets/bulk-distribution', {
       mode: 'single',
       ticket_ids: selectedTicketIds,
       single_agent_id: Number(singleAgentId),
+    }, {
+      onFinish: () => setPendingMode(null),
     })
   }
 
   const assignRoundRobin = () => {
     if (roundRobinAgentIds.length === 0 || selectedTicketIds.length === 0) return
+    if (pendingMode !== null) return
+
+    setPendingMode('round_robin')
     router.post('/tickets/bulk-distribution', {
       mode: 'round_robin',
       ticket_ids: selectedTicketIds,
       agent_ids: roundRobinAgentIds,
+    }, {
+      onFinish: () => setPendingMode(null),
     })
   }
 
@@ -86,10 +98,15 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
       }))
 
     if (payload.length === 0) return
+    if (pendingMode !== null) return
+
+    setPendingMode('manual')
 
     router.post('/tickets/bulk-distribution', {
       mode: 'manual',
       manual_assignments: payload,
+    }, {
+      onFinish: () => setPendingMode(null),
     })
   }
 
@@ -116,7 +133,10 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
                   <option key={agent.id} value={agent.id}>{agent.name} ({agent.active_tickets_count})</option>
                 ))}
               </select>
-              <Button onClick={assignSingle} disabled={!singleAgentId || selectedTicketIds.length === 0}>Attribuer {selectedTicketIds.length} ticket(s)</Button>
+              <Button onClick={assignSingle} disabled={!singleAgentId || selectedTicketIds.length === 0 || pendingMode !== null}>
+                {pendingMode === 'single' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Attribuer {selectedTicketIds.length} ticket(s)
+              </Button>
             </CardContent>
           </Card>
 
@@ -143,7 +163,10 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
                   </label>
                 ))}
               </div>
-              <Button onClick={assignRoundRobin} disabled={roundRobinAgentIds.length === 0 || selectedTicketIds.length === 0}>Repartir {selectedTicketIds.length} ticket(s)</Button>
+              <Button onClick={assignRoundRobin} disabled={roundRobinAgentIds.length === 0 || selectedTicketIds.length === 0 || pendingMode !== null}>
+                {pendingMode === 'round_robin' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Repartir {selectedTicketIds.length} ticket(s)
+              </Button>
             </CardContent>
           </Card>
 
@@ -172,7 +195,10 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => setSelectedTicketIds(filteredTickets.map((ticket) => ticket.id))}>Tout selectionner (filtre)</Button>
               <Button type="button" variant="outline" onClick={() => setSelectedTicketIds([])}>Vider</Button>
-              <Button type="button" onClick={assignManual}>Appliquer manuel</Button>
+              <Button type="button" onClick={assignManual} disabled={pendingMode !== null}>
+                {pendingMode === 'manual' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Appliquer manuel
+              </Button>
             </div>
 
             <div className="max-h-[540px] overflow-auto rounded-md border">

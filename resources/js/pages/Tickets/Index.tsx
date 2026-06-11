@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import { SortableTh, useSortableData } from '@/components/sortable-table';
+import { Loader2 } from 'lucide-react';
 
 // Fonction pour traduire les statuts en français
 const translateStatus = (status: string): string => {
@@ -105,6 +106,7 @@ export default function Index({
   const [linkTargetTicket, setLinkTargetTicket] = useState<Ticket | null>(null);
   const [commandeSearch, setCommandeSearch] = useState('');
   const [isLinking, setIsLinking] = useState(false);
+  const [linkingCommandeId, setLinkingCommandeId] = useState<number | null>(null);
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [deviceTargetTicket, setDeviceTargetTicket] = useState<Ticket | null>(null);
   const [deviceIdToAttach, setDeviceIdToAttach] = useState('');
@@ -237,6 +239,7 @@ export default function Index({
     if (!linkTargetTicket) return;
 
     setIsLinking(true);
+    setLinkingCommandeId(commandeId);
 
     router.patch(
       `/tickets/${linkTargetTicket.id}/link-commande`,
@@ -244,7 +247,10 @@ export default function Index({
       {
         preserveScroll: true,
         onSuccess: () => closeLinkModal(),
-        onFinish: () => setIsLinking(false),
+        onFinish: () => {
+          setIsLinking(false);
+          setLinkingCommandeId(null);
+        },
       },
     );
   };
@@ -439,6 +445,7 @@ export default function Index({
                           disabled={selfAssigningTicketId === t.id}
                           onClick={() => handleSelfAssign(t.id)}
                         >
+                          {selfAssigningTicketId === t.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                           {selfAssigningTicketId === t.id ? 'Attribution...' : "Je m'en occupe"}
                         </Button>
                       )}
@@ -621,6 +628,7 @@ export default function Index({
                           disabled={isLinking}
                           onClick={() => handleLinkCommande(commande.id)}
                         >
+                            {isLinking && linkingCommandeId === commande.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                           Lier
                         </Button>
                       </div>
@@ -671,6 +679,7 @@ export default function Index({
                     ))}
                   </select>
                   <Button type="button" size="sm" onClick={handleAttachDevice} disabled={isAttachingDevice}>
+                    {isAttachingDevice ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                     {isAttachingDevice ? 'En cours...' : 'Enregistrer'}
                   </Button>
                 </div>
@@ -717,6 +726,7 @@ export default function Index({
                     </div>
                   </div>
                   <Button type="button" size="sm" onClick={handleCreateAndAttachDevice} disabled={isCreatingDevice || !newDevice.model.trim()}>
+                    {isCreatingDevice ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                     {isCreatingDevice ? 'Creation...' : 'Creer et lier'}
                   </Button>
                 </div>

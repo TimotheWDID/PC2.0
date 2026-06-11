@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import LogModal from '@/components/LogModal';
 import MobileNativeNav from '@/components/mobile-native-nav';
-import { Mail, MessageSquare } from 'lucide-react';
+import { Mail, MessageSquare, Loader2 } from 'lucide-react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -101,6 +101,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendingSms, setSendingSms] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<number | null>(null);
+  const [deletingDeviceId, setDeletingDeviceId] = useState<number | null>(null);
 
   const { data, setData, put, processing, errors } = useForm<UserEditForm>({
     first_name: user?.first_name ?? '',
@@ -176,7 +177,10 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
       return;
     }
 
-    router.delete(`/users/${user?.id}/devices/${deviceId}`);
+    setDeletingDeviceId(deviceId);
+    router.delete(`/users/${user?.id}/devices/${deviceId}`, {
+      onFinish: () => setDeletingDeviceId(null),
+    });
   };
 
   const sendPasswordEmail = () => {
@@ -366,6 +370,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
 
                 <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:gap-2 lg:mt-6 lg:justify-end lg:border-t lg:pt-6">
                   <Button type="submit" disabled={processing} className="w-full sm:w-auto lg:min-w-[10rem]">
+                    {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {processing ? 'Enregistrement...' : 'Enregistrer'}
                   </Button>
                   <Button
@@ -393,7 +398,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     onClick={sendPasswordEmail}
                     disabled={sendingEmail}
                   >
-                    <Mail className="mr-2 h-4 w-4" />
+                    {sendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                     {sendingEmail ? 'Envoi...' : 'Envoyer par email'}
                   </Button>
                   <Button
@@ -402,7 +407,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                     onClick={sendPasswordSms}
                     disabled={sendingSms}
                   >
-                    <MessageSquare className="mr-2 h-4 w-4" />
+                    {sendingSms ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
                     {sendingSms ? 'Envoi...' : 'Envoyer par SMS'}
                   </Button>
                 </div>
@@ -503,6 +508,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
               </div>
 
               <Button type="submit" disabled={processingDevice}>
+                {processingDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {processingDevice ? (editingDeviceId ? 'Mise à jour...' : 'Ajout...') : (editingDeviceId ? 'Mettre à jour l\'appareil' : 'Ajouter l\'appareil')}
               </Button>
             </form>
@@ -525,6 +531,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                         Modifier
                       </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => deleteDevice(device.id)}>
+                        {deletingDeviceId === device.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                         Supprimer
                       </Button>
                     </div>

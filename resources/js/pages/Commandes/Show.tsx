@@ -18,6 +18,7 @@ import { type BreadcrumbItem } from '@/types';
 import { useState } from 'react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
+import { Loader2 } from 'lucide-react';
 
 type User = {
   id: number;
@@ -146,6 +147,7 @@ export default function Show({ commande }: { commande: Commande }) {
               <Button variant="outline">Modifier</Button>
             </Link>
             <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {isDeleting ? 'Suppression...' : 'Supprimer'}
             </Button>
           </div>
@@ -329,6 +331,7 @@ export default function Show({ commande }: { commande: Commande }) {
                 onClick={handleStatusChange}
                 disabled={statusSubmitting}
               >
+                {statusSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {statusSubmitting ? 'Mise à jour...' : 'Valider le changement'}
               </Button>
             </DialogFooter>

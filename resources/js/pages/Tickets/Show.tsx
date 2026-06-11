@@ -196,6 +196,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
   const [pendingTimelineActions, setPendingTimelineActions] = useState<string[]>([]);
+  const [pendingRemovedTimelineEvents, setPendingRemovedTimelineEvents] = useState<number[]>([]);
+  const [pendingRestoredTimelineEvents, setPendingRestoredTimelineEvents] = useState<number[]>([]);
+  const [pendingStatusValue, setPendingStatusValue] = useState<string | null>(null);
+  const [pendingPriorityValue, setPendingPriorityValue] = useState<string | null>(null);
+  const [isSavingTicket, setIsSavingTicket] = useState(false);
+  const [isSavingInternalNote, setIsSavingInternalNote] = useState(false);
+  const [isAddingTimelineEvent, setIsAddingTimelineEvent] = useState(false);
+  const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
@@ -312,41 +320,79 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingTicket) {
+      return;
+    }
+
+    setIsSavingTicket(true);
     router.put(`/tickets/${ticket.id}`, formData, {
       onSuccess: () => {
         setIsEditing(false);
+      },
+      onFinish: () => {
+        setIsSavingTicket(false);
       },
     });
   };
 
   const handleSaveNote = () => {
+    if (isSavingInternalNote) {
+      return;
+    }
+
+    setIsSavingInternalNote(true);
     router.patch(`/users/${ticket.user.id}/internal-note`, { internal_note: internalNote }, {
       onSuccess: () => {
         setIsEditingNote(false);
+      },
+      onFinish: () => {
+        setIsSavingInternalNote(false);
       },
     });
   };
 
   const handleStatusChange = (newStatus: string) => {
+    if (pendingStatusValue !== null) {
+      return;
+    }
+
+    setPendingStatusValue(newStatus);
     router.post(`/tickets/${ticket.id}/status`, { status: newStatus, _method: 'patch' }, {
       preserveScroll: true,
       onSuccess: () => {
         setFormData({ ...formData, status: newStatus });
       },
+      onFinish: () => {
+        setPendingStatusValue(null);
+      },
     });
   };
 
   const handlePriorityChange = (newPriority: string) => {
+    if (pendingPriorityValue !== null) {
+      return;
+    }
+
+    setPendingPriorityValue(newPriority);
     router.post(`/tickets/${ticket.id}/priority`, { priority: newPriority, _method: 'patch' }, {
       preserveScroll: true,
       onSuccess: () => {
         setFormData({ ...formData, priority: newPriority });
+      },
+      onFinish: () => {
+        setPendingPriorityValue(null);
       },
     });
   };
 
   const handleCreateDeviceEvent = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isAddingDeviceEvent) {
+      return;
+    }
+
+    setIsAddingDeviceEvent(true);
 
     const payload = {
       ...deviceEventForm,
@@ -362,6 +408,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           details: '',
           happened_at: '',
         });
+      },
+      onFinish: () => {
+        setIsAddingDeviceEvent(false);
       },
     });
   };
@@ -574,6 +623,12 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const handleCreateTimelineEvent = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isAddingTimelineEvent) {
+      return;
+    }
+
+    setIsAddingTimelineEvent(true);
+
     const payload = {
       ...manualEventForm,
       happened_at: toUtcNaiveDateTime(manualEventForm.happened_at),
@@ -593,6 +648,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
         });
         setManualPrerequisites([]);
         setManualActions([]);
+      },
+      onFinish: () => {
+        setIsAddingTimelineEvent(false);
       },
     });
   };
@@ -674,19 +732,35 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   };
 
   const handleRemoveTimelineEvent = (eventId: number) => {
+    if (pendingRemovedTimelineEvents.includes(eventId)) {
+      return;
+    }
+
+    setPendingRemovedTimelineEvents((current) => [...current, eventId]);
     const reason = window.prompt('Raison du retrait (optionnel):') ?? '';
 
     router.delete(`/tickets/${ticket.id}/timeline-events/${eventId}`, {
       preserveScroll: true,
       data: { reason },
+      onFinish: () => {
+        setPendingRemovedTimelineEvents((current) => current.filter((id) => id !== eventId));
+      },
     });
   };
 
   const handleRestoreTimelineEvent = (eventId: number) => {
+    if (pendingRestoredTimelineEvents.includes(eventId)) {
+      return;
+    }
+
+    setPendingRestoredTimelineEvents((current) => [...current, eventId]);
     router.post(`/tickets/${ticket.id}/timeline-events/${eventId}/restore`, {
       _method: 'patch',
     }, {
       preserveScroll: true,
+      onFinish: () => {
+        setPendingRestoredTimelineEvents((current) => current.filter((id) => id !== eventId));
+      },
     });
   };
 
@@ -735,12 +809,32 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           )}
           {showActions && (
             !event.is_removed ? (
-              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => handleRemoveTimelineEvent(event.id)}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" />Retirer
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-destructive"
+                onClick={() => handleRemoveTimelineEvent(event.id)}
+                disabled={pendingRemovedTimelineEvents.includes(event.id)}
+              >
+                {pendingRemovedTimelineEvents.includes(event.id)
+                  ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                Retirer
               </Button>
             ) : (
-              <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => handleRestoreTimelineEvent(event.id)}>
-                <RotateCcw className="h-3.5 w-3.5 mr-1" />Restaurer
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2"
+                onClick={() => handleRestoreTimelineEvent(event.id)}
+                disabled={pendingRestoredTimelineEvents.includes(event.id)}
+              >
+                {pendingRestoredTimelineEvents.includes(event.id)
+                  ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                Restaurer
               </Button>
             )
           )}
@@ -871,7 +965,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           }
                         }}
                         type="button"
+                        disabled={pendingStatusValue !== null}
                       >
+                        {pendingStatusValue === value ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                         {label}
                       </Button>
                     );
@@ -897,7 +993,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           }
                         }}
                         type="button"
+                        disabled={pendingPriorityValue !== null}
                       >
+                        {pendingPriorityValue === value ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                         {label}
                       </Button>
                     );
@@ -1201,8 +1299,11 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                                 )}
                               </div>
                               <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)}>Annuler</Button>
-                                <Button type="submit">Ajouter</Button>
+                                <Button type="button" variant="outline" onClick={() => setIsAddEventModalOpen(false)} disabled={isAddingTimelineEvent}>Annuler</Button>
+                                <Button type="submit" disabled={isAddingTimelineEvent}>
+                                  {isAddingTimelineEvent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  {isAddingTimelineEvent ? 'Ajout...' : 'Ajouter'}
+                                </Button>
                               </DialogFooter>
                             </form>
                           </DialogContent>
@@ -1442,11 +1543,13 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button type="submit">
-                        <Save className="mr-2 h-4 w-4" />
-                        Enregistrer
+                      <Button type="submit" disabled={isSavingTicket}>
+                        {isSavingTicket
+                          ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          : <Save className="mr-2 h-4 w-4" />}
+                        {isSavingTicket ? 'Enregistrement...' : 'Enregistrer'}
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)} disabled={isSavingTicket}>
                         Annuler
                       </Button>
                     </div>
@@ -1685,7 +1788,10 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         />
                       </div>
 
-                      <Button type="submit" size="sm">Ajouter au suivi appareil</Button>
+                      <Button type="submit" size="sm" disabled={isAddingDeviceEvent}>
+                        {isAddingDeviceEvent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {isAddingDeviceEvent ? 'Ajout...' : 'Ajouter au suivi appareil'}
+                      </Button>
                     </form>
                   )}
 
@@ -1890,13 +1996,16 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           className="text-sm"
                         />
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={handleSaveNote}>
-                            <Check className="h-4 w-4 mr-1" />
-                            Sauvegarder
+                          <Button size="sm" onClick={handleSaveNote} disabled={isSavingInternalNote}>
+                            {isSavingInternalNote
+                              ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              : <Check className="h-4 w-4 mr-1" />}
+                            {isSavingInternalNote ? 'Sauvegarde...' : 'Sauvegarder'}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={isSavingInternalNote}
                             onClick={() => {
                               setIsEditingNote(false);
                               setInternalNote(ticket.user.internal_note ?? '');
