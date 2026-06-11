@@ -56,7 +56,7 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
     window.localStorage.setItem('kiosk-theme', next ? 'dark' : 'light')
   }
 
-  const { data, setData, post, processing, errors } = useForm({
+  const { data, setData, post, processing, errors, transform } = useForm({
     first_name: '',
     last_name: '',
     phone: '',
@@ -76,25 +76,25 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       return
     }
 
-    post('/kiosk/tickets', {
-      data: {
-        ...data,
-        no_device_password: false,
-        password_empty_confirmed: false,
-      },
-    })
+    transform((values) => ({
+      ...values,
+      no_device_password: false,
+      password_empty_confirmed: false,
+    }))
+
+    post('/kiosk/tickets')
   }
 
   const confirmNoPasswordAndSubmit = () => {
     setShowNoPasswordConfirm(false)
 
-    post('/kiosk/tickets', {
-      data: {
-        ...data,
-        no_device_password: true,
-        password_empty_confirmed: true,
-      },
-    })
+    transform((values) => ({
+      ...values,
+      no_device_password: true,
+      password_empty_confirmed: true,
+    }))
+
+    post('/kiosk/tickets')
   }
 
   const resetForNextClient = () => {

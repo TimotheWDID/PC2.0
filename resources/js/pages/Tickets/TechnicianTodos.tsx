@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { formatDateTimeFr } from '@/lib/datetime';
+import { Loader2 } from 'lucide-react';
 
 type TodoRow = {
   ticket: {
@@ -69,6 +70,10 @@ const translatePriority = (priority: string | null): string => {
 
 export default function TechnicianTodos({ todoRows }: { todoRows: TodoRow[] }) {
   const [query, setQuery] = useState('');
+  const [pendingActions, setPendingActions] = useState<string[]>([]);
+  const [locallyCompletedActions, setLocallyCompletedActions] = useState<string[]>([]);
+
+  const getActionKey = (row: TodoRow): string => `${row.ticket.id}:${row.event.id}:${row.action.index}`;
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -111,6 +116,15 @@ export default function TechnicianTodos({ todoRows }: { todoRows: TodoRow[] }) {
   }, [filteredRows]);
 
   const completeAction = (row: TodoRow) => {
+    const actionKey = getActionKey(row);
+
+    if (pendingActions.includes(actionKey) || locallyCompletedActions.includes(actionKey)) {
+      return;
+    }
+
+    setPendingActions((current) => [...current, actionKey]);
+    setLocallyCompletedActions((current) => [...current, actionKey]);
+
     router.patch(
       `/tickets/${row.ticket.id}/timeline-events/${row.event.id}/actions`,
       {
@@ -119,6 +133,12 @@ export default function TechnicianTodos({ todoRows }: { todoRows: TodoRow[] }) {
       },
       {
         preserveScroll: true,
+        onError: () => {
+          setLocallyCompletedActions((current) => current.filter((key) => key !== actionKey));
+        },
+        onFinish: () => {
+          setPendingActions((current) => current.filter((key) => key !== actionKey));
+        },
       },
     );
   };
@@ -168,22 +188,38 @@ export default function TechnicianTodos({ todoRows }: { todoRows: TodoRow[] }) {
                     </div>
 
                     <div className="space-y-2">
-                      {group.rows.map((row, index) => (
+                      {group.rows.map((row, index) => {
+                        const actionKey = getActionKey(row);
+                        const isPending = pendingActions.includes(actionKey);
+                        const isChecked = locallyCompletedActions.includes(actionKey);
+
+                        return (
                         <div key={`todo-row-${group.ticketId}-${index}`} className="rounded-md border bg-muted/20 px-2 py-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <Checkbox checked={false} onCheckedChange={() => completeAction(row)} id={`todo-check-${group.ticketId}-${row.event.id}-${row.action.index}`} />
+                              {isPending ? (
+                                <span className="inline-flex h-4 w-4 items-center justify-center text-primary" aria-hidden="true">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                </span>
+                              ) : (
+                                <Checkbox
+                                  checked={isChecked}
+                                  disabled={isPending}
+                                  onCheckedChange={() => completeAction(row)}
+                                  id={`todo-check-${group.ticketId}-${row.event.id}-${row.action.index}`}
+                                />
+                              )}
                               <p className="text-sm">{row.action.label}</p>
                             </div>
-                            <Button size="sm" variant="outline" onClick={() => completeAction(row)}>
-                              Marquer fait
+                            <Button size="sm" variant="outline" onClick={() => completeAction(row)} disabled={isPending || isChecked}>
+                              {isPending ? 'Validation...' : isChecked ? 'Fait' : 'Marquer fait'}
                             </Button>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
                             Depuis: {row.event.summary || 'Evenement sans resume'} · {row.event.technician_name || 'Technicien'} · {formatDateTimeFr(row.event.happened_at)}
                           </p>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 ))}

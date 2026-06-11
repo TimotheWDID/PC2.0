@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2 } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -186,9 +186,16 @@ const priorityUI: Record<string, { badge: string; btn: string; btnActive: string
   },
 };
 
+type PredefinedTaskList = {
+  key: string;
+  label: string;
+  tasks: string[];
+};
+
 export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], timelineTemplateSettings = { templates: [] }, actionListSettings = { lists: [] } }: any) {
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
+  const [pendingTimelineActions, setPendingTimelineActions] = useState<string[]>([]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
@@ -644,7 +651,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     setManualActions((current) => current.filter((_, i) => i !== index));
   };
 
-  const predefinedTaskLists = useMemo(() => {
+  const predefinedTaskLists = useMemo<PredefinedTaskList[]>(() => {
     return (actionListSettings?.lists ?? [])
       .map((list: any) => ({
         key: String(list?.key ?? ''),
@@ -653,17 +660,17 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
           ? list.tasks.map((task: unknown) => String(task ?? '').trim()).filter((task: string) => task !== '')
           : [],
       }))
-      .filter((list: any) => list.key !== '' && list.tasks.length > 0);
+      .filter((list: PredefinedTaskList) => list.key !== '' && list.tasks.length > 0);
   }, [actionListSettings]);
 
   const applyPredefinedTaskList = (listKey: string) => {
-    const list = predefinedTaskLists.find((item) => item.key === listKey);
+    const list = predefinedTaskLists.find((item: PredefinedTaskList) => item.key === listKey);
 
     if (!list || !Array.isArray(list.tasks) || list.tasks.length === 0) {
       return;
     }
 
-    setManualActions(list.tasks.map((task) => ({ label: task, done: false })));
+    setManualActions(list.tasks.map((task: string) => ({ label: task, done: false })));
   };
 
   const handleRemoveTimelineEvent = (eventId: number) => {
@@ -684,11 +691,22 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   };
 
   const handleToggleTimelineAction = (eventId: number, actionIndex: number, done: boolean) => {
+    const actionKey = `${eventId}:${actionIndex}`;
+
+    if (pendingTimelineActions.includes(actionKey)) {
+      return;
+    }
+
+    setPendingTimelineActions((current) => [...current, actionKey]);
+
     router.patch(`/tickets/${ticket.id}/timeline-events/${eventId}/actions`, {
       action_index: actionIndex,
       done,
     }, {
       preserveScroll: true,
+      onFinish: () => {
+        setPendingTimelineActions((current) => current.filter((key) => key !== actionKey));
+      },
     });
   };
 
@@ -743,29 +761,41 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
         <div className="mt-2 rounded-md border border-border/70 bg-muted/20 p-2">
           <p className="text-[11px] font-medium text-foreground">Actions a realiser</p>
           <div className="mt-1 space-y-1.5">
-            {event.details.actions.map((action: any, index: number) => (
-              <div key={`${event.id}-act-${index}`} className="text-[11px] text-muted-foreground">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {isAgent && !event.is_removed ? (
-                      <Checkbox
-                        checked={Boolean(action.done)}
-                        onCheckedChange={(value) => handleToggleTimelineAction(event.id, index, Boolean(value))}
-                        id={`timeline-action-${event.id}-${index}`}
-                      />
-                    ) : (
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${action.done ? 'bg-primary' : 'bg-muted-foreground/50'}`} />
-                    )}
-                    <p>{action.done ? 'FAIT' : 'A FAIRE'} - {action.label}</p>
+            {event.details.actions.map((action: any, index: number) => {
+              const actionKey = `${event.id}:${index}`;
+              const isPending = pendingTimelineActions.includes(actionKey);
+
+              return (
+                <div key={`${event.id}-act-${index}`} className="text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {isAgent && !event.is_removed ? (
+                        isPending ? (
+                          <span className="inline-flex h-4 w-4 items-center justify-center text-primary" aria-hidden="true">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          </span>
+                        ) : (
+                          <Checkbox
+                            checked={Boolean(action.done)}
+                            disabled={isPending}
+                            onCheckedChange={(value) => handleToggleTimelineAction(event.id, index, Boolean(value))}
+                            id={`timeline-action-${event.id}-${index}`}
+                          />
+                        )
+                      ) : (
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${action.done ? 'bg-primary' : 'bg-muted-foreground/50'}`} />
+                      )}
+                      <p>{action.done ? 'FAIT' : 'A FAIRE'} - {action.label}</p>
+                    </div>
                   </div>
+                  {action.done && (
+                    <p className="text-[11px] text-primary">
+                      Realisee par {action.done_by_name ?? event.technician?.name ?? 'Technicien'} le {formatDateTime(action.done_at ?? event.happened_at)}
+                    </p>
+                  )}
                 </div>
-                {action.done && (
-                  <p className="text-[11px] text-primary">
-                    Realisee par {action.done_by_name ?? event.technician?.name ?? 'Technicien'} le {formatDateTime(action.done_at ?? event.happened_at)}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
