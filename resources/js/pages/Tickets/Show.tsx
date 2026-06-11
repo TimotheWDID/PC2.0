@@ -699,7 +699,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
     setPendingTimelineActions((current) => [...current, actionKey]);
 
-    router.patch(`/tickets/${ticket.id}/timeline-events/${eventId}/actions`, {
+    router.post(`/tickets/${ticket.id}/timeline-events/${eventId}/actions`, {
+      _method: 'patch',
       action_index: actionIndex,
       done,
     }, {

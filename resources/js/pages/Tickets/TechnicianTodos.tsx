@@ -125,9 +125,10 @@ export default function TechnicianTodos({ todoRows }: { todoRows: TodoRow[] }) {
     setPendingActions((current) => [...current, actionKey]);
     setLocallyCompletedActions((current) => [...current, actionKey]);
 
-    router.patch(
+    router.post(
       `/tickets/${row.ticket.id}/timeline-events/${row.event.id}/actions`,
       {
+        _method: 'patch',
         action_index: row.action.index,
         done: true,
       },
