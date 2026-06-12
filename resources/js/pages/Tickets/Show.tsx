@@ -1160,7 +1160,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
             {isAgent ? (
               <div className="grid gap-3 xl:grid-cols-2">
                 <div id="ticket-discussion" className="min-w-0 scroll-mt-20">
-                  <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+                  <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} mentionCandidates={agents} />
                 </div>
                 <Card id="ticket-suivi-tech" className="w-full max-w-full scroll-mt-20 overflow-hidden">
                   <CardHeader className="pb-3 bg-muted/10">
@@ -1319,7 +1319,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 </Card>
               </div>
             ) : (
-              <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} />
+              <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} mentionCandidates={agents} />
             )}
           </div>
 

@@ -57,6 +57,7 @@ Route::middleware('auth')->group(function () {
     // Chat/Messages routes for tickets
     Route::get('tickets/{ticket}/messages', [MessageController::class, 'index'])->name('tickets.messages.index');
     Route::post('tickets/{ticket}/messages', [MessageController::class, 'store'])->name('tickets.messages.store');
+    Route::post('tickets/{ticket}/messages/{message}/validate-mention', [MessageController::class, 'validateMention'])->name('tickets.messages.validateMention');
     Route::delete('tickets/{ticket}/messages/{message}', [MessageController::class, 'destroy'])->name('tickets.messages.destroy');
 });
 

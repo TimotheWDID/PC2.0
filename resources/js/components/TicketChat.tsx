@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,21 +20,42 @@ interface Message {
   attachments: string[];
   created_at: string;
   author: Author;
+  mention_notification?: {
+    exists: boolean;
+    validated: boolean;
+    unread_count: number;
+  };
 }
 
 interface TicketChatProps {
   ticketId: number;
   currentUserId: number;
   isAgent?: boolean;
+  mentionCandidates?: Array<{
+    id: number;
+    name: string;
+    mention_aliases?: string[];
+  }>;
 }
 
-export default function TicketChat({ ticketId, currentUserId, isAgent = false }: TicketChatProps) {
+export default function TicketChat({ ticketId, currentUserId, isAgent = false, mentionCandidates = [] }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [mentionFeedback, setMentionFeedback] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [validatingMentionMessageId, setValidatingMentionMessageId] = useState<number | null>(null);
   const [sendingMode, setSendingMode] = useState<'public' | 'internal'>('public');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const normalizeMentionToken = (value: string): string => {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  };
 
   const scrollToBottom = (force = false) => {
     const el = messagesContainerRef.current;
@@ -69,6 +90,75 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
     return () => clearInterval(interval);
   }, [ticketId]);
 
+  const mentionHelpItems = React.useMemo(() => {
+    return mentionCandidates
+      .map((agent) => {
+        const aliases = (Array.isArray(agent.mention_aliases) ? agent.mention_aliases : []).map((a) => normalizeMentionToken(a));
+        const fullAlias = aliases.find((alias) => alias.length > 3) ?? '';
+        const shortAlias = aliases.find((alias) => alias.length === 3) ?? '';
+
+        return {
+          id: agent.id,
+          name: agent.name,
+          fullAlias,
+          shortAlias,
+        };
+      })
+      .filter((item) => !!item.fullAlias || !!item.shortAlias)
+      .slice(0, 20);
+  }, [mentionCandidates]);
+
+  const mentionQuery = React.useMemo(() => {
+    const match = newMessage.match(/(?:^|\s)@([\p{L}\p{N}]*)$/u);
+    if (!match) {
+      return null;
+    }
+
+    return normalizeMentionToken(match[1] ?? '');
+  }, [newMessage]);
+
+  const mentionSuggestions = React.useMemo(() => {
+    if (mentionQuery === null) {
+      return [] as Array<{ id: number; name: string; alias: string; kind: 'full' | 'short' }>;
+    }
+
+    return mentionHelpItems
+      .flatMap((item) => {
+        const entries: Array<{ id: number; name: string; alias: string; kind: 'full' | 'short' }> = [];
+
+        if (item.fullAlias) {
+          entries.push({ id: item.id, name: item.name, alias: item.fullAlias, kind: 'full' });
+        }
+
+        if (item.shortAlias) {
+          entries.push({ id: item.id, name: item.name, alias: item.shortAlias, kind: 'short' });
+        }
+
+        return entries;
+      })
+      .filter((entry) => mentionQuery === '' || entry.alias.startsWith(mentionQuery))
+      .slice(0, 8);
+  }, [mentionHelpItems, mentionQuery]);
+
+  const insertMention = (alias: string) => {
+    const trimmed = alias.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const atMatch = newMessage.match(/(?:^|\s)@[\p{L}\p{N}]*$/u);
+
+    if (!atMatch) {
+      const prefix = newMessage.length > 0 && !newMessage.endsWith(' ') ? ' ' : '';
+      setNewMessage(`${newMessage}${prefix}@${trimmed} `);
+      return;
+    }
+
+    const replacement = atMatch[0].startsWith(' ') ? ` @${trimmed} ` : `@${trimmed} `;
+    const base = newMessage.slice(0, newMessage.length - atMatch[0].length);
+    setNewMessage(`${base}${replacement}`);
+  };
+
   const sendMessage = async (internal: boolean) => {
     if (!newMessage.trim()) return;
 
@@ -79,6 +169,9 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
         content: newMessage,
         is_internal: internal,
       });
+
+      const mentionWarnings: string[] = response.data?.meta?.mention_warnings ?? [];
+      setMentionFeedback(internal ? mentionWarnings : []);
 
       setMessages([...messages, response.data.message]);
       setNewMessage('');
@@ -101,10 +194,28 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
 
     try {
       await axios.delete(`/tickets/${ticketId}/messages/${messageId}`);
-      setMessages(messages.filter(msg => msg.id !== messageId));
+      setMessages(messages.filter((msg) => msg.id !== messageId));
     } catch (error) {
       console.error('Erreur lors de la suppression du message:', error);
       alert('Erreur lors de la suppression du message');
+    }
+  };
+
+  const validateMentionNotification = async (messageId: number) => {
+    if (validatingMentionMessageId !== null) {
+      return;
+    }
+
+    setValidatingMentionMessageId(messageId);
+
+    try {
+      await axios.post(`/tickets/${ticketId}/messages/${messageId}/validate-mention`);
+      await fetchMessages();
+    } catch (error) {
+      console.error('Erreur lors de la validation de la notification:', error);
+      alert('Erreur lors de la validation de la notification');
+    } finally {
+      setValidatingMentionMessageId(null);
     }
   };
 
@@ -112,6 +223,29 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
 
   const formatDate = (dateString: string) => {
     return formatDateTimeFr(dateString, { timeZone: 'Europe/Paris' });
+  };
+
+  const renderMessageContent = (content: string) => {
+    // Split content by mentions while preserving them
+    const parts = content.split(/(@[\p{L}\p{N}]+)/u);
+
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('@')) {
+            return (
+              <span
+                key={`mention-${index}`}
+                className="font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-1 rounded"
+              >
+                {part}
+              </span>
+            );
+          }
+          return <span key={`text-${index}`}>{part}</span>;
+        })}
+      </>
+    );
   };
 
   return (
@@ -165,15 +299,35 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
                           </div>
                         </div>
                         <div className="whitespace-pre-wrap break-words text-sm">
-                          {message.content}
+                          {renderMessageContent(message.content)}
                         </div>
                         <div className={`text-xs ${isCurrentUser ? 'opacity-80' : 'text-muted-foreground'}`}>
                           {formatDate(message.created_at)}
                         </div>
                         {message.is_internal && isAgent && (
-                          <Badge variant="secondary" className="text-xs border border-dashed border-[#2a3ff5] bg-[#f3f4f6] text-[#141d3a]">
-                            Interne (équipe)
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="secondary" className="text-xs border border-dashed border-[#2a3ff5] bg-[#f3f4f6] text-[#141d3a]">
+                              Interne (équipe)
+                            </Badge>
+                            {message.mention_notification?.exists && (
+                              message.mention_notification.validated ? (
+                                <Badge variant="outline" className="text-xs border-[#22a06b] bg-[#eaf8f1] text-[#1c7a53]">
+                                  OK
+                                </Badge>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={validatingMentionMessageId === message.id}
+                                  onClick={() => validateMentionNotification(message.id)}
+                                >
+                                  {validatingMentionMessageId === message.id ? 'Validation...' : 'Valider la notification'}
+                                </Button>
+                              )
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -193,6 +347,36 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false }:
               rows={2}
               disabled={isSending}
             />
+            {isAgent && (
+              <div className="space-y-1">
+                {mentionSuggestions.length > 0 && mentionQuery !== null && (
+                  <div className="rounded-md border border-border bg-background p-1">
+                    <div className="flex flex-wrap gap-1.5">
+                      {mentionSuggestions.map((item, index) => (
+                        <button
+                          key={`${item.id}-${item.alias}-${index}`}
+                          type="button"
+                          onClick={() => insertMention(item.alias)}
+                          className="inline-flex items-center rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-muted"
+                          title={`Ajouter @${item.alias}`}
+                        >
+                          @{item.alias} - {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {mentionFeedback.length > 0 && (
+                  <div className="space-y-1">
+                    {mentionFeedback.map((warning, index) => (
+                      <Badge key={`${warning}-${index}`} variant="outline" className="mr-1 border-[#e6892e] bg-[#fff4e8] text-[#b55f00]">
+                        {warning}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap justify-end gap-2">
               {isAgent && (
                 <Button

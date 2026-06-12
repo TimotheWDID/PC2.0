@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Commande;
+use App\Notifications\AgentMentionNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Ticket;
 use App\Support\DashboardInsightSettings;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Str;
+use Throwable;
 
 class DashboardController extends Controller
 {
@@ -227,6 +230,83 @@ class DashboardController extends Controller
         ];
     }
 
+    private function buildAgentMentionInsights($user)
+    {
+        if (! $user) {
+            return collect();
+        }
+
+        try {
+            $notifications = $user->unreadNotifications()
+                ->where('type', 'App\\Notifications\\AgentMentionNotification')
+                ->latest()
+                ->limit(12)
+                ->get();
+        } catch (Throwable $exception) {
+            // If notifications table is not migrated yet, keep dashboard functional.
+            return collect();
+        }
+
+        if ($notifications->isEmpty()) {
+            return collect();
+        }
+
+        $ticketIds = $notifications
+            ->pluck('data.ticket_id')
+            ->filter(fn ($id) => ! is_null($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $ticketsById = Ticket::query()
+            ->standardOnly()
+            ->whereIn('id', $ticketIds->all())
+            ->with([
+                'user:id,first_name,last_name',
+                'assignee:id,first_name,last_name',
+                'category:id,name',
+            ])
+            ->withCount('messages')
+            ->get()
+            ->keyBy('id');
+
+        return $notifications->map(function ($notification) use ($ticketsById) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            $ticketId = (int) ($data['ticket_id'] ?? 0);
+            $ticket = $ticketId > 0 ? $ticketsById->get($ticketId) : null;
+            $ticketTitle = $data['ticket_title'] ?? ($ticket?->title ?: ('Ticket n°' . ($ticketId ?: '-')));
+            $excerpt = trim((string) ($data['excerpt'] ?? ''));
+            $baseReason = trim((string) ($data['reason'] ?? 'Mention interne reçue.'));
+            $reason = $excerpt !== '' ? ($baseReason . ' « ' . $excerpt . ' »') : $baseReason;
+            $href = is_string($data['href'] ?? null) ? $data['href'] : ('/tickets/' . $ticketId);
+
+            return $this->makeInsight([
+                'kind' => 'ticket',
+                'severity' => 'notification',
+                'title' => 'Notification d\'equipe',
+                'reason' => $reason,
+                'action_label' => 'Voir la notification',
+                'href' => $href,
+                'entity_id' => 'mention-' . $notification->id,
+                'age_label' => $this->formatSinceLabel($notification->created_at),
+                'tags' => ['Notification', 'Mention @'],
+                'ticket' => $ticket ? $this->serializeTicket($ticket) : [
+                    'id' => $ticketId,
+                    'title' => $ticketTitle,
+                    'status' => null,
+                    'priority' => null,
+                    'requester_name' => null,
+                    'assignee_name' => null,
+                    'messages_count' => null,
+                    'is_locked' => false,
+                    'is_resolved' => false,
+                    'created_at' => null,
+                    'updated_at' => null,
+                ],
+            ]);
+        });
+    }
+
     private function isAgentContext(): bool
     {
         $user = Auth::user();
@@ -411,8 +491,10 @@ class DashboardController extends Controller
 
             $actionItems = $ticketActions
                 ->merge($commandActions)
+                ->merge($this->buildAgentMentionInsights($user))
                 ->sortByDesc(function (array $item) {
                     $severityRank = [
+                        'notification' => 4,
                         'critical' => 3,
                         'warning' => 2,
                         'info' => 1,
@@ -574,5 +656,49 @@ class DashboardController extends Controller
                 ],
             ]);
         }
+    }
+
+    public function validateTicketNotifications(Request $request, int $ticketId)
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $this->isAgentContext()) {
+            abort(403);
+        }
+
+        try {
+            $ownedUnread = $user->unreadNotifications()
+                ->where('type', AgentMentionNotification::class)
+                ->where('data->ticket_id', $ticketId)
+                ->get();
+        } catch (Throwable $exception) {
+            return back();
+        }
+
+        if ($ownedUnread->isEmpty()) {
+            return back();
+        }
+
+        $messageIds = $ownedUnread
+            ->pluck('data.message_id')
+            ->filter(fn ($id) => ! is_null($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($messageIds->isEmpty()) {
+            return back();
+        }
+
+        DatabaseNotification::query()
+            ->where('type', AgentMentionNotification::class)
+            ->whereIn('data->message_id', $messageIds->all())
+            ->whereNull('read_at')
+            ->update([
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        return back();
     }
 }

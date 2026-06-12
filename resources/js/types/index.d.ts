@@ -21,6 +21,7 @@ export interface NavItem {
     icon?: LucideIcon | null;
     quickHref?: NonNullable<InertiaLinkProps['href']>;
     quickLabel?: string;
+    badgeCount?: number;
     isActive?: boolean;
     items?: NavItem[];
 }

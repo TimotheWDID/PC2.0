@@ -1,16 +1,17 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { formatDateTimeFr } from '@/lib/datetime';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowRight, BellRing, Clock3, Home, ListFilter, Plus, Search, Settings, Wrench } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { AlertCircle, Bell, BellRing, Clock3, Home, Info, ListFilter, Plus, Search, Settings, TriangleAlert, Wrench } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type DashboardMode = 'agent' | 'user';
-type Severity = 'all' | 'critical' | 'warning' | 'info';
+type Severity = 'all' | 'critical' | 'warning' | 'info' | 'notification';
 
 type Summary = {
     total?: number;
@@ -41,7 +42,7 @@ type QuickAction = {
 type ActionItem = {
     id: string;
     kind: 'ticket' | 'commande';
-    severity: 'critical' | 'warning' | 'info';
+    severity: 'critical' | 'warning' | 'info' | 'notification';
     title: string;
     reason: string;
     action_label: string;
@@ -59,6 +60,11 @@ type ActionItem = {
         ticket_title?: string | null;
         updated_at?: string | null;
     } | null;
+};
+
+type TicketSignal = {
+    severity: Exclude<Severity, 'all'>;
+    messages: string[];
 };
 
 type DashboardProps = {
@@ -116,28 +122,25 @@ const severityLabel = (severity: Severity): string => {
     if (severity === 'critical') return 'Critique';
     if (severity === 'warning') return 'Attention';
     if (severity === 'info') return 'Info';
+    if (severity === 'notification') return 'Notification';
     return 'Toutes';
 };
 
-const severityBadgeVariant = (severity: Severity) => {
-    if (severity === 'critical') return 'destructive';
-    if (severity === 'warning') return 'secondary';
-    return 'outline';
+const signalOrder: Exclude<Severity, 'all'>[] = ['critical', 'warning', 'info', 'notification'];
+
+const signalIcon = (severity: Exclude<Severity, 'all'>) => {
+    if (severity === 'critical') return TriangleAlert;
+    if (severity === 'warning') return AlertCircle;
+    if (severity === 'info') return Info;
+    return Bell;
 };
 
-type DashboardTab = 'recommended' | 'assigned';
-
-const tabLabel: Record<DashboardTab, string> = {
-    recommended: 'Actions recommandées',
-    assigned: 'Tickets attitrés',
+const signalIconClass = (severity: Exclude<Severity, 'all'>) => {
+    if (severity === 'critical') return 'text-destructive';
+    if (severity === 'warning') return 'text-chart-3';
+    if (severity === 'info') return 'text-chart-2';
+    return 'text-primary';
 };
-
-const assignedTabLabel = (count: number) => `Tickets attitrés (${count})`;
-
-const tabButtonClass = (active: boolean) =>
-    `rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-        active ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'
-    }`;
 
 const sectionTitleClass = 'relative pl-3 text-sm font-semibold tracking-tight before:absolute before:left-0 before:top-1 before:h-4 before:w-1 before:rounded-full before:bg-primary/60';
 
@@ -145,6 +148,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const page = usePage();
     const user = (page.props as any).auth?.user ?? null;
     const isAgent = mode ? mode === 'agent' : !!user?.agent;
+    const currentUrl = page.url ?? '/';
     const currentPath = (page.url ?? '/').split('?')[0] || '/';
 
     const stats = summary ?? {};
@@ -152,44 +156,107 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const allActionItems = actionItems ?? [];
     const assigned = assignedTickets ?? [];
     const recent = recentTickets ?? [];
-    const assignedCount = assigned.length;
 
     const [query, setQuery] = useState('');
-    const [severity, setSeverity] = useState<Severity>('all');
-    const [activeTab, setActiveTab] = useState<DashboardTab>('recommended');
+    const [validatingTicketId, setValidatingTicketId] = useState<number | null>(null);
+    const severityOrder = useMemo<Severity[]>(() => ['notification', 'critical', 'warning', 'info', 'all'], []);
+    const severityRank = useMemo<Record<Exclude<Severity, 'all'>, number>>(
+        () => ({ notification: 4, critical: 3, warning: 2, info: 1 }),
+        [],
+    );
 
-    const filteredActionItems = useMemo(() => {
+    const initialSeverity = useMemo<Severity>(() => {
+        const queryString = (page.url ?? '').split('?')[1] ?? '';
+        const fromQuery = new URLSearchParams(queryString).get('severity');
+        return severityOrder.includes(fromQuery as Severity) ? (fromQuery as Severity) : 'all';
+    }, [page.url, severityOrder]);
+
+    const [severity, setSeverity] = useState<Severity>(initialSeverity);
+
+    useEffect(() => {
+        setSeverity(initialSeverity);
+    }, [initialSeverity]);
+
+    const assignedTicketIds = useMemo(() => new Set(assigned.map((ticket) => ticket.id)), [assigned]);
+
+    const ticketSignalsById = useMemo(() => {
+        const signalMap = new Map<number, Map<Exclude<Severity, 'all'>, string[]>>();
+
+        allActionItems.forEach((item) => {
+            let ticketId: number | null = null;
+
+            if (item.kind === 'ticket' && item.ticket?.id) {
+                const candidate = Number(item.ticket.id);
+                ticketId = Number.isFinite(candidate) ? candidate : null;
+            } else if (item.kind === 'commande' && item.commande?.ticket_id) {
+                const candidate = Number(item.commande.ticket_id);
+                ticketId = Number.isFinite(candidate) ? candidate : null;
+            }
+
+            if (!ticketId) {
+                return;
+            }
+
+            const current = signalMap.get(ticketId) ?? new Map<Exclude<Severity, 'all'>, string[]>();
+            const key = item.severity as Exclude<Severity, 'all'>;
+            const messages = current.get(key) ?? [];
+            messages.push(item.reason);
+            current.set(key, messages);
+            signalMap.set(ticketId, current);
+        });
+
+        const flatMap = new Map<number, TicketSignal[]>();
+
+        signalMap.forEach((bySeverity, ticketId) => {
+            const signals: TicketSignal[] = signalOrder
+                .map((level) => ({ severity: level, messages: bySeverity.get(level) ?? [] }))
+                .filter((entry) => entry.messages.length > 0)
+                .map((entry) => ({
+                    severity: entry.severity,
+                    messages: Array.from(new Set(entry.messages)),
+                }));
+
+            flatMap.set(ticketId, signals);
+        });
+
+        return flatMap;
+    }, [allActionItems]);
+
+    const mentionOutsideAssignedTickets = useMemo(() => {
+        const byId = new Map<number, TicketItem>();
+
+        allActionItems
+            .filter((item) => item.kind === 'ticket' && item.severity === 'notification' && !!item.ticket?.id)
+            .forEach((item) => {
+                const ticket = item.ticket as TicketItem;
+                const ticketId = Number(ticket.id);
+
+                if (!Number.isFinite(ticketId) || assignedTicketIds.has(ticketId)) {
+                    return;
+                }
+
+                if (!byId.has(ticketId)) {
+                    byId.set(ticketId, { ...ticket, id: ticketId });
+                }
+            });
+
+        return Array.from(byId.values());
+    }, [allActionItems, assignedTicketIds]);
+
+    const filteredMentionOutsideAssignedTickets = useMemo(() => {
         const q = query.trim().toLowerCase();
 
-        return allActionItems.filter((item) => {
-            if (severity !== 'all' && item.severity !== severity) {
+        if (severity !== 'all' && severity !== 'notification') {
+            return [] as TicketItem[];
+        }
+
+        return mentionOutsideAssignedTickets.filter((ticket) => {
+            const signals = ticketSignalsById.get(ticket.id) ?? [];
+
+            if (severity === 'notification' && !signals.some((signal) => signal.severity === 'notification')) {
                 return false;
             }
 
-            if (!q) {
-                return true;
-            }
-
-            const haystack = [
-                item.title,
-                item.reason,
-                item.ticket?.id?.toString() ?? '',
-                item.ticket?.title ?? '',
-                item.commande?.id?.toString() ?? '',
-                item.commande?.nom ?? '',
-                ...(item.tags ?? []),
-            ]
-                .join(' ')
-                .toLowerCase();
-
-            return haystack.includes(q);
-        });
-    }, [allActionItems, query, severity]);
-
-    const filteredAssignedTickets = useMemo(() => {
-        const q = query.trim().toLowerCase();
-
-        return assigned.filter((ticket) => {
             if (!q) {
                 return true;
             }
@@ -201,13 +268,241 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                 ticket.priority ?? '',
                 ticket.requester_name ?? '',
                 ticket.updated_at ?? '',
+                ...signals.flatMap((signal) => signal.messages),
             ]
                 .join(' ')
                 .toLowerCase();
 
             return haystack.includes(q);
         });
-    }, [assigned, query]);
+    }, [mentionOutsideAssignedTickets, query, severity, ticketSignalsById]);
+
+    const commandOutsideAssignedTickets = useMemo(() => {
+        const byId = new Map<number, TicketItem>();
+
+        allActionItems
+            .filter((item) => item.kind === 'commande' && !!item.commande?.ticket_id)
+            .forEach((item) => {
+                const ticketId = Number(item.commande?.ticket_id);
+
+                if (!Number.isFinite(ticketId) || assignedTicketIds.has(ticketId)) {
+                    return;
+                }
+
+                if (!byId.has(ticketId)) {
+                    byId.set(ticketId, {
+                        id: ticketId,
+                        title: item.commande?.ticket_title ?? `Ticket n°${ticketId}`,
+                        status: null,
+                        priority: null,
+                        requester_name: null,
+                        updated_at: item.commande?.updated_at ?? null,
+                    });
+                }
+            });
+
+        return Array.from(byId.values());
+    }, [allActionItems, assignedTicketIds]);
+
+    const allAssignedCommandes = useMemo(() => {
+        const byId = new Map<number, ActionItem>();
+
+        allActionItems
+            .filter((item) => item.kind === 'commande' && !!item.commande?.id)
+            .forEach((item) => {
+                const commandId = Number(item.commande?.id);
+                if (!Number.isFinite(commandId)) {
+                    return;
+                }
+
+                if (!byId.has(commandId)) {
+                    byId.set(commandId, item);
+                }
+            });
+
+        return Array.from(byId.values());
+    }, [allActionItems]);
+
+    const filteredAssignedCommandes = useMemo(() => {
+        const q = query.trim().toLowerCase();
+
+        return allAssignedCommandes.filter((item) => {
+            if (severity !== 'all' && item.severity !== severity) {
+                return false;
+            }
+
+            if (!q) {
+                return true;
+            }
+
+            const haystack = [
+                item.commande?.id?.toString() ?? '',
+                item.commande?.nom ?? '',
+                item.commande?.statut ?? '',
+                item.commande?.fournisseur ?? '',
+                item.commande?.command_number ?? '',
+                item.commande?.ticket_title ?? '',
+                item.reason ?? '',
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return haystack.includes(q);
+        });
+    }, [allAssignedCommandes, query, severity]).sort((a, b) => {
+        const rankDiff = (severityRank[b.severity] ?? 0) - (severityRank[a.severity] ?? 0);
+        if (rankDiff !== 0) {
+            return rankDiff;
+        }
+
+        const aDate = a.commande?.updated_at ? new Date(a.commande.updated_at).getTime() : 0;
+        const bDate = b.commande?.updated_at ? new Date(b.commande.updated_at).getTime() : 0;
+        return bDate - aDate;
+    });
+
+    const filteredCommandOutsideAssignedTickets = useMemo(() => {
+        const q = query.trim().toLowerCase();
+
+        if (severity !== 'all' && severity !== 'critical' && severity !== 'warning') {
+            return [] as TicketItem[];
+        }
+
+        return commandOutsideAssignedTickets.filter((ticket) => {
+            const signals = ticketSignalsById.get(ticket.id) ?? [];
+
+            if (severity === 'critical' && !signals.some((signal) => signal.severity === 'critical')) {
+                return false;
+            }
+
+            if (severity === 'warning' && !signals.some((signal) => signal.severity === 'warning')) {
+                return false;
+            }
+
+            if (!q) {
+                return true;
+            }
+
+            const haystack = [
+                ticket.id?.toString() ?? '',
+                ticket.title ?? '',
+                ticket.status ?? '',
+                ticket.priority ?? '',
+                ticket.requester_name ?? '',
+                ticket.updated_at ?? '',
+                ...signals.flatMap((signal) => signal.messages),
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return haystack.includes(q);
+        });
+    }, [commandOutsideAssignedTickets, query, severity, ticketSignalsById]);
+
+    const filteredAssignedTickets = useMemo(() => {
+        const q = query.trim().toLowerCase();
+
+        return assigned.filter((ticket) => {
+            const signals = ticketSignalsById.get(ticket.id) ?? [];
+
+            if (severity !== 'all' && !signals.some((signal) => signal.severity === severity)) {
+                return false;
+            }
+
+            if (!q) {
+                return true;
+            }
+
+            const haystack = [
+                ticket.id?.toString() ?? '',
+                ticket.title ?? '',
+                ticket.status ?? '',
+                ticket.priority ?? '',
+                ticket.requester_name ?? '',
+                ticket.updated_at ?? '',
+                ...signals.flatMap((signal) => signal.messages),
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return haystack.includes(q);
+        });
+    }, [assigned, query, severity, ticketSignalsById]);
+
+    const mergedAssignedTickets = useMemo(() => {
+        const byId = new Map<number, TicketItem>();
+
+        filteredAssignedTickets.forEach((ticket) => {
+            byId.set(ticket.id, ticket);
+        });
+
+        filteredMentionOutsideAssignedTickets.forEach((ticket) => {
+            if (!byId.has(ticket.id)) {
+                byId.set(ticket.id, ticket);
+            }
+        });
+
+        filteredCommandOutsideAssignedTickets.forEach((ticket) => {
+            if (!byId.has(ticket.id)) {
+                byId.set(ticket.id, ticket);
+            }
+        });
+
+        return Array.from(byId.values()).sort((a, b) => {
+            const rankFor = (ticketId: number) => {
+                const signals = ticketSignalsById.get(ticketId) ?? [];
+                if (signals.length === 0) {
+                    return 0;
+                }
+
+                return Math.max(...signals.map((signal) => severityRank[signal.severity] ?? 0));
+            };
+
+            const rankDiff = rankFor(b.id) - rankFor(a.id);
+            if (rankDiff !== 0) {
+                return rankDiff;
+            }
+
+            const aDate = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const bDate = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return bDate - aDate;
+        });
+    }, [filteredAssignedTickets, filteredMentionOutsideAssignedTickets, filteredCommandOutsideAssignedTickets, ticketSignalsById, severityRank]);
+
+    const mentionOutsideTicketIds = useMemo(() => {
+        return new Set(mentionOutsideAssignedTickets.map((ticket) => ticket.id));
+    }, [mentionOutsideAssignedTickets]);
+
+    const commandOutsideTicketIds = useMemo(() => {
+        return new Set(commandOutsideAssignedTickets.map((ticket) => ticket.id));
+    }, [commandOutsideAssignedTickets]);
+
+    const assignedPanelCount = useMemo(() => {
+        const ids = new Set<number>();
+        assigned.forEach((ticket) => ids.add(ticket.id));
+        mentionOutsideAssignedTickets.forEach((ticket) => ids.add(ticket.id));
+        commandOutsideAssignedTickets.forEach((ticket) => ids.add(ticket.id));
+        return ids.size + allAssignedCommandes.length;
+    }, [assigned, mentionOutsideAssignedTickets, commandOutsideAssignedTickets, allAssignedCommandes.length]);
+
+    const unreadCount = Number((page.props as any).notifications?.unread_count ?? 0);
+
+    const validateTicketNotification = (ticketId: number) => {
+        if (validatingTicketId !== null) {
+            return;
+        }
+
+        setValidatingTicketId(ticketId);
+
+        router.post(
+            `/dashboard/notifications/validate-ticket/${ticketId}`,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setValidatingTicketId(null),
+            },
+        );
+    };
 
     const metricCards = isAgent
         ? [
@@ -232,6 +527,146 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
         `flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] transition-all duration-200 active:scale-95 ${
             active ? 'bg-muted/60 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/40'
         }`;
+
+    const renderSignalIcons = (ticketId: number) => {
+        const signals = ticketSignalsById.get(ticketId) ?? [];
+
+        if (signals.length === 0) {
+            return null;
+        }
+
+        return (
+            <div className="flex items-center gap-1">
+                {signals.map((signal) => {
+                    const Icon = signalIcon(signal.severity);
+
+                    return (
+                        <Tooltip key={`${ticketId}-${signal.severity}`}>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/80">
+                                    <Icon className={`h-4 w-4 ${signalIconClass(signal.severity)}`} />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                                <div className="space-y-1">
+                                    <div className="font-semibold">{severityLabel(signal.severity)}</div>
+                                    {signal.messages.slice(0, 3).map((message, idx) => (
+                                        <div key={`${ticketId}-${signal.severity}-${idx}`}>{message}</div>
+                                    ))}
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    const renderTicketCard = (ticket: TicketItem, compact = false, isOutsideMention = false, isOutsideCommand = false) => (
+        <Link
+            key={ticket.id}
+            href={`/tickets/${ticket.id}`}
+            className={`block rounded-lg border transition-all duration-200 hover:bg-muted/40 active:scale-[0.99] ${
+                isOutsideCommand
+                    ? 'border-[#e6892e]'
+                    : isOutsideMention
+                      ? 'border-[#2a3ff5]'
+                      : 'border-border'
+            } ${
+                compact ? 'p-3' : 'rounded-xl p-4'
+            }`}
+        >
+            {(ticketSignalsById.get(ticket.id) ?? []).some((signal) => signal.severity === 'notification') && (
+                <div className="mb-2 flex justify-end">
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            validateTicketNotification(ticket.id);
+                        }}
+                        disabled={validatingTicketId === ticket.id}
+                        className="inline-flex items-center rounded-md border border-primary/40 bg-background px-2 py-1 text-[11px] font-medium text-primary hover:bg-muted disabled:opacity-60"
+                    >
+                        {validatingTicketId === ticket.id ? 'Validation...' : 'Valider la notification'}
+                    </button>
+                </div>
+            )}
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-muted-foreground`}>{ticket.requester_name ?? 'Demandeur inconnu'}</div>
+                    <div className={`break-words ${compact ? 'text-sm leading-snug' : 'font-medium leading-tight'}`}>Ticket n°{ticket.id} · {ticket.title ?? 'Sans titre'}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {renderSignalIcons(ticket.id)}
+                    {isOutsideMention && (
+                        <Badge variant="outline" className="shrink-0">
+                            Mention @
+                        </Badge>
+                    )}
+                    <Badge className={`shrink-0 ${statusBadgeClass(ticket.status)}`} variant="outline">
+                        {statusLabel(ticket.status)}
+                    </Badge>
+                </div>
+            </div>
+
+            <p className={`mt-2 break-words ${compact ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
+                <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${priorityBadgeClass(ticket.priority)}`}>
+                    Priorité {priorityLabel(ticket.priority)}
+                </span>
+                {ticket.updated_at ? ` · Mis à jour le ${formatDateTimeFr(ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
+            </p>
+        </Link>
+    );
+
+    const renderCommandeCard = (item: ActionItem, compact = false) => {
+        const commande = item.commande;
+        if (!commande) {
+            return null;
+        }
+
+        const CommandSignalIcon = signalIcon(item.severity as Exclude<Severity, 'all'>);
+
+        return (
+            <Link
+                key={`commande-${commande.id}`}
+                href={item.href}
+                className={`block rounded-lg border border-[#22a06b] transition-all duration-200 hover:bg-muted/40 active:scale-[0.99] ${
+                    compact ? 'p-3' : 'rounded-xl p-4'
+                }`}
+            >
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-muted-foreground`}>{commande.fournisseur || 'Fournisseur non renseigne'}</div>
+                        <div className={`break-words ${compact ? 'text-sm leading-snug' : 'font-medium leading-tight'}`}>Commande n°{commande.id}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/80">
+                                    <CommandSignalIcon className={`h-4 w-4 ${signalIconClass(item.severity as Exclude<Severity, 'all'>)}`} />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                                <div className="space-y-1">
+                                    <div className="font-semibold">{severityLabel(item.severity)}</div>
+                                    <div>{item.reason}</div>
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                        <Badge variant="outline" className="shrink-0 border-[#22a06b] text-[#1c7a53]">
+                            Commande
+                        </Badge>
+                    </div>
+                </div>
+
+                <p className={`mt-2 break-words ${compact ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
+                    {commande.ticket_title ? `Ticket: ${commande.ticket_title}` : 'Aucun ticket lie'}
+                    {commande.command_number ? ` · Ref: ${commande.command_number}` : ''}
+                </p>
+            </Link>
+        );
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -287,139 +722,46 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                         <Card className="border-border/70 bg-background">
                             <CardHeader className="space-y-3 border-b border-border/60 p-3 pb-3">
                                 <div className="flex items-center justify-between gap-3">
-                                    <CardTitle className="text-sm">
-                                        {activeTab === 'assigned' ? assignedTabLabel(assignedCount) : tabLabel[activeTab]}
-                                    </CardTitle>
-                                    {isAgent && (
-                                        <div className="ml-auto grid w-full max-w-[240px] grid-cols-2 gap-1 rounded-2xl border border-border/70 p-1">
-                                            <button type="button" onClick={() => setActiveTab('recommended')} className={tabButtonClass(activeTab === 'recommended')}>
-                                                A. recommandées
-                                            </button>
-                                            <button type="button" onClick={() => setActiveTab('assigned')} className={tabButtonClass(activeTab === 'assigned')}>
-                                                Tickets
-                                            </button>
-                                        </div>
-                                    )}
+                                    <CardTitle className="text-sm">Attitré ({assignedPanelCount})</CardTitle>
                                 </div>
                                 <div className="space-y-2">
-                                    {activeTab === 'recommended' ? (
-                                        <>
-                                            <div className="relative">
-                                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                                <Input
-                                                    value={query}
-                                                    onChange={(event) => setQuery(event.target.value)}
-                                                    placeholder="Rechercher"
-                                                    className="h-9 pl-9 text-sm"
-                                                />
-                                            </div>
-                                            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                                                {(['all', 'critical', 'warning', 'info'] as Severity[]).map((value) => (
-                                                    <Button
-                                                        key={value}
-                                                        type="button"
-                                                        variant={severity === value ? 'default' : 'outline'}
-                                                        size="sm"
-                                                        onClick={() => setSeverity(value)}
-                                                        className="h-8 shrink-0 px-3"
-                                                    >
-                                                        {severityLabel(value)}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="relative">
-                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                            <Input
-                                                value={query}
-                                                onChange={(event) => setQuery(event.target.value)}
-                                                placeholder="Rechercher un ticket attitré"
-                                                className="h-9 pl-9 text-sm"
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            value={query}
+                                            onChange={(event) => setQuery(event.target.value)}
+                                            placeholder="Rechercher dans attitré"
+                                            className="h-9 pl-9 text-sm"
+                                        />
+                                    </div>
+                                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                                        {(['notification', 'critical', 'warning', 'info', 'all'] as Severity[]).map((value) => (
+                                            <Button
+                                                key={value}
+                                                type="button"
+                                                variant={severity === value ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setSeverity(value)}
+                                                className="h-8 shrink-0 px-3"
+                                            >
+                                                {severityLabel(value)}
+                                            </Button>
+                                        ))}
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-2 p-3 pt-1">
-                                {activeTab === 'recommended' ? (
-                                    filteredActionItems.length === 0 ? (
-                                        <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                                            Aucune action ne correspond au filtre actuel.
-                                        </div>
-                                    ) : (
-                                        filteredActionItems.map((item) => (
-                                            <Link
-                                                key={item.id}
-                                                href={item.href}
-                                                className="block rounded-lg border border-border p-3 transition-all duration-200 hover:bg-muted/40 active:scale-[0.99]"
-                                            >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="min-w-0">
-                                                        <div className="text-[11px] text-muted-foreground">
-                                                            {item.kind === 'ticket'
-                                                                ? `#${item.ticket?.id ?? '-'} ${item.ticket?.title ?? 'Sans titre'}`
-                                                                : `Commande n°${item.commande?.id ?? '-'}`}
-                                                        </div>
-                                                        <div className="break-words text-sm font-medium leading-snug">{item.title}</div>
-                                                    </div>
-                                                    <Badge className="shrink-0" variant={severityBadgeVariant(item.severity)}>
-                                                        {severityLabel(item.severity)}
-                                                    </Badge>
-                                                </div>
-
-                                                <p className="mt-1.5 break-words text-xs text-muted-foreground">{item.reason}</p>
-
-                                                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                                                    {item.age_label && (
-                                                        <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-                                                            <Clock3 className="h-3 w-3" />
-                                                            {item.age_label}
-                                                        </span>
-                                                    )}
-                                                    {(item.tags ?? []).slice(0, 2).map((tag) => (
-                                                        <span key={`${item.id}-${tag}`} className="inline-flex rounded-md border border-border px-2 py-1">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-
-                                                <div className="mt-2 flex items-center justify-end text-xs font-medium">
-                                                    {item.action_label}
-                                                    <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                                                </div>
-                                            </Link>
-                                        ))
-                                    )
-                                ) : filteredAssignedTickets.length === 0 ? (
+                                {mergedAssignedTickets.length === 0 && filteredAssignedCommandes.length === 0 ? (
                                     <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                                        Aucun ticket attitré ne correspond à la recherche actuelle.
+                                        Aucun element attitre ne correspond a la recherche actuelle.
                                     </div>
                                 ) : (
-                                    filteredAssignedTickets.map((ticket) => (
-                                        <Link
-                                            key={ticket.id}
-                                            href={`/tickets/${ticket.id}`}
-                                            className="block rounded-lg border border-border p-3 transition-all duration-200 hover:bg-muted/40 active:scale-[0.99]"
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <div className="text-[11px] text-muted-foreground">{ticket.requester_name ?? 'Demandeur inconnu'}</div>
-                                                    <div className="break-words text-sm font-medium leading-snug">Ticket n°{ticket.id} · {ticket.title ?? 'Sans titre'}</div>
-                                                </div>
-                                                <Badge className={`shrink-0 ${statusBadgeClass(ticket.status)}`} variant="outline">
-                                                    {statusLabel(ticket.status)}
-                                                </Badge>
-                                            </div>
-
-                                            <p className="mt-1.5 break-words text-xs text-muted-foreground">
-                                                <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${priorityBadgeClass(ticket.priority)}`}>
-                                                    Priorité {priorityLabel(ticket.priority)}
-                                                </span>
-                                                {ticket.updated_at ? ` · Mis à jour le ${formatDateTimeFr(ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
-                                            </p>
-                                        </Link>
-                                    ))
+                                    <>
+                                        {mergedAssignedTickets.map((ticket) =>
+                                            renderTicketCard(ticket, true, mentionOutsideTicketIds.has(ticket.id), commandOutsideTicketIds.has(ticket.id)),
+                                        )}
+                                        {filteredAssignedCommandes.map((item) => renderCommandeCard(item, true))}
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
@@ -462,7 +804,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                     </Button>
 
                     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-                        <div className="mx-auto grid w-full max-w-md grid-cols-4 gap-2">
+                        <div className="mx-auto grid w-full max-w-md grid-cols-5 gap-2">
                             <Link href="/dashboard" className={mobileNavItemClass(isMobileNavActive('/dashboard'))}>
                                 <Home className="h-4 w-4" />
                                 Accueil
@@ -477,6 +819,17 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                             >
                                 {isAgent ? <Wrench className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                                 {isAgent ? 'Commandes' : 'Créer'}
+                            </Link>
+                            <Link href="/dashboard?severity=notification" className={mobileNavItemClass(currentUrl.includes('severity=notification'))}>
+                                <span className="relative inline-flex">
+                                    <Bell className="h-4 w-4" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </span>
+                                Notifications
                             </Link>
                             <Link href="/settings/profile" className={mobileNavItemClass(isMobileNavActive('/settings'))}>
                                 <Settings className="h-4 w-4" />
@@ -546,164 +899,45 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                     <Card className="border-border/70 bg-background xl:col-span-2">
                         <CardHeader className="space-y-3 p-4 pb-2">
                             <div className="flex items-start justify-between gap-4">
-                                <CardTitle className={sectionTitleClass}>
-                                        {isAgent && activeTab === 'assigned' ? assignedTabLabel(assignedCount) : 'Actions recommandées'}
-                                </CardTitle>
-                                {isAgent && (
-                                    <div className="inline-flex shrink-0 rounded-lg border border-border/70 p-1 text-sm">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab('recommended')}
-                                            className={`rounded-md px-4 py-1.5 transition-all duration-200 ${
-                                                activeTab === 'recommended' ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'
-                                            }`}
-                                        >
-                                            Actions recommandées
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab('assigned')}
-                                            className={`rounded-md px-4 py-1.5 transition-all duration-200 ${
-                                                activeTab === 'assigned' ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'
-                                            }`}
-                                        >
-                                                    {assignedTabLabel(assignedCount)}
-                                        </button>
-                                    </div>
-                                )}
+                                <CardTitle className={sectionTitleClass}>Attitré ({assignedPanelCount})</CardTitle>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2">
-                                {activeTab === 'recommended' ? (
-                                    <>
-                                        <div className="relative">
-                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                            <Input
-                                                value={query}
-                                                onChange={(event) => setQuery(event.target.value)}
-                                                placeholder="Rechercher un ticket, une commande ou un mot-clé"
-                                                className="pl-9"
-                                            />
-                                        </div>
-                                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-                                            {(['all', 'critical', 'warning', 'info'] as Severity[]).map((value) => (
-                                                <Button
-                                                    key={value}
-                                                    type="button"
-                                                    variant={severity === value ? 'default' : 'outline'}
-                                                    size="sm"
-                                                    onClick={() => setSeverity(value)}
-                                                    className="h-9 shrink-0"
-                                                >
-                                                    {severityLabel(value)}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="relative sm:col-span-2">
-                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                            value={query}
-                                            onChange={(event) => setQuery(event.target.value)}
-                                            placeholder="Rechercher un ticket attitré"
-                                            className="pl-9"
-                                        />
-                                    </div>
-                                )}
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        value={query}
+                                        onChange={(event) => setQuery(event.target.value)}
+                                        placeholder="Rechercher dans attitré"
+                                        className="pl-9"
+                                    />
+                                </div>
+                                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+                                    {(['notification', 'critical', 'warning', 'info', 'all'] as Severity[]).map((value) => (
+                                        <Button
+                                            key={value}
+                                            type="button"
+                                            variant={severity === value ? 'default' : 'outline'}
+                                            size="sm"
+                                            onClick={() => setSeverity(value)}
+                                            className="h-9 shrink-0"
+                                        >
+                                            {severityLabel(value)}
+                                        </Button>
+                                    ))}
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            {activeTab === 'recommended' ? (
-                                filteredActionItems.length === 0 ? (
-                                    <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-sm text-muted-foreground">
-                                        Aucune action ne correspond à votre recherche ou à ce filtre.
-                                    </div>
-                                ) : (
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        {filteredActionItems.map((item) => (
-                                            <Link
-                                                key={item.id}
-                                                href={item.href}
-                                                className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/40 active:scale-[0.99]"
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0 space-y-1">
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {item.kind === 'ticket'
-                                                                ? `#${item.ticket?.id ?? '-'} ${item.ticket?.title ?? 'Sans titre'}`
-                                                                : `Commande n°${item.commande?.id ?? '-'}`}
-                                                        </div>
-                                                        <div className="break-words font-medium leading-tight">{item.title}</div>
-                                                    </div>
-                                                    <Badge className="shrink-0" variant={severityBadgeVariant(item.severity)}>{severityLabel(item.severity)}</Badge>
-                                                </div>
-
-                                                <p className="mt-2 break-words text-sm text-muted-foreground">{item.reason}</p>
-
-                                                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                                    {item.age_label && (
-                                                        <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-                                                            <Clock3 className="h-3 w-3" />
-                                                            {item.age_label}
-                                                        </span>
-                                                    )}
-                                                    {(item.tags ?? []).slice(0, 3).map((tag) => (
-                                                        <span key={`${item.id}-${tag}`} className="inline-flex rounded-md border border-border px-2 py-1">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-
-                                                {item.ticket && (
-                                                    <div className="mt-3 text-xs text-muted-foreground">
-                                                        Statut: {statusLabel(item.ticket.status)} · {item.ticket.messages_count ?? 0} message(s)
-                                                    </div>
-                                                )}
-
-                                                {item.commande && (
-                                                    <div className="mt-3 break-words text-xs text-muted-foreground">
-                                                        {item.commande.ticket_id
-                                                            ? `#${item.commande.ticket_id} ${item.commande.ticket_title ?? 'Sans titre'}`
-                                                            : item.commande.ticket_title ?? 'Ticket lié'} · statut commande: {item.commande.statut ?? 'N/A'}
-                                                    </div>
-                                                )}
-
-                                                <div className="mt-3 flex items-center justify-end text-sm font-medium">
-                                                    {item.action_label}
-                                                    <ArrowRight className="ml-1 h-4 w-4" />
-                                                </div>
-                                            </Link>
-                                        ))}
-                                    </div>
-                                )
-                            ) : filteredAssignedTickets.length === 0 ? (
+                            {mergedAssignedTickets.length === 0 && filteredAssignedCommandes.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-sm text-muted-foreground">
-                                    Aucun ticket attitré ne correspond à votre recherche.
+                                    Aucun element attitre ne correspond a votre recherche.
                                 </div>
                             ) : (
                                 <div className="grid gap-3 md:grid-cols-2">
-                                    {filteredAssignedTickets.map((ticket) => (
-                                        <Link
-                                            key={ticket.id}
-                                            href={`/tickets/${ticket.id}`}
-                                            className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/40 active:scale-[0.99]"
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0 space-y-1">
-                                                    <div className="text-xs text-muted-foreground">{ticket.requester_name ?? 'Demandeur inconnu'}</div>
-                                                    <div className="break-words font-medium leading-tight">Ticket n°{ticket.id} · {ticket.title ?? 'Sans titre'}</div>
-                                                </div>
-                                                <Badge className={`shrink-0 ${statusBadgeClass(ticket.status)}`} variant="outline">{statusLabel(ticket.status)}</Badge>
-                                            </div>
-
-                                            <p className="mt-2 break-words text-sm text-muted-foreground">
-                                                <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${priorityBadgeClass(ticket.priority)}`}>
-                                                    Priorité {priorityLabel(ticket.priority)}
-                                                </span>
-                                                {ticket.updated_at ? ` · Mis à jour le ${formatDateTimeFr(ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
-                                            </p>
-                                        </Link>
-                                    ))}
+                                    {mergedAssignedTickets.map((ticket) =>
+                                        renderTicketCard(ticket, false, mentionOutsideTicketIds.has(ticket.id), commandOutsideTicketIds.has(ticket.id)),
+                                    )}
+                                    {filteredAssignedCommandes.map((item) => renderCommandeCard(item, false))}
                                 </div>
                             )}
                         </CardContent>

@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { BookOpen, Computer, FilePlus, Folder, HardHat, LayoutGrid, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
+import { Bell, BookOpen, Computer, FilePlus, Folder, HardHat, LayoutGrid, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -27,6 +27,11 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard Admin',
         href: '/admin/dashboard',
         icon: ShieldCheck,
+    },
+    {
+        title: 'Notifications',
+        href: '/dashboard?severity=notification',
+        icon: Bell,
     },
     {
         title: 'Tickets',
@@ -94,6 +99,11 @@ const nonAgentNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'Notifications',
+        href: '/dashboard?severity=notification',
+        icon: Bell,
+    },
+    {
         title: 'Tickets',
         href: '/tickets',
         icon: Folder,
@@ -133,6 +143,7 @@ export function AppSidebar() {
     // layout remains stable and users can still return to the home route.
     const isAgent = !!user?.agent;
     const isAdmin = !!(user?.is_admin || user?.agent?.is_admin || preview?.canToggle);
+    const unreadCount = Number((page.props as any).notifications?.unread_count ?? 0);
 
     const setPreviewMode = (mode: 'admin' | 'agent' | 'user') => {
         if (!preview.canToggle || preview.mode === mode) {
@@ -211,6 +222,16 @@ export function AppSidebar() {
                   return item;
               });
 
+    const withNotificationBadge = (items: NavItem[]) =>
+        items.map((item) =>
+            item.title === 'Notifications'
+                ? {
+                      ...item,
+                      badgeCount: unreadCount,
+                  }
+                : item,
+        );
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -228,7 +249,7 @@ export function AppSidebar() {
             {isAgent ? (
                 <>
                     <SidebarContent>
-                        <NavMain items={visibleMainNavItems} />
+                        <NavMain items={withNotificationBadge(visibleMainNavItems)} />
                     </SidebarContent>
 
                     <SidebarFooter>
@@ -241,7 +262,7 @@ export function AppSidebar() {
                 // Dedicated navigation for non-agent users.
                 <>
                     <SidebarContent>
-                        <NavMain items={nonAgentNavItems} />
+                        <NavMain items={withNotificationBadge(nonAgentNavItems)} />
                     </SidebarContent>
                     <SidebarFooter>
                         {previewControls}

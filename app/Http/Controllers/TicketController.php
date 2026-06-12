@@ -17,6 +17,7 @@ use App\Support\TicketTimelineTemplateSettings;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Throwable;
 use Illuminate\Validation\Rule;
 use Inertia\Response;
 
@@ -108,6 +109,38 @@ class TicketController extends Controller
         }
 
         return [];
+    }
+
+    private function buildAgentMentionAliasesForUser(\App\Models\User $user): array
+    {
+        $firstName = trim((string) ($user->first_name ?? ''));
+        $lastName = trim((string) ($user->last_name ?? ''));
+
+        $normalize = function (string $value): string {
+            return trim(
+                Str::of($value)
+                    ->ascii()
+                    ->lower()
+                    ->replaceMatches('/[^a-z0-9]/', '')
+                    ->toString()
+            );
+        };
+
+        $firstNormalized = $normalize($firstName);
+        $lastNormalized = $normalize($lastName);
+
+        $fullAlias = $normalize($firstNormalized . $lastNormalized);
+        $shortAlias = '';
+
+        if ($firstNormalized !== '' && $lastNormalized !== '') {
+            $shortAlias = $normalize(substr($firstNormalized, 0, 1) . substr($lastNormalized, 0, 2));
+        }
+
+        return collect([$fullAlias, $shortAlias])
+            ->filter(fn ($alias) => $alias !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function getOrCreateSpecialCategoryId(string $ticketKind): ?int
@@ -1116,7 +1149,6 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
         $ticket->load(['user.devices', 'assignee', 'category', 'device']);
-        $viewer = Auth::user();
 
         $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
@@ -1132,6 +1164,7 @@ class TicketController extends Controller
             ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->first_name . ' ' . $u->last_name,
+                'mention_aliases' => $this->buildAgentMentionAliasesForUser($u),
                 'specialities' => $u->agent?->specialities?->pluck('name')->values()->all() ?? [],
             ])
             ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))
@@ -1300,6 +1333,7 @@ class TicketController extends Controller
             ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->first_name . ' ' . $u->last_name,
+                'mention_aliases' => $this->buildAgentMentionAliasesForUser($u),
                 'specialities' => $u->agent?->specialities?->pluck('name')->values()->all() ?? [],
             ])
             ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))

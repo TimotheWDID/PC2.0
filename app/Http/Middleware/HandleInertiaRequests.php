@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Notifications\AgentMentionNotification;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Throwable;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -68,6 +70,19 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        $unreadMentionCount = 0;
+
+        if ($request->user()) {
+            try {
+                $unreadMentionCount = (int) $request->user()
+                    ->unreadNotifications()
+                    ->where('type', AgentMentionNotification::class)
+                    ->count();
+            } catch (Throwable $exception) {
+                $unreadMentionCount = 0;
+            }
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -80,6 +95,9 @@ class HandleInertiaRequests extends Middleware
                 'nonAgent' => $nonAgentPreviewActive,
                 'canToggle' => $canToggleNonAgentPreview,
                 'mode' => $previewMode,
+            ],
+            'notifications' => [
+                'unread_count' => $unreadMentionCount,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
