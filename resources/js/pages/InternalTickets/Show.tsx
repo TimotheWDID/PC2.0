@@ -5,6 +5,7 @@ import { type BreadcrumbItem } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDateTimeFr } from '@/lib/datetime'
 
 type Ticket = {
   id: number
@@ -69,13 +70,13 @@ export default function ShowInternalTicket({ ticket, canProcess }: { ticket: Tic
             {ticket.processed_at ? (
               <div>
                 <div className="text-sm font-medium text-foreground">Traitement</div>
-                <div className="text-sm text-muted-foreground">Traite le {ticket.processed_at || '-'}</div>
+                <div className="text-sm text-muted-foreground">Traite le {formatDateTimeFr(ticket.processed_at)}</div>
                 {ticket.processed_by ? <div className="text-sm text-muted-foreground">Par {ticket.processed_by.name}</div> : null}
               </div>
             ) : null}
             <div>
               <div className="text-sm font-medium text-foreground">Créé le</div>
-              <div className="text-sm text-muted-foreground">{ticket.created_at || '-'}</div>
+              <div className="text-sm text-muted-foreground">{formatDateTimeFr(ticket.created_at)}</div>
             </div>
             <div>
               <div className="text-sm font-medium text-foreground">Description</div>

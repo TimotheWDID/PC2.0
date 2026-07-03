@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-react'
+import { formatDateTimeFr } from '@/lib/datetime'
 
 type TicketRow = {
   id: number
@@ -225,7 +226,7 @@ export default function BulkAssign({ tickets, agents }: { tickets: TicketRow[]; 
                       </td>
                       <td className="px-3 py-2 align-top">
                         <p className="font-medium">#{ticket.id} - {ticket.title || 'Sans titre'}</p>
-                        <p className="text-xs text-muted-foreground">{ticket.created_at || '-'}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTimeFr(ticket.created_at)}</p>
                       </td>
                       <td className="px-3 py-2 align-top">{ticket.requester || '-'}</td>
                       <td className="px-3 py-2 align-top">

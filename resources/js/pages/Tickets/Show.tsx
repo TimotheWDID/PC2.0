@@ -516,7 +516,31 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   }, [timelineEvents, timelineSearch, timelineTypeFilter, timelineTechnicianFilter, showRemovedEvents]);
 
   const latestTimelineEvents = useMemo(() => {
-    return timelineEvents.filter((event: any) => !event.is_removed).slice(0, 3);
+    return timelineEvents.filter((event: any) => !event.is_removed).slice(0, 8);
+  }, [timelineEvents]);
+
+  const pendingTimelineTodos = useMemo(() => {
+    return timelineEvents
+      .filter((event: any) => !event.is_removed && Array.isArray(event.details?.actions))
+      .flatMap((event: any) =>
+        event.details.actions
+          .map((action: any, originalIndex: number) => ({
+            event,
+            action,
+            originalIndex,
+          }))
+          .filter(({ action }: any) => !action.done),
+      )
+      .sort((left: any, right: any) => {
+        const leftAt = left.event?.happened_at ? new Date(left.event.happened_at).getTime() : 0;
+        const rightAt = right.event?.happened_at ? new Date(right.event.happened_at).getTime() : 0;
+
+        if (leftAt !== rightAt) {
+          return rightAt - leftAt;
+        }
+
+        return left.originalIndex - right.originalIndex;
+      });
   }, [timelineEvents]);
 
   const operationalInsights = useMemo(() => {
@@ -786,7 +810,10 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   };
 
   const renderTimelineEventItem = (event: any, showActions = true) => (
-    <div key={event.id} className="relative border-l pl-5 pb-4 last:pb-0">
+    <div
+      key={event.id}
+      className={`relative rounded-lg border border-border/70 bg-background/80 px-3 py-3 shadow-sm ${event.is_removed ? 'opacity-75' : ''}`}
+    >
       <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${getTimelineAccent(event.event_type).dot}`} />
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -856,12 +883,18 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
         <div className="mt-2 rounded-md border border-border/70 bg-muted/20 p-2">
           <p className="text-[11px] font-medium text-foreground">Actions a realiser</p>
           <div className="mt-1 space-y-1.5">
-            {event.details.actions.map((action: any, index: number) => {
-              const actionKey = `${event.id}:${index}`;
+            {[...event.details.actions]
+              .map((action: any, originalIndex: number) => ({ action, originalIndex }))
+              .sort((left: any, right: any) => Number(Boolean(left.done)) - Number(Boolean(right.done)))
+              .map(({ action, originalIndex }: any) => {
+              const actionKey = `${event.id}:${originalIndex}`;
               const isPending = pendingTimelineActions.includes(actionKey);
 
               return (
-                <div key={`${event.id}-act-${index}`} className="text-[11px] text-muted-foreground">
+                <div
+                  key={`${event.id}-act-${originalIndex}`}
+                  className={`text-[11px] ${action.done ? 'text-muted-foreground' : 'rounded-md border border-border/60 bg-background/80 px-2 py-1.5 text-foreground shadow-sm'}`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       {isAgent && !event.is_removed ? (
@@ -873,14 +906,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           <Checkbox
                             checked={Boolean(action.done)}
                             disabled={isPending}
-                            onCheckedChange={(value) => handleToggleTimelineAction(event.id, index, Boolean(value))}
-                            id={`timeline-action-${event.id}-${index}`}
+                            onCheckedChange={(value) => handleToggleTimelineAction(event.id, originalIndex, Boolean(value))}
+                            id={`timeline-action-${event.id}-${originalIndex}`}
                           />
                         )
                       ) : (
                         <span className={`inline-block h-2.5 w-2.5 rounded-full ${action.done ? 'bg-primary' : 'bg-muted-foreground/50'}`} />
                       )}
-                      <p>{action.done ? 'FAIT' : 'A FAIRE'} - {action.label}</p>
+                      <p className="leading-snug">{action.done ? 'FAIT' : 'A FAIRE'} - {action.label}</p>
                     </div>
                   </div>
                   {action.done && (
@@ -890,7 +923,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                   )}
                 </div>
               );
-            })}
+              })}
           </div>
         </div>
       )}
@@ -1162,8 +1195,11 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 <div id="ticket-discussion" className="min-w-0 scroll-mt-20">
                   <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} mentionCandidates={agents} />
                 </div>
-                <Card id="ticket-suivi-tech" className="w-full max-w-full scroll-mt-20 overflow-hidden">
-                  <CardHeader className="pb-3 bg-muted/10">
+                <Card
+                  id="ticket-suivi-tech"
+                  className="w-full max-w-full scroll-mt-20 overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-background to-muted/20 shadow-sm"
+                >
+                  <CardHeader className="pb-4 bg-muted/10">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <History className="h-4 w-4" />
@@ -1305,13 +1341,56 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         </Dialog>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Apercu immediat des 3 dernieres actions technicien. Ouvrez l'historique pour la vue complete.</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                      <Badge className="bg-primary text-primary-foreground">Suivi prioritaire</Badge>
+                      <Badge variant="outline">Dernier mouvement: {formatElapsedFromNow(operationalInsights.latestActivityAt)}</Badge>
+                      <Badge variant="outline">Actions tech: {operationalInsights.technicianActionsCount}</Badge>
+                      <Badge variant="outline">{operationalInsights.isAssigned ? 'Technicien assigne' : 'Non assigne'}</Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">Apercu immediat des 8 dernieres actions technicien. Ouvrez l'historique pour la vue complete.</p>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    {pendingTimelineTodos.length > 0 && (
+                      <div className="mb-3 rounded-xl border border-border/70 bg-background/80 p-3 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-primary">A faire</p>
+                            <p className="text-[11px] text-muted-foreground">Actions technicien non terminees, remontees en premier.</p>
+                          </div>
+                          <Badge variant="secondary">{pendingTimelineTodos.length} en attente</Badge>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {pendingTimelineTodos.map(({ event, action, originalIndex }: any) => (
+                            <div
+                              key={`pending-todo-${event.id}-${originalIndex}`}
+                              className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2"
+                            >
+                              <div className="min-w-0 space-y-1">
+                                <p className="text-sm font-medium leading-snug text-foreground">{action.label}</p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {event.summary} • {event.technician?.name ?? 'Technicien'} • {formatDateTime(event.happened_at)}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 shrink-0"
+                                  onClick={() => handleToggleTimelineAction(event.id, originalIndex, true)}
+                                >
+                                  Fait
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {latestTimelineEvents.length === 0 ? (
                       <div className="text-sm text-muted-foreground">Aucune action technicien enregistrée pour le moment.</div>
                     ) : (
-                      <div className="space-y-4">
+                      <div className="space-y-3 rounded-xl border border-border/70 bg-background/80 p-3">
                         {latestTimelineEvents.map((event: any) => renderTimelineEventItem(event, false))}
                       </div>
                     )}

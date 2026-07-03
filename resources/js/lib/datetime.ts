@@ -1,4 +1,5 @@
 const BACKEND_DATETIME_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const DEFAULT_TIMEZONE = 'Europe/Paris';
 
 export const parseBackendDate = (value?: string | null): Date | null => {
   if (!value) {
@@ -37,6 +38,7 @@ export const formatDateTimeFr = (
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: DEFAULT_TIMEZONE,
     ...options,
   });
 };
@@ -58,6 +60,7 @@ export const formatDateFr = (
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: DEFAULT_TIMEZONE,
     ...options,
   });
 };

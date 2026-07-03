@@ -7,6 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { formatDateFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import { SortableTh, useSortableData } from '@/components/sortable-table';
@@ -39,20 +41,6 @@ type Commande = {
   ticket?: Ticket;
 };
 
-type PaginatedCommandes = {
-  data: Commande[];
-  current_page: number;
-  last_page: number;
-  per_page: number;
-  total: number;
-};
-
-type Filters = {
-  statut?: string;
-  fournisseur?: string;
-  search?: string;
-};
-
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Commandes', href: '/commandes' },
 ];
@@ -73,12 +61,51 @@ const statutColors: Record<string, string> = {
   'traité': 'status-badge-traite',
 };
 
-export default function Index({ commandes, filters }: { commandes: PaginatedCommandes; filters: Filters }) {
-  const [search, setSearch] = useState(filters?.search || '');
-  const [statut, setStatut] = useState(filters?.statut || '');
-  const [fournisseur, setFournisseur] = useState(filters?.fournisseur || '');
+export default function Index({ commandes }: { commandes: Commande[] }) {
+  const [query, setQuery] = useState('');
+  const [fournisseurQuery, setFournisseurQuery] = useState('');
 
-  const { sortedItems: sortedCommandes, sortState, requestSort } = useSortableData(commandes.data ?? [], {
+  const [statusFilters, setStatusFilters] = useState({
+    new: true,
+    panier: true,
+    commandé: true,
+    réceptionner: true,
+    traité: false,
+  });
+
+  const toggleStatus = (status: keyof typeof statusFilters) => {
+    setStatusFilters((prev) => ({ ...prev, [status]: !prev[status] }));
+  };
+
+  const filtered = (commandes ?? []).filter((commande) => {
+    const searchLower = query.toLowerCase();
+    const fournisseurLower = fournisseurQuery.toLowerCase();
+
+    const userLabel = commande.user
+      ? (commande.user.name || `${commande.user.first_name ?? ''} ${commande.user.last_name ?? ''}`.trim() || commande.user.email)
+      : '';
+
+    const matchesSearch = (
+      String(commande.id).includes(query)
+      || (commande.nom ?? '').toLowerCase().includes(searchLower)
+      || (commande.command_number ?? '').toLowerCase().includes(searchLower)
+      || (commande.fournisseur ?? '').toLowerCase().includes(searchLower)
+      || (commande.invoice_id ?? '').toLowerCase().includes(searchLower)
+      || String(commande.ticket_id ?? '').includes(query)
+      || userLabel.toLowerCase().includes(searchLower)
+      || (commande.ticket?.title ?? '').toLowerCase().includes(searchLower)
+    );
+
+    const matchesFournisseur =
+      !fournisseurQuery.trim() ||
+      (commande.fournisseur ?? '').toLowerCase().includes(fournisseurLower);
+
+    const matchesStatus = statusFilters[commande.statut as keyof typeof statusFilters] ?? true;
+
+    return matchesSearch && matchesFournisseur && matchesStatus;
+  });
+
+  const { sortedItems: sortedCommandes, sortState, requestSort } = useSortableData(filtered, {
     id: (commande) => commande.id,
     nom: (commande) => commande.nom ?? '',
     command_number: (commande) => commande.command_number ?? '',
@@ -91,63 +118,26 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
     created_at: (commande) => commande.created_at ?? '',
   });
 
-  const handleFilter = () => {
-    router.get('/commandes', { search, statut, fournisseur }, { preserveState: true });
-  };
-
-  const handleReset = () => {
-    setSearch('');
-    setStatut('');
-    setFournisseur('');
-    router.get('/commandes');
-  };
-
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Commandes" />
       <div className="py-2 sm:py-4 w-full">
         <Heading title="Commandes" description="Gestion des commandes" />
 
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Filtres</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4">
-              <Input
-                placeholder="Rechercher ID, sujet, demandeur, ticket..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <Input
-                placeholder="Fournisseur"
-                value={fournisseur}
-                onChange={(e) => setFournisseur(e.target.value)}
-              />
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={statut}
-                onChange={(e) => setStatut(e.target.value)}
-              >
-                <option value="">Tous</option>
-                <option value="new">Nouveau</option>
-                <option value="panier">Panier</option>
-                <option value="commandé">Commandé</option>
-                <option value="réceptionner">Réceptionné</option>
-                <option value="traité">Traité</option>
-              </select>
-              <div className="flex gap-2">
-                <Button onClick={handleFilter} className="flex-1 md:flex-none">Filtrer</Button>
-                <Button variant="outline" onClick={handleReset} className="flex-1 md:flex-none">Réinitialiser</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Liste des commandes ({commandes.total})</CardTitle>
+            <CardTitle>Liste des commandes ({sortedCommandes.length})</CardTitle>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Input
+                placeholder="Rechercher ID, sujet, demandeur, ticket..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <Input
+                placeholder="Filtrer par fournisseur"
+                value={fournisseurQuery}
+                onChange={(e) => setFournisseurQuery(e.target.value)}
+              />
               <Link href="/commandes/create-bulk">
                 <Button variant="outline" className="w-full sm:w-auto">Commande groupée</Button>
               </Link>
@@ -157,10 +147,56 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
             </div>
           </CardHeader>
 
-          <CardContent className="p-0">
+          <CardContent className="pb-4">
+            <div className="flex flex-wrap gap-3 mb-2 px-4 py-2 border-b">
+              <span className="text-xs text-muted-foreground mr-2">Filtrer par statut :</span>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="filter-new"
+                  checked={statusFilters.new}
+                  onCheckedChange={() => toggleStatus('new')}
+                />
+                <Label htmlFor="filter-new" className="cursor-pointer text-xs">Nouveau</Label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="filter-panier"
+                  checked={statusFilters.panier}
+                  onCheckedChange={() => toggleStatus('panier')}
+                />
+                <Label htmlFor="filter-panier" className="cursor-pointer text-xs">Panier</Label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="filter-commande"
+                  checked={statusFilters.commandé}
+                  onCheckedChange={() => toggleStatus('commandé')}
+                />
+                <Label htmlFor="filter-commande" className="cursor-pointer text-xs">Commandé</Label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="filter-reception"
+                  checked={statusFilters.réceptionner}
+                  onCheckedChange={() => toggleStatus('réceptionner')}
+                />
+                <Label htmlFor="filter-reception" className="cursor-pointer text-xs">Réceptionné</Label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="filter-traite"
+                  checked={statusFilters.traité}
+                  onCheckedChange={() => toggleStatus('traité')}
+                />
+                <Label htmlFor="filter-traite" className="cursor-pointer text-xs">Traité</Label>
+              </div>
+            </div>
+          </CardContent>
+
+          <CardContent className="p-0 pt-0">
             <div className="space-y-2 p-3 sm:hidden">
-              {commandes.data && commandes.data.length > 0 ? (
-                commandes.data.map((commande) => (
+              {sortedCommandes.length > 0 ? (
+                sortedCommandes.map((commande) => (
                   <div key={commande.id} className="rounded-md border p-3 transition-colors hover:bg-muted/40">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <p className="line-clamp-2 text-sm font-semibold">#{commande.id} - {commande.nom}</p>
@@ -267,34 +303,6 @@ export default function Index({ commandes, filters }: { commandes: PaginatedComm
                 </tbody>
               </table>
             </div>
-
-            {commandes.last_page > 1 && (
-              <div className="flex items-center justify-between px-4 py-4 border-t">
-                <div className="text-sm text-muted-foreground">
-                  Page {commandes.current_page} sur {commandes.last_page}
-                </div>
-                <div className="flex gap-2">
-                  {commandes.current_page > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => router.get(`/commandes?page=${commandes.current_page - 1}`)}
-                    >
-                      Précédent
-                    </Button>
-                  )}
-                  {commandes.current_page < commandes.last_page && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => router.get(`/commandes?page=${commandes.current_page + 1}`)}
-                    >
-                      Suivant
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

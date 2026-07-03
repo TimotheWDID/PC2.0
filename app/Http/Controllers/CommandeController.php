@@ -123,49 +123,12 @@ class CommandeController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Commande::with(['user', 'ticket']);
-
-        // Filter by status if provided
-        if ($request->has('statut') && $request->statut !== '') {
-            $query->where('statut', $request->statut);
-        }
-
-        // Filter by fournisseur if provided
-        if ($request->has('fournisseur') && $request->fournisseur !== '') {
-            $query->byFournisseur($request->fournisseur);
-        }
-
-        // Search functionality
-        if ($request->has('search') && $request->search !== '') {
-            $search = trim((string) $request->search);
-            $searchNumeric = is_numeric($search) ? (int) $search : null;
-            $query->where(function ($q) use ($search, $searchNumeric) {
-                $q->where('command_number', 'like', "%{$search}%")
-                    ->orWhere('nom', 'like', "%{$search}%")
-                    ->orWhere('fournisseur', 'like', "%{$search}%")
-                    ->orWhere('invoice_id', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($userQuery) use ($search) {
-                        $userQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('ticket', function ($ticketQuery) use ($search) {
-                        $ticketQuery->where('title', 'like', "%{$search}%");
-                    });
-
-                if (!is_null($searchNumeric)) {
-                    $q->orWhere('id', $searchNumeric)
-                        ->orWhere('ticket_id', $searchNumeric)
-                        ->orWhere('user_id', $searchNumeric);
-                }
-            });
-        }
-
-        $commandes = $query->orderBy('created_at', 'desc')->paginate(15);
+        $commandes = Commande::with(['user', 'ticket'])
+            ->orderByDesc('created_at')
+            ->get();
 
         return Inertia::render('Commandes/Index', [
             'commandes' => $commandes,
-            'filters' => $request->only(['statut', 'fournisseur', 'search']),
         ]);
     }
 

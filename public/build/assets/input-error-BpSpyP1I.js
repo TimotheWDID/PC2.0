@@ -1,0 +1,1 @@
+import{j as o}from"./app-CowzUoFT.js";import{c as s}from"./button-CKmIF_o4.js";function i({message:t,className:r="",...n}){return t?o.jsx("p",{...n,className:s("text-sm text-destructive",r),children:t}):null}export{i as I};

@@ -111,8 +111,8 @@ class DashboardController extends Controller
             'messages_count' => $ticket->messages_count ?? 0,
             'is_locked' => (bool) $ticket->is_locked,
             'is_resolved' => (bool) $ticket->is_resolved,
-            'created_at' => $ticket->created_at ? $ticket->created_at->toDateTimeString() : null,
-            'updated_at' => $ticket->updated_at ? $ticket->updated_at->toDateTimeString() : null,
+            'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
+            'updated_at' => $ticket->updated_at ? $ticket->updated_at->toIso8601String() : null,
         ];
     }
 
@@ -127,8 +127,8 @@ class DashboardController extends Controller
             'ticket_id' => $commande->ticket_id,
             'ticket_title' => $commande->ticket?->title ?? null,
             'ticket_status' => $commande->ticket?->status ?? null,
-            'updated_at' => $commande->updated_at ? $commande->updated_at->toDateTimeString() : null,
-            'created_at' => $commande->created_at ? $commande->created_at->toDateTimeString() : null,
+            'updated_at' => $commande->updated_at ? $commande->updated_at->toIso8601String() : null,
+            'created_at' => $commande->created_at ? $commande->created_at->toIso8601String() : null,
         ];
     }
 

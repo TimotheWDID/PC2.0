@@ -148,8 +148,8 @@ class DeviceController extends Controller
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'assignee' => $ticket->assignee ? trim(($ticket->assignee->first_name ?? '') . ' ' . ($ticket->assignee->last_name ?? '')) : null,
-                'created_at' => $ticket->created_at?->toDateTimeString(),
-                'updated_at' => $ticket->updated_at?->toDateTimeString(),
+                'created_at' => $ticket->created_at?->toIso8601String(),
+                'updated_at' => $ticket->updated_at?->toIso8601String(),
             ])
             ->values();
 
@@ -164,7 +164,7 @@ class DeviceController extends Controller
                 'event_type' => $event->event_type,
                 'summary' => $event->summary,
                 'details' => $event->details,
-                'happened_at' => $event->happened_at?->toDateTimeString(),
+                'happened_at' => $event->happened_at?->toIso8601String(),
                 'ticket_id' => $event->ticket_id,
                 'technician' => $event->technician
                     ? trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? ''))

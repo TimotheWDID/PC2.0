@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -72,6 +72,7 @@ export default function CreateTicket({
   const [pendingPrintAfterPasswordConfirm, setPendingPrintAfterPasswordConfirm] = useState(false)
   const [showQuickDeviceDialog, setShowQuickDeviceDialog] = useState(false)
   const [showQuickCommandeDialog, setShowQuickCommandeDialog] = useState(false)
+  const isSubmittingRef = useRef(false)
   const [newUserData, setNewUserData] = useState({
     first_name: '',
     last_name: '',
@@ -135,6 +136,25 @@ export default function CreateTicket({
     )
   }, [searchQuery, users])
 
+  useEffect(() => {
+    const handleInertiaInvalid = (event: Event) => {
+      if (!isSubmittingRef.current) {
+        return
+      }
+
+      const detail = (event as CustomEvent<{ response?: { status?: number } }>).detail
+      if (detail?.response?.status === 419) {
+        window.location.reload()
+      }
+    }
+
+    document.addEventListener('inertia:invalid', handleInertiaInvalid)
+
+    return () => {
+      document.removeEventListener('inertia:invalid', handleInertiaInvalid)
+    }
+  }, [])
+
   const submit = (e: React.SyntheticEvent, printLabel = false) => {
     e.preventDefault()
 
@@ -153,8 +173,12 @@ export default function CreateTicket({
       password_empty_confirmed: false,
       print_label: printLabel ? '1' : '0',
     }))
+    isSubmittingRef.current = true
     post('/tickets', {
-      onFinish: () => transform((current) => current),
+      onFinish: () => {
+        isSubmittingRef.current = false
+        transform((current) => current)
+      },
     })
   }
 
@@ -171,8 +195,12 @@ export default function CreateTicket({
       print_label: pendingPrintAfterPasswordConfirm ? '1' : '0',
     }))
 
+    isSubmittingRef.current = true
     post('/tickets', {
-      onFinish: () => transform((current) => current),
+      onFinish: () => {
+        isSubmittingRef.current = false
+        transform((current) => current)
+      },
     })
   }
 

@@ -247,7 +247,7 @@ class AdminDashboardController extends Controller
                 'stalled_count'    => $stalledCount,
                 'pending_too_long' => $pendingTooLong,
                 'alert_count'      => $alertCount,
-                'last_activity'    => $lastTicket?->updated_at?->toDateTimeString(),
+                'last_activity'    => $lastTicket?->updated_at?->toIso8601String(),
                 'last_activity_label' => $lastTicket
                     ? 'il y a ' . $this->formatDelayLabel($lastTicket->updated_at)
                     : 'Aucune activité',
@@ -281,8 +281,8 @@ class AdminDashboardController extends Controller
                     'priority'       => $ticket->priority,
                     'category'       => $ticket->category?->name,
                     'requester_name' => $this->formatUserName($ticket->user),
-                    'created_at'     => $ticket->created_at?->toDateTimeString(),
-                    'updated_at'     => $ticket->updated_at?->toDateTimeString(),
+                    'created_at'     => $ticket->created_at?->toIso8601String(),
+                    'updated_at'     => $ticket->updated_at?->toIso8601String(),
                     'age_label'      => 'Depuis ' . $this->formatDelayLabel($ticket->created_at),
                 ];
             });
@@ -311,7 +311,7 @@ class AdminDashboardController extends Controller
                     'category'       => $ticket->category?->name,
                     'requester_name' => $this->formatUserName($ticket->user),
                     'assignee_name'  => $this->formatUserName($ticket->assignee),
-                    'updated_at'     => $ticket->updated_at?->toDateTimeString(),
+                    'updated_at'     => $ticket->updated_at?->toIso8601String(),
                     'stalled_since'  => 'Depuis ' . $this->formatDelayLabel($ticket->updated_at),
                 ];
             });
@@ -340,7 +340,7 @@ class AdminDashboardController extends Controller
                     'category'       => $ticket->category?->name,
                     'requester_name' => $this->formatUserName($ticket->user),
                     'assignee_name'  => $this->formatUserName($ticket->assignee),
-                    'updated_at'     => $ticket->updated_at?->toDateTimeString(),
+                    'updated_at'     => $ticket->updated_at?->toIso8601String(),
                     'pending_since'  => 'En attente depuis ' . $this->formatDelayLabel($ticket->updated_at),
                 ];
             });
@@ -369,8 +369,8 @@ class AdminDashboardController extends Controller
                     'requester_name' => $this->formatUserName($ticket->user),
                     'assignee_name'  => $this->formatUserName($ticket->assignee),
                     'messages_count' => $ticket->messages_count ?? 0,
-                    'updated_at'     => $ticket->updated_at?->toDateTimeString(),
-                    'created_at'     => $ticket->created_at?->toDateTimeString(),
+                    'updated_at'     => $ticket->updated_at?->toIso8601String(),
+                    'created_at'     => $ticket->created_at?->toIso8601String(),
                 ];
             });
 
@@ -508,7 +508,7 @@ class AdminDashboardController extends Controller
                     'fournisseur'  => $commande->fournisseur,
                     'ticket_id'    => $commande->ticket_id,
                     'ticket_title' => $commande->ticket?->title,
-                    'updated_at'   => $commande->updated_at?->toDateTimeString(),
+                    'updated_at'   => $commande->updated_at?->toIso8601String(),
                     'stalled_since'=> 'Depuis ' . $this->formatDelayLabel($commande->updated_at),
                 ];
             });

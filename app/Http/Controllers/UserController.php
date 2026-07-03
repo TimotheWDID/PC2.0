@@ -46,7 +46,7 @@ class UserController extends Controller
                 'name' => $u->name,
                 'email' => $u->email,
                 'phone' => $u->phone ?? null,
-                'created_at' => $u->created_at?->toDateTimeString(),
+                'created_at' => $u->created_at?->toIso8601String(),
             ];
         });
 
@@ -94,7 +94,7 @@ class UserController extends Controller
                     'title' => $ticket->title,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
-                    'created_at' => $ticket->created_at?->toDateTimeString(),
+                    'created_at' => $ticket->created_at?->toIso8601String(),
                     'device' => $ticket->device ? [
                         'id' => $ticket->device->id,
                         'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
@@ -128,7 +128,7 @@ class UserController extends Controller
                     'title' => $ticket->title,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
-                    'created_at' => $ticket->created_at?->toDateTimeString(),
+                    'created_at' => $ticket->created_at?->toIso8601String(),
                     'device' => $ticket->device ? [
                         'id' => $ticket->device->id,
                         'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),

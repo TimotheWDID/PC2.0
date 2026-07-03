@@ -452,8 +452,8 @@ class TicketController extends Controller
                     ? ($t->ticket_kind ?? 'standard')
                     : $this->inferTicketKindFromCategoryName($t->category?->name),
                 'status' => $t->status ?? null,
-                'created_at' => $t->created_at ? $t->created_at->toDateTimeString() : null,
-                'updated_at' => $t->updated_at ? $t->updated_at->toDateTimeString() : null,
+                'created_at' => $t->created_at ? $t->created_at->toIso8601String() : null,
+                'updated_at' => $t->updated_at ? $t->updated_at->toIso8601String() : null,
                 'category' => $t->category ? [
                     'id' => $t->category->id,
                     'name' => $t->category->name,
@@ -1123,7 +1123,7 @@ class TicketController extends Controller
                 'id' => $ticket->id,
                 'title' => $ticket->title ?? null,
                 'message' => $ticket->message ?? null,
-                'created_at' => $ticket->created_at ? $ticket->created_at->toDateTimeString() : null,
+                'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
                 'priority' => $ticket->priority ?? null,
                 'status' => $ticket->status ?? null,
                 'user' => $ticket->user ? [
@@ -1182,7 +1182,7 @@ class TicketController extends Controller
                 'command_number' => $c->command_number,
                 'invoice_id' => $c->invoice_id,
                 'statut' => $c->statut,
-                'created_at' => $c->created_at->toDateTimeString(),
+                'created_at' => $c->created_at->toIso8601String(),
                 'user' => $c->user ? [
                     'id' => $c->user->id,
                     'name' => $c->user->first_name . ' ' . $c->user->last_name,
@@ -1206,11 +1206,11 @@ class TicketController extends Controller
                     'event_type' => $event->event_type,
                     'summary' => $event->summary,
                     'details' => $event->details,
-                    'happened_at' => $event->happened_at ? $event->happened_at->toDateTimeString() : null,
+                    'happened_at' => $event->happened_at ? $event->happened_at->toIso8601String() : null,
                     'is_removed' => !is_null($event->deleted_at),
-                    'removed_at' => $event->removed_at ? $event->removed_at->toDateTimeString() : null,
+                    'removed_at' => $event->removed_at ? $event->removed_at->toIso8601String() : null,
                     'removed_reason' => $event->removed_reason,
-                    'restored_at' => $event->restored_at ? $event->restored_at->toDateTimeString() : null,
+                    'restored_at' => $event->restored_at ? $event->restored_at->toIso8601String() : null,
                     'technician' => $event->technician ? [
                         'id' => $event->technician->id,
                         'name' => $event->technician->first_name . ' ' . $event->technician->last_name,
@@ -1242,7 +1242,7 @@ class TicketController extends Controller
                     'event_type' => $event->event_type,
                     'summary' => $event->summary,
                     'details' => $event->details,
-                    'happened_at' => $event->happened_at?->toDateTimeString(),
+                    'happened_at' => $event->happened_at?->toIso8601String(),
                     'ticket_id' => $event->ticket_id,
                     'technician' => $event->technician ? [
                         'id' => $event->technician->id,
@@ -1267,7 +1267,7 @@ class TicketController extends Controller
                 'contact_email' => $ticket->contact_email,
                 'is_resolved' => $ticket->is_resolved,
                 'is_locked' => $ticket->is_locked,
-                'created_at' => $ticket->created_at ? $ticket->created_at->toDateTimeString() : null,
+                'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
                 'user' => $ticket->user ? [
                     'id' => $ticket->user->id,
                     'first_name' => $ticket->user->first_name,
@@ -1277,7 +1277,7 @@ class TicketController extends Controller
                     'phone' => $ticket->user->phone ?? null,
                     'address' => $ticket->user->address ?? null,
                     'internal_note' => $ticket->user->internal_note ?? null,
-                    'email_verified_at' => $ticket->user->email_verified_at ? $ticket->user->email_verified_at->toDateTimeString() : null,
+                    'email_verified_at' => $ticket->user->email_verified_at ? $ticket->user->email_verified_at->toIso8601String() : null,
                 ] : null,
                 'assignee' => $ticket->assignee ? [
                     'id' => $ticket->assignee->id,
@@ -1653,11 +1653,11 @@ class TicketController extends Controller
 
                 if ($isDone) {
                     if ($happenedAt instanceof \DateTimeInterface) {
-                        $doneAt = $happenedAt->format('Y-m-d H:i:s');
+                        $doneAt = $happenedAt->toIso8601String();
                     } elseif (is_string($happenedAt)) {
                         $doneAt = $happenedAt;
                     } else {
-                        $doneAt = now()->toDateTimeString();
+                        $doneAt = now()->toIso8601String();
                     }
                 }
 
@@ -1745,7 +1745,7 @@ class TicketController extends Controller
                 'device_event_id' => $deviceEvent->id,
                 'event_type' => $deviceEvent->event_type,
                 'summary' => $deviceEvent->summary,
-                'happened_at' => $deviceEvent->happened_at?->toDateTimeString(),
+                'happened_at' => $deviceEvent->happened_at?->toIso8601String(),
             ]
         );
 
@@ -1844,7 +1844,7 @@ class TicketController extends Controller
         $action['done'] = $nextDone;
         $action['done_by_id'] = $nextDone ? $user->id : null;
         $action['done_by_name'] = $nextDone ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : null;
-        $action['done_at'] = $nextDone ? now()->toDateTimeString() : null;
+        $action['done_at'] = $nextDone ? now()->toIso8601String() : null;
 
         $actions->put($actionIndex, $action);
         $details['actions'] = $actions->all();
@@ -1934,7 +1934,7 @@ class TicketController extends Controller
                             'event' => [
                                 'id' => $event->id,
                                 'summary' => $event->summary,
-                                'happened_at' => $event->happened_at?->toDateTimeString(),
+                                'happened_at' => $event->happened_at?->toIso8601String(),
                                 'technician_name' => $event->technician
                                     ? trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? ''))
                                     : null,
@@ -1975,7 +1975,7 @@ class TicketController extends Controller
                 'title' => $ticket->title,
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
-                'created_at' => $ticket->created_at?->toDateTimeString(),
+                'created_at' => $ticket->created_at?->toIso8601String(),
                 'requester' => $ticket->user ? trim(($ticket->user->first_name ?? '') . ' ' . ($ticket->user->last_name ?? '')) : null,
                 'assignee_id' => $ticket->assignee_id,
                 'assignee_name' => $ticket->assignee ? trim(($ticket->assignee->first_name ?? '') . ' ' . ($ticket->assignee->last_name ?? '')) : null,

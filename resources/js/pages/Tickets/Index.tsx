@@ -145,12 +145,12 @@ export default function Index({
         closed: true,
       };
     }
-    // Par défaut, masquer les résolus et fermés
+    // Par défaut, inclure les résolus mais masquer les fermés
     return {
       open: true,
       in_progress: true,
       pending: true,
-      resolved: false,
+      resolved: true,
       closed: false,
     };
   };

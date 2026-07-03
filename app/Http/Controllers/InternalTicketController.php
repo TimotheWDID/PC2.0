@@ -52,8 +52,8 @@ class InternalTicketController extends Controller
                 'description' => $ticket->description,
                 'category' => $ticket->category,
                 'category_label' => InternalTicket::labelFor($ticket->category),
-                'created_at' => $ticket->created_at?->toDateTimeString(),
-                'processed_at' => $ticket->processed_at?->toDateTimeString(),
+                'created_at' => $ticket->created_at?->toIso8601String(),
+                'processed_at' => $ticket->processed_at?->toIso8601String(),
                 'processed_by' => $ticket->processedBy ? trim(($ticket->processedBy->first_name ?? '') . ' ' . ($ticket->processedBy->last_name ?? '')) : null,
                 'requester' => $ticket->user ? [
                     'id' => $ticket->user->id,
@@ -137,8 +137,8 @@ class InternalTicketController extends Controller
                 'description' => $internalTicket->description,
                 'category' => $internalTicket->category,
                 'category_label' => InternalTicket::labelFor($internalTicket->category),
-                'created_at' => $internalTicket->created_at?->toDateTimeString(),
-                'processed_at' => $internalTicket->processed_at?->toDateTimeString(),
+                'created_at' => $internalTicket->created_at?->toIso8601String(),
+                'processed_at' => $internalTicket->processed_at?->toIso8601String(),
                 'processed_by' => $internalTicket->processedBy ? [
                     'id' => $internalTicket->processedBy->id,
                     'name' => trim(($internalTicket->processedBy->first_name ?? '') . ' ' . ($internalTicket->processedBy->last_name ?? '')),

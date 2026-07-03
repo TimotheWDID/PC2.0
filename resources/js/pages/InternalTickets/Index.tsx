@@ -5,6 +5,7 @@ import { type BreadcrumbItem } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatDateTimeFr } from '@/lib/datetime'
 
 type InternalTicket = {
   id: number
@@ -79,7 +80,7 @@ export default function InternalTicketsIndex({ tickets, isAgent, showProcessed }
                     </div>
                     <div className="text-sm text-muted-foreground sm:text-right">
                       <div>{ticket.requester?.name || 'Demandeur inconnu'}</div>
-                      <div>{ticket.created_at || '-'}</div>
+                      <div>{formatDateTimeFr(ticket.created_at)}</div>
                       {ticket.processed_at ? <div>Traite par {ticket.processed_by || 'agent'}</div> : null}
                     </div>
                   </div>

@@ -67,7 +67,7 @@ class AgentController extends Controller
                 'specialities' => $a->specialities?->pluck('name')->toArray() ?? [],
                 'is_admin' => (bool) ($a->is_admin ?? false),
                 'is_active' => (bool) ($a->is_active ?? true),
-                'created_at' => $a->created_at?->toDateTimeString(),
+                'created_at' => $a->created_at?->toIso8601String(),
             ];
         });
 

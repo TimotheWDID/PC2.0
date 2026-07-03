@@ -1,5 +1,5 @@
 import { Head, useForm } from '@inertiajs/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ const kioskStepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justif
 export default function KioskCreate({ success = false, ticketId = null }: Props) {
   const [isDark, setIsDark] = useState(false)
   const [showNoPasswordConfirm, setShowNoPasswordConfirm] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const applyTheme = (darkMode: boolean) => {
     document.documentElement.classList.toggle('dark', darkMode)
@@ -68,6 +69,25 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
     password_empty_confirmed: false,
   })
 
+  useEffect(() => {
+    const handleInertiaInvalid = (event: Event) => {
+      if (!isSubmittingRef.current) {
+        return
+      }
+
+      const detail = (event as CustomEvent<{ response?: { status?: number } }>).detail
+      if (detail?.response?.status === 419) {
+        window.location.reload()
+      }
+    }
+
+    document.addEventListener('inertia:invalid', handleInertiaInvalid)
+
+    return () => {
+      document.removeEventListener('inertia:invalid', handleInertiaInvalid)
+    }
+  }, [])
+
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
@@ -82,7 +102,12 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       password_empty_confirmed: false,
     }))
 
-    post('/kiosk/tickets')
+    isSubmittingRef.current = true
+    post('/kiosk/tickets', {
+      onFinish: () => {
+        isSubmittingRef.current = false
+      },
+    })
   }
 
   const confirmNoPasswordAndSubmit = () => {
@@ -94,7 +119,12 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       password_empty_confirmed: true,
     }))
 
-    post('/kiosk/tickets')
+    isSubmittingRef.current = true
+    post('/kiosk/tickets', {
+      onFinish: () => {
+        isSubmittingRef.current = false
+      },
+    })
   }
 
   const resetForNextClient = () => {
