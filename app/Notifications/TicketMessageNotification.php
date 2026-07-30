@@ -63,11 +63,17 @@ class TicketMessageNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $kindLabel = $this->getTicketKindLabel();
+        $recipientFirstName = trim((string) ($this->ticket->user?->first_name ?? ''));
+
+        if ($recipientFirstName === '') {
+            $recipientFirstName = 'client';
+        }
 
         return (new MailMessage)
             ->subject("[{$kindLabel}] Ticket #{$this->ticket->id}: {$this->ticket->title}")
             ->markdown('emails.tickets.message', [
                 'user' => $notifiable,
+                'recipientFirstName' => $recipientFirstName,
                 'ticket' => $this->ticket,
                 'messageBody' => $this->message->content,
                 'ticketKindLabel' => $kindLabel,

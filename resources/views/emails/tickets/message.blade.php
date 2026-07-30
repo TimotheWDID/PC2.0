@@ -1,7 +1,7 @@
 @component('mail::message')
 # Ticket #{{ $ticket->id }}: {{ $ticket->title }}
 
-Bonjour {{ $user->first_name }},
+Bonjour {{ $recipientFirstName ?? 'client' }},
 
 Vous avez un nouveau message sur votre ticket {{ strtolower($ticketKindLabel ?? 'Support') }}.
 
