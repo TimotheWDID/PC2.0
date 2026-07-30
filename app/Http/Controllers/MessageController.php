@@ -10,6 +10,7 @@ use App\Notifications\AgentMentionNotification;
 use App\Notifications\AgentTicketReplyNotification;
 use App\Notifications\TicketMessageNotification;
 use App\Notifications\Channels\SmsFactoryChannel;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Auth;
@@ -543,7 +544,18 @@ class MessageController extends Controller
         // Ne notifier que si l'auteur n'est pas le user lui-meme.
         if (! $message->is_internal && $ticket->user && $message->author_id !== $ticket->user_id) {
             $notification = new TicketMessageNotification($ticket, $message);
-            $viaChannels = $notification->via($ticket->user);
+            $ticketNotificationContext = $this->resolveTicketNotificationContext($ticket);
+            $anonymousNotifiable = new AnonymousNotifiable();
+
+            if (! empty($ticketNotificationContext['email'])) {
+                $anonymousNotifiable->route('mail', $ticketNotificationContext['email']);
+            }
+
+            if (! empty($ticketNotificationContext['phone'])) {
+                $anonymousNotifiable->route('smsfactory', $ticketNotificationContext['phone']);
+            }
+
+            $viaChannels = $notification->via($anonymousNotifiable);
 
             if (empty($viaChannels)) {
                 $this->updateMessageDeliveryState(
@@ -556,7 +568,7 @@ class MessageController extends Controller
                 $resolvedChannel = $this->resolveDeliveryChannelFromViaEntry($viaChannels[0] ?? null) ?? $notificationChannel;
 
                 $this->updateMessageDeliveryState($message, 'pending', $resolvedChannel);
-                $ticket->user->notify($notification);
+                $anonymousNotifiable->notify($notification);
             }
         }
 

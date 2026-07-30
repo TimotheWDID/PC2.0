@@ -39,28 +39,19 @@ class TicketMessageNotification extends Notification implements ShouldQueue
     {
         $preference = $this->resolveNotificationPreference($notifiable);
         $phone = $this->resolveSmsPhone($notifiable);
-        $email = is_string($notifiable->email ?? null) ? trim((string) $notifiable->email) : null;
+        $email = $this->resolveEmailAddress($notifiable);
         $smsAvailable = $this->isSmsChannelAvailable() && $phone !== null;
 
         if ($preference === 'None') {
             return [];
         }
 
-        if ($preference === 'SMS' && $smsAvailable) {
-            return [SmsFactoryChannel::class];
+        if ($preference === 'SMS') {
+            return $smsAvailable ? [SmsFactoryChannel::class] : [];
         }
 
-        if ($preference === 'Email' && ! empty($email)) {
-            return ['mail'];
-        }
-
-        // Fallback to avoid dropping the notification if the preferred channel is unavailable.
-        if ($smsAvailable) {
-            return [SmsFactoryChannel::class];
-        }
-
-        if (! empty($email)) {
-            return ['mail'];
+        if ($preference === 'Email') {
+            return ! empty($email) ? ['mail'] : [];
         }
 
         return [];
@@ -135,6 +126,23 @@ class TicketMessageNotification extends Notification implements ShouldQueue
     private function resolveSmsPhone(object $notifiable): ?string
     {
         $candidate = trim((string) ($this->ticket->contact_phone ?: ($notifiable->phone ?? '')));
+
+        return $candidate !== '' ? $candidate : null;
+    }
+
+    private function resolveEmailAddress(object $notifiable): ?string
+    {
+        $routedMail = null;
+
+        if (method_exists($notifiable, 'routeNotificationFor')) {
+            $route = $notifiable->routeNotificationFor('mail', $this);
+
+            if (is_string($route)) {
+                $routedMail = $route;
+            }
+        }
+
+        $candidate = trim((string) ($this->ticket->contact_email ?: ($routedMail ?: ($notifiable->email ?? ''))));
 
         return $candidate !== '' ? $candidate : null;
     }
