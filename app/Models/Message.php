@@ -13,11 +13,16 @@ class Message extends Model
         'content',
         'is_internal',
         'attachments',
+        'notification_channel',
+        'notification_status',
+        'notification_error',
+        'notified_at',
     ];
 
     protected $casts = [
         'is_internal' => 'boolean',
         'attachments' => 'array',
+        'notified_at' => 'datetime',
     ];
 
     public function ticket(): BelongsTo

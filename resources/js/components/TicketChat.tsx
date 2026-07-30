@@ -21,6 +21,12 @@ interface Message {
   is_internal: boolean;
   attachments: string[];
   created_at: string;
+  delivery?: {
+    channel: 'SMS' | 'Email' | 'None' | null;
+    status: 'pending' | 'sent' | 'failed' | 'skipped' | null;
+    error: string | null;
+    sent_at: string | null;
+  };
   author: Author;
   mention_notification?: {
     exists: boolean;
@@ -321,6 +327,50 @@ export default function TicketChat({
     return formatDateTimeFr(dateString, { timeZone: 'Europe/Paris' });
   };
 
+  const getDeliveryBadgeConfig = (message: Message) => {
+    const channel = message.delivery?.channel;
+    const status = message.delivery?.status;
+
+    if (message.is_internal) {
+      return null;
+    }
+
+    if (!status) {
+      return {
+        text: 'Aucune notification (message client ou ancien message)',
+        className: 'border-border bg-muted text-muted-foreground',
+      };
+    }
+
+    const channelLabel = channel === 'SMS' ? 'SMS' : channel === 'Email' ? 'Email' : 'Notification';
+
+    if (status === 'sent') {
+      return {
+        text: `${channelLabel} envoye`,
+        className: 'border-[#22a06b] bg-[#eaf8f1] text-[#1c7a53]',
+      };
+    }
+
+    if (status === 'pending') {
+      return {
+        text: `${channelLabel} en cours`,
+        className: 'border-[#e6892e] bg-[#fff4e8] text-[#b55f00]',
+      };
+    }
+
+    if (status === 'failed') {
+      return {
+        text: `${channelLabel} erreur`,
+        className: 'border-[#d14343] bg-[#ffecec] text-[#a12828]',
+      };
+    }
+
+    return {
+      text: 'Notification non envoyee',
+      className: 'border-border bg-muted text-muted-foreground',
+    };
+  };
+
   const renderMessageContent = (content: string) => {
     // Split content by mentions while preserving them
     const parts = content.split(/(@[\p{L}\p{N}]+)/u);
@@ -400,6 +450,26 @@ export default function TicketChat({
                         <div className={`text-xs ${isCurrentUser ? 'opacity-80' : 'text-muted-foreground'}`}>
                           {formatDate(message.created_at)}
                         </div>
+                        {(() => {
+                          const deliveryBadge = getDeliveryBadgeConfig(message);
+
+                          if (!deliveryBadge) {
+                            return null;
+                          }
+
+                          return (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className={`text-xs ${deliveryBadge.className}`}>
+                                {deliveryBadge.text}
+                              </Badge>
+                              {message.delivery?.status === 'failed' && message.delivery?.error && (
+                                <p className="text-[11px] text-[#a12828] dark:text-[#ff9a9a]">
+                                  {message.delivery.error}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {message.is_internal && isAgent && (
                           <div className="flex flex-wrap items-center gap-1.5">
                             <Badge variant="secondary" className="text-xs border border-dashed border-[#2a3ff5] bg-[#f3f4f6] text-[#141d3a]">

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\AgentMentionNotification;
 use App\Notifications\AgentTicketReplyNotification;
 use App\Notifications\TicketMessageNotification;
+use App\Notifications\Channels\SmsFactoryChannel;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +18,41 @@ use Throwable;
 
 class MessageController extends Controller
 {
+    private function resolveDeliveryChannelFromViaEntry(mixed $viaEntry): ?string
+    {
+        if (! is_string($viaEntry)) {
+            return null;
+        }
+
+        if ($viaEntry === 'mail') {
+            return 'Email';
+        }
+
+        if ($viaEntry === SmsFactoryChannel::class) {
+            return 'SMS';
+        }
+
+        return null;
+    }
+
+    private function updateMessageDeliveryState(
+        Message $message,
+        string $status,
+        ?string $channel = null,
+        ?string $error = null,
+        bool $markAsSent = false
+    ): void {
+        $message->notification_status = $status;
+
+        if ($channel !== null) {
+            $message->notification_channel = $channel;
+        }
+
+        $message->notification_error = $error;
+        $message->notified_at = $markAsSent ? now() : null;
+        $message->save();
+    }
+
     /**
      * @param array<int, int> $messageIds
      * @return array<int, array{exists: bool, validated: bool, unread_count: int}>
@@ -425,6 +461,12 @@ class MessageController extends Controller
                     'is_internal' => $message->is_internal,
                     'attachments' => $message->attachments ?? [],
                     'created_at' => $message->created_at->toISOString(),
+                    'delivery' => [
+                        'channel' => $message->notification_channel,
+                        'status' => $message->notification_status,
+                        'error' => $message->notification_error,
+                        'sent_at' => $message->notified_at?->toISOString(),
+                    ],
                     'author' => [
                         'id' => $message->author->id,
                         'name' => $message->author->first_name . ' ' . $message->author->last_name,
@@ -500,7 +542,22 @@ class MessageController extends Controller
 
         // Ne notifier que si l'auteur n'est pas le user lui-meme.
         if (! $message->is_internal && $ticket->user && $message->author_id !== $ticket->user_id) {
-            $ticket->user->notify(new TicketMessageNotification($ticket, $message));
+            $notification = new TicketMessageNotification($ticket, $message);
+            $viaChannels = $notification->via($ticket->user);
+
+            if (empty($viaChannels)) {
+                $this->updateMessageDeliveryState(
+                    $message,
+                    'skipped',
+                    $notificationChannel,
+                    'Aucun canal de notification disponible pour ce client.'
+                );
+            } else {
+                $resolvedChannel = $this->resolveDeliveryChannelFromViaEntry($viaChannels[0] ?? null) ?? $notificationChannel;
+
+                $this->updateMessageDeliveryState($message, 'pending', $resolvedChannel);
+                $ticket->user->notify($notification);
+            }
         }
 
         if (! $message->is_internal && $message->author_id === $ticket->user_id) {
@@ -514,6 +571,12 @@ class MessageController extends Controller
                 'is_internal' => $message->is_internal,
                 'attachments' => $message->attachments ?? [],
                 'created_at' => $message->created_at->toISOString(),
+                'delivery' => [
+                    'channel' => $message->notification_channel,
+                    'status' => $message->notification_status,
+                    'error' => $message->notification_error,
+                    'sent_at' => $message->notified_at?->toISOString(),
+                ],
                 'author' => [
                     'id' => $message->author->id,
                     'name' => $message->author->first_name . ' ' . $message->author->last_name,

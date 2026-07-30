@@ -7,6 +7,7 @@ use App\Support\SmsFactoryClient;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use RuntimeException;
 
 class SmsFactoryChannel
 {
@@ -53,6 +54,22 @@ class SmsFactoryChannel
             return;
         }
 
-        $this->client->send((string) $recipient, $message->content, $message->sender);
+        $result = $this->client->sendDetailed((string) $recipient, $message->content, $message->sender);
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            $status = $result['http_status'] ?? null;
+            $body = is_string($result['body'] ?? null) ? trim((string) $result['body']) : '';
+            $errorMessage = 'Echec envoi SMSFactory';
+
+            if ($status !== null) {
+                $errorMessage .= ' (HTTP ' . (string) $status . ')';
+            }
+
+            if ($body !== '') {
+                $errorMessage .= ': ' . mb_substr($body, 0, 250);
+            }
+
+            throw new RuntimeException($errorMessage);
+        }
     }
 }
