@@ -26,6 +26,7 @@ type User = {
   id: number
   name: string
   email: string
+  phone?: string
   devices?: Device[]
 }
 
@@ -117,6 +118,7 @@ export default function CreateTicket({
     quick_commande_command_number: '',
     quick_commande_invoice_id: '',
     quick_commande_statut: 'new',
+    notify_by: '',
     print_label: '0',
   })
 
@@ -135,6 +137,57 @@ export default function CreateTicket({
       (user.email && user.email.toLowerCase().includes(query))
     )
   }, [searchQuery, users])
+
+  const availableNotificationChannels = useMemo(() => {
+    if (!isAgent) {
+      return [] as Array<'Email' | 'SMS'>
+    }
+
+    const sourceUser = data.user_selection === 'new'
+      ? {
+          email: data.user_email,
+          phone: data.user_phone,
+        }
+      : selectedUser
+
+    const channels: Array<'Email' | 'SMS'> = []
+
+    if (sourceUser?.email?.trim()) {
+      channels.push('Email')
+    }
+
+    if (sourceUser?.phone?.trim()) {
+      channels.push('SMS')
+    }
+
+    return channels
+  }, [data.user_email, data.user_phone, data.user_selection, isAgent, selectedUser])
+
+  const notificationModeLabel = availableNotificationChannels.length === 1
+    ? availableNotificationChannels[0]
+    : availableNotificationChannels.length === 0
+      ? 'Aucun canal disponible'
+      : 'Choix manuel requis'
+
+  useEffect(() => {
+    if (!isAgent) {
+      return
+    }
+
+    if (availableNotificationChannels.length === 1) {
+      setData('notify_by', availableNotificationChannels[0])
+      return
+    }
+
+    if (availableNotificationChannels.length === 0) {
+      setData('notify_by', '')
+      return
+    }
+
+    if (!availableNotificationChannels.includes(data.notify_by as 'Email' | 'SMS')) {
+      setData('notify_by', 'Email')
+    }
+  }, [availableNotificationChannels, data.notify_by, isAgent, setData])
 
   useEffect(() => {
     const handleInertiaInvalid = (event: Event) => {
@@ -232,6 +285,7 @@ export default function CreateTicket({
       id: 0,
       name: `${newUserData.first_name} ${newUserData.last_name}`,
       email: newUserData.email || 'Pas d\'email',
+      phone: newUserData.phone || undefined,
     })
   }
 
@@ -443,6 +497,9 @@ export default function CreateTicket({
                       <div className="rounded-lg border border-border bg-muted/40 p-3 text-foreground">
                         <p className="font-medium">{selectedUser.name}</p>
                         <p className="text-sm text-muted-foreground">{selectedUser.email || 'Pas d\'email'}</p>
+                        {selectedUser.phone && (
+                          <p className="text-sm text-muted-foreground">{selectedUser.phone}</p>
+                        )}
                         <Button
                           type="button"
                           variant="ghost"
@@ -460,6 +517,7 @@ export default function CreateTicket({
                               postal_code: '',
                               city: '',
                             })
+                            setData('notify_by', '')
                           }}
                           className="mt-2"
                         >
@@ -484,6 +542,7 @@ export default function CreateTicket({
                           >
                             <p className="font-medium">{user.name}</p>
                             <p className="text-sm text-muted-foreground">{user.email || 'Pas d\'email'}</p>
+                            {user.phone && <p className="text-sm text-muted-foreground">{user.phone}</p>}
                           </button>
                         ))}
                       </div>
@@ -613,6 +672,40 @@ export default function CreateTicket({
                 </Select>
                 <p className="text-xs text-muted-foreground">Optionnel, utile pour le tri et la priorisation.</p>
               </div>
+
+              {isAgent && !specialOnly && (
+                <div className={sectionClassName}>
+                  <div className={sectionHeaderClassName}>
+                    <span className={stepPillClassName}>{isAgent && !specialOnly ? '4' : '2'}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Notification du client</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {availableNotificationChannels.length <= 1
+                          ? `Canal automatique: ${notificationModeLabel.toLowerCase()}`
+                          : 'Choisissez le canal à utiliser quand le client dispose des deux moyens de contact.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notify_by">Méthode de notification</Label>
+                    <Select
+                      value={data.notify_by || (availableNotificationChannels[0] ?? 'Email')}
+                      onValueChange={(value) => setData('notify_by', value)}
+                      disabled={availableNotificationChannels.length <= 1}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un canal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Email">Email</SelectItem>
+                        <SelectItem value="SMS">SMS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.notify_by && <div className="text-sm text-destructive">{errors.notify_by}</div>}
+                  </div>
+                </div>
+              )}
 
               {!specialOnly && (
                 <div className={sectionClassName}>

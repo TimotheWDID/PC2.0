@@ -9,6 +9,9 @@ use App\Http\Controllers\Settings\TicketLabelController;
 use App\Http\Controllers\Settings\TicketActionListController;
 use App\Http\Controllers\Settings\TicketTimelineTemplateController;
 use App\Http\Controllers\Settings\DashboardInsightController;
+use App\Http\Controllers\Settings\InboundMailReviewController;
+use App\Http\Controllers\Settings\MailDebugController;
+use App\Http\Controllers\Settings\SmsDebugController;
 use App\Http\Controllers\Settings\EditableDataController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -69,6 +72,30 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/dashboard-insights', [DashboardInsightController::class, 'update'])
         ->middleware('admin')
         ->name('dashboard-insights.update');
+
+    Route::get('settings/sms-debug', [SmsDebugController::class, 'edit'])
+        ->middleware('admin')
+        ->name('sms-debug.edit');
+    Route::post('settings/sms-debug', [SmsDebugController::class, 'send'])
+        ->middleware('admin')
+        ->name('sms-debug.send');
+
+    Route::get('settings/mail-debug', [MailDebugController::class, 'edit'])
+        ->middleware('admin')
+        ->name('mail-debug.edit');
+    Route::post('settings/mail-debug', [MailDebugController::class, 'send'])
+        ->middleware('admin')
+        ->name('mail-debug.send');
+
+    Route::get('settings/inbound-mail-review', [InboundMailReviewController::class, 'index'])
+        ->middleware('admin')
+        ->name('inbound-mail-review.index');
+    Route::post('settings/inbound-mail-review/{inboundEmail}/attach', [InboundMailReviewController::class, 'attachToTicket'])
+        ->middleware('admin')
+        ->name('inbound-mail-review.attach');
+    Route::post('settings/inbound-mail-review/{inboundEmail}/dismiss', [InboundMailReviewController::class, 'dismiss'])
+        ->middleware('admin')
+        ->name('inbound-mail-review.dismiss');
 
     Route::get('settings/application', function () {
         return redirect('/app-settings');

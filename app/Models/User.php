@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Illuminate\Notifications\Notification;
 
 class User extends Authenticatable
 {
@@ -99,5 +100,12 @@ class User extends Authenticatable
     public function internalTickets(): HasMany
     {
         return $this->hasMany(InternalTicket::class);
+    }
+
+    public function routeNotificationForSmsfactory(?Notification $notification = null): ?string
+    {
+        $phone = trim((string) ($this->phone ?? ''));
+
+        return $phone !== '' ? $phone : null;
     }
 }

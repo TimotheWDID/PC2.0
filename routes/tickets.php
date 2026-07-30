@@ -4,11 +4,18 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\InternalTicketController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\Settings\InboundMailReviewController;
 
 Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
 Route::middleware('auth')->group(function () {
+    Route::middleware('agent')->group(function () {
+        Route::get('tickets/inbound-mails', [InboundMailReviewController::class, 'index'])->name('tickets.inbound-mails.index');
+        Route::post('tickets/inbound-mails/{inboundEmail}/attach', [InboundMailReviewController::class, 'attachToTicket'])->name('tickets.inbound-mails.attach');
+        Route::post('tickets/inbound-mails/{inboundEmail}/dismiss', [InboundMailReviewController::class, 'dismiss'])->name('tickets.inbound-mails.dismiss');
+    });
+
     Route::middleware('admin')->group(function () {
         Route::get('tickets/bulk-distribution', [TicketController::class, 'bulkDistributionIndex'])->name('tickets.bulkDistribution.index');
         Route::post('tickets/bulk-distribution', [TicketController::class, 'bulkDistributionAssign'])->name('tickets.bulkDistribution.assign');

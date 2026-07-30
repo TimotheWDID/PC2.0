@@ -7,7 +7,7 @@ import { formatDateTimeFr } from '@/lib/datetime';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlertCircle, Bell, BellRing, Clock3, Home, Info, ListFilter, Plus, Search, Settings, TriangleAlert, Wrench } from 'lucide-react';
+import { AlertCircle, Bell, BellRing, CheckCircle2, Clock3, Home, Info, Inbox, ListFilter, MailWarning, Plus, Search, Settings, TriangleAlert, Wrench } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type DashboardMode = 'agent' | 'user';
@@ -150,6 +150,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const isAgent = mode ? mode === 'agent' : !!user?.agent;
     const currentUrl = page.url ?? '/';
     const currentPath = (page.url ?? '/').split('?')[0] || '/';
+    const isNotificationView = currentUrl.includes('severity=notification');
 
     const stats = summary ?? {};
     const actions = quickActions ?? [];
@@ -158,6 +159,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const recent = recentTickets ?? [];
 
     const [query, setQuery] = useState('');
+    const [notificationKind, setNotificationKind] = useState<'all' | 'ticket_reply' | 'mention' | 'inbound'>('all');
     const [validatingTicketId, setValidatingTicketId] = useState<number | null>(null);
     const severityOrder = useMemo<Severity[]>(() => ['notification', 'critical', 'warning', 'info', 'all'], []);
     const severityRank = useMemo<Record<Exclude<Severity, 'all'>, number>>(
@@ -486,6 +488,94 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
 
     const unreadCount = Number((page.props as any).notifications?.unread_count ?? 0);
 
+    const notificationItems = useMemo(() => {
+        const onlyNotifications = allActionItems.filter((item) => item.severity === 'notification');
+
+        return [...onlyNotifications].sort((left, right) => {
+            const leftDate = left.ticket?.updated_at
+                ? new Date(left.ticket.updated_at).getTime()
+                : left.commande?.updated_at
+                  ? new Date(left.commande.updated_at).getTime()
+                  : 0;
+
+            const rightDate = right.ticket?.updated_at
+                ? new Date(right.ticket.updated_at).getTime()
+                : right.commande?.updated_at
+                  ? new Date(right.commande.updated_at).getTime()
+                  : 0;
+
+            return rightDate - leftDate;
+        });
+    }, [allActionItems]);
+
+    const filteredNotificationItems = useMemo(() => {
+        const q = query.trim().toLowerCase();
+
+        return notificationItems.filter((item) => {
+            const tags = item.tags ?? [];
+            const isMention = tags.includes('Mention @');
+            const isTicketReply = tags.includes('Reponse ticket');
+            const isInbound = tags.includes('Mail entrant');
+
+            if (notificationKind === 'mention' && !isMention) {
+                return false;
+            }
+
+            if (notificationKind === 'ticket_reply' && !isTicketReply) {
+                return false;
+            }
+
+            if (notificationKind === 'inbound' && !isInbound) {
+                return false;
+            }
+
+            if (!q) {
+                return true;
+            }
+
+            const haystack = [
+                item.title,
+                item.reason,
+                item.ticket?.id?.toString() ?? '',
+                item.ticket?.title ?? '',
+                item.ticket?.requester_name ?? '',
+                item.commande?.id?.toString() ?? '',
+                item.commande?.ticket_title ?? '',
+                ...tags,
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return haystack.includes(q);
+        });
+    }, [notificationItems, notificationKind, query]);
+
+    const notificationSummary = useMemo(() => {
+        const summaryMap = {
+            mention: 0,
+            ticket_reply: 0,
+            inbound: 0,
+        };
+
+        notificationItems.forEach((item) => {
+            const tags = item.tags ?? [];
+
+            if (tags.includes('Mention @')) {
+                summaryMap.mention += 1;
+            }
+
+            if (tags.includes('Reponse ticket')) {
+                summaryMap.ticket_reply += 1;
+            }
+
+            if (tags.includes('Mail entrant')) {
+                summaryMap.inbound += 1;
+            }
+        });
+
+        return summaryMap;
+    }, [notificationItems]);
+
     const validateTicketNotification = (ticketId: number) => {
         if (validatingTicketId !== null) {
             return;
@@ -667,6 +757,174 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
             </Link>
         );
     };
+
+    const renderNotificationCard = (item: ActionItem) => {
+        const tags = item.tags ?? [];
+        const isMention = tags.includes('Mention @');
+        const isTicketReply = tags.includes('Reponse ticket');
+        const isInbound = tags.includes('Mail entrant');
+        const ticketId = item.ticket?.id ? Number(item.ticket.id) : null;
+
+        const accentClass = isInbound
+            ? 'border-[#e6892e]/50 bg-[#fff4e8]'
+            : isTicketReply
+              ? 'border-[#22a06b]/40 bg-[#ecfdf3]'
+              : 'border-[#2a3ff5]/30 bg-[#eef1ff]';
+
+        return (
+            <div key={item.id} className={`rounded-xl border p-4 ${accentClass}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                        <p className="text-sm text-foreground">{item.reason}</p>
+                        {item.age_label && <p className="text-xs text-muted-foreground">{item.age_label}</p>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {isMention && <Badge variant="outline">Mention</Badge>}
+                        {isTicketReply && <Badge variant="outline" className="border-[#22a06b] text-[#1c7a53]">Reponse client</Badge>}
+                        {isInbound && <Badge variant="outline" className="border-[#e6892e] text-[#b55f00]">Mail non lie</Badge>}
+                    </div>
+                </div>
+
+                {item.ticket && (
+                    <div className="mt-3 rounded-lg border border-border/60 bg-background/70 p-3 text-sm">
+                        <p className="font-medium">Ticket n°{item.ticket.id} · {item.ticket.title ?? 'Sans titre'}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {item.ticket.requester_name ?? 'Demandeur inconnu'}
+                            {item.ticket.updated_at ? ` · ${formatDateTimeFr(item.ticket.updated_at, { timeZone: 'Europe/Paris' })}` : ''}
+                        </p>
+                    </div>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                    <Button asChild size="sm">
+                        <Link href={item.href}>{item.action_label || 'Ouvrir'}</Link>
+                    </Button>
+
+                    {ticketId && (isMention || isTicketReply) && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => validateTicketNotification(ticketId)}
+                            disabled={validatingTicketId === ticketId}
+                        >
+                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                            {validatingTicketId === ticketId ? 'Validation...' : 'Marquer lue'}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    if (isNotificationView) {
+        return (
+            <AppLayout breadcrumbs={[{ title: 'Notifications', href: '/dashboard?severity=notification' }]}>
+                <Head title="Notifications" />
+
+                <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-2 py-2 pb-24 sm:px-4 sm:py-4 md:px-6 lg:pb-6">
+                    <section className="rounded-2xl border border-border/70 bg-gradient-to-r from-[#141d3a] via-[#1f2b57] to-[#2a3ff5] p-4 text-white shadow-sm sm:p-6">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                            <div className="space-y-2">
+                                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
+                                    <BellRing className="h-3.5 w-3.5" />
+                                    Centre de notifications
+                                </div>
+                                <h1 className="text-xl font-semibold sm:text-2xl">Notifications agents</h1>
+                                <p className="max-w-2xl text-sm text-white/85">
+                                    Reponses client, mentions internes et mails entrants non lies. Tout est centralise ici pour traitement rapide.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                <div className="rounded-xl border border-white/25 bg-white/10 px-3 py-2">
+                                    <div className="text-[11px] text-white/80">Non lues</div>
+                                    <p className="text-lg font-semibold leading-none">{unreadCount}</p>
+                                </div>
+                                <div className="rounded-xl border border-white/25 bg-white/10 px-3 py-2">
+                                    <div className="text-[11px] text-white/80">Mentions</div>
+                                    <p className="text-lg font-semibold leading-none">{notificationSummary.mention}</p>
+                                </div>
+                                <div className="rounded-xl border border-white/25 bg-white/10 px-3 py-2">
+                                    <div className="text-[11px] text-white/80">Reponses client</div>
+                                    <p className="text-lg font-semibold leading-none">{notificationSummary.ticket_reply}</p>
+                                </div>
+                                <div className="rounded-xl border border-white/25 bg-white/10 px-3 py-2">
+                                    <div className="text-[11px] text-white/80">Mails non lies</div>
+                                    <p className="text-lg font-semibold leading-none">{notificationSummary.inbound}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <Card className="border-border/70">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Filtrer les notifications</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        value={query}
+                                        onChange={(event) => setQuery(event.target.value)}
+                                        placeholder="Rechercher dans les notifications"
+                                        className="pl-9"
+                                    />
+                                </div>
+                                <Button type="button" variant="outline" onClick={() => router.reload({ only: ['actionItems', 'summary', 'notifications'] })}>
+                                    Actualiser
+                                </Button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <Button type="button" size="sm" variant={notificationKind === 'all' ? 'default' : 'outline'} onClick={() => setNotificationKind('all')}>
+                                    Toutes
+                                </Button>
+                                <Button type="button" size="sm" variant={notificationKind === 'mention' ? 'default' : 'outline'} onClick={() => setNotificationKind('mention')}>
+                                    Mentions
+                                </Button>
+                                <Button type="button" size="sm" variant={notificationKind === 'ticket_reply' ? 'default' : 'outline'} onClick={() => setNotificationKind('ticket_reply')}>
+                                    Reponses client
+                                </Button>
+                                <Button type="button" size="sm" variant={notificationKind === 'inbound' ? 'default' : 'outline'} onClick={() => setNotificationKind('inbound')}>
+                                    Mails non lies
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <section className="space-y-3">
+                        {filteredNotificationItems.length === 0 ? (
+                            <Card className="border-border/70">
+                                <CardContent className="flex items-center gap-3 pt-6 text-sm text-muted-foreground">
+                                    <Inbox className="h-5 w-5" />
+                                    <span>Aucune notification pour ce filtre.</span>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            filteredNotificationItems.map((item) => renderNotificationCard(item))
+                        )}
+                    </section>
+
+                    <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="outline">
+                            <Link href="/dashboard">
+                                <Home className="mr-1.5 h-4 w-4" />
+                                Retour dashboard
+                            </Link>
+                        </Button>
+                        <Button asChild>
+                            <Link href="/tickets/inbound-mails">
+                                <MailWarning className="mr-1.5 h-4 w-4" />
+                                Traiter les mails entrants
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+            </AppLayout>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

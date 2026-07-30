@@ -257,7 +257,72 @@ A adapter dans `.env` en prod:
 - `SESSION_SAME_SITE=lax`
 - `SESSION_DOMAIN=votre-domaine` (ou `.votre-domaine` si sous-domaines)
 
+### 10.1 Envoi des mails via O2Switch
+Le systeme de ticket envoie deja des emails de reponse via la notification `TicketMessageNotification` quand le ticket est configure pour `Email` ou quand le fallback email est disponible.
+
+Config SMTP recommandee dans `.env`:
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=mail.votredomaine.tld
+MAIL_PORT=587
+MAIL_USERNAME=contact@votredomaine.tld
+MAIL_PASSWORD=mot_de_passe_du_compte_mail
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=contact@votredomaine.tld
+MAIL_FROM_NAME="SupportPC"
+```
+
+Si O2Switch te demande le port 465, remplace seulement ces deux lignes:
+```env
+MAIL_PORT=465
+MAIL_ENCRYPTION=ssl
+```
+
+La notification de ticket implemente `ShouldQueue`, donc l'email passe par la queue Laravel. En hebergement mutualise O2Switch, le plus simple est:
+```env
+QUEUE_CONNECTION=database
+```
+
+Puis un cron systeme qui lance regulierement:
+```bash
+php artisan queue:work --stop-when-empty
+```
+
+Apres toute modification de `.env`:
+```bash
+php artisan optimize:clear
+php artisan config:cache
+```
+
 Points anti-erreur 419:
+
+## 11) Notifications SMS (SMSFactory)
+L'application peut notifier les clients par SMS lors d'un nouveau message de ticket.
+
+Configuration `.env`:
+```bash
+SMSFACTORY_ENABLED=true
+SMSFACTORY_BASE_URL=https://api.smsfactor.com
+SMSFACTORY_SEND_PATH=/send
+SMSFACTORY_API_KEY=...
+SMSFACTORY_AUTH_HEADER=X-API-KEY
+SMSFACTORY_AUTH_PREFIX=
+SMSFACTORY_SENDER="SupportPC"
+SMSFACTORY_SIGNATURE="Planete-Computers 2.0\n03.89.82.76.33"
+SMSFACTORY_TIMEOUT=10
+SMSFACTORY_VERIFY_SSL=true
+```
+
+Logique de canal utilisee:
+- Priorite au champ ticket `notify_by` (`SMS`, `Email`, `None`).
+- Si le canal prefere n'est pas disponible (ex: pas de numero), fallback automatique vers l'autre canal disponible.
+- Numero SMS utilise: `ticket.contact_phone` puis `user.phone`.
+- Une signature globale est ajoutee a tous les SMS via `SMSFACTORY_SIGNATURE`.
+
+Notes:
+- L'envoi passe par une requete HTTP JSON avec en-tete d'authentification configurable (`SMSFACTORY_AUTH_HEADER` + `SMSFACTORY_AUTH_PREFIX`).
+- Si votre compte SMSFactory utilise un endpoint/format different, adaptez `SMSFACTORY_BASE_URL` et `SMSFACTORY_SEND_PATH`.
+- En local Windows/XAMPP, si vous voyez `cURL error 60` (certificat SSL), vous pouvez temporairement mettre `SMSFACTORY_VERIFY_SSL=false` pour tester.
 - Si `SESSION_DRIVER=database`, verifier que la table `sessions` existe (`php artisan migrate --force`).
 - Apres modification du `.env`, executer:
 ```bash

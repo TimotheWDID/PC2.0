@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Notifications\AgentMentionNotification;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -76,7 +75,6 @@ class HandleInertiaRequests extends Middleware
             try {
                 $unreadMentionCount = (int) $request->user()
                     ->unreadNotifications()
-                    ->where('type', AgentMentionNotification::class)
                     ->count();
             } catch (Throwable $exception) {
                 $unreadMentionCount = 0;

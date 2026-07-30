@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Speciality;
+use App\Support\MailFooterSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -35,9 +36,12 @@ class AppSettingsController extends Controller
             ])
             ->values();
 
+        $mailFooter = MailFooterSettings::load();
+
         return Inertia::render('AppSettings/Index', [
             'categories' => $categories,
             'specialities' => $specialities,
+            'mailFooter' => $mailFooter,
             'modules' => [
                 [
                     'title' => 'Etiquettes tickets',
@@ -63,8 +67,33 @@ class AppSettingsController extends Controller
                     'href' => '/settings/dashboard-insights',
                     'status' => 'Disponible',
                 ],
+                [
+                    'title' => 'Footer des mails',
+                    'description' => 'Texte ajoute automatiquement en bas des emails du systeme.',
+                    'href' => '/app-settings#mail-footer',
+                    'status' => 'Disponible',
+                ],
             ],
         ]);
+    }
+
+    public function updateMailFooter(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled' => ['nullable', 'boolean'],
+            'content' => ['nullable', 'string', 'max:5000'],
+            'image_url' => ['nullable', 'string', 'max:2048'],
+            'image_alt' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        MailFooterSettings::save([
+            'enabled' => $request->boolean('enabled'),
+            'content' => trim((string) ($validated['content'] ?? '')),
+            'image_url' => trim((string) ($validated['image_url'] ?? '')),
+            'image_alt' => trim((string) ($validated['image_alt'] ?? '')),
+        ]);
+
+        return back()->with('success', 'Footer des mails enregistre.');
     }
 
     public function storeCategory(Request $request)

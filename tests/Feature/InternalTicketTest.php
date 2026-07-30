@@ -98,3 +98,4 @@ test('agents can mark an internal ticket as processed', function () {
 
     expect($ticket->fresh()?->processed_at)->not->toBeNull();
 });
+

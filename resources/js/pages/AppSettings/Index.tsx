@@ -29,6 +29,13 @@ type ModuleItem = {
   status: string;
 };
 
+type MailFooterSettings = {
+  enabled: boolean;
+  content: string;
+  image_url: string;
+  image_alt: string;
+};
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Parametrage application', href: '/app-settings' },
 ];
@@ -37,14 +44,20 @@ export default function AppSettingsIndex({
   categories,
   specialities,
   modules,
+  mailFooter,
 }: {
   categories: CategoryItem[];
   specialities: SpecialityItem[];
   modules: ModuleItem[];
+  mailFooter: MailFooterSettings;
 }) {
   const [query, setQuery] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [specialityName, setSpecialityName] = useState('');
+  const [footerEnabled, setFooterEnabled] = useState(mailFooter?.enabled ?? true);
+  const [footerContent, setFooterContent] = useState(mailFooter?.content ?? 'Cordialement,\nSupportPC');
+  const [footerImageUrl, setFooterImageUrl] = useState(mailFooter?.image_url ?? '');
+  const [footerImageAlt, setFooterImageAlt] = useState(mailFooter?.image_alt ?? 'Logo SupportPC');
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -109,6 +122,19 @@ export default function AppSettingsIndex({
     router.post('/app-settings/specialities', { name }, {
       preserveScroll: true,
       onSuccess: () => setSpecialityName(''),
+    });
+  };
+
+  const saveMailFooter = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    router.post('/app-settings/mail-footer', {
+      enabled: footerEnabled,
+      content: footerContent,
+      image_url: footerImageUrl,
+      image_alt: footerImageAlt,
+    }, {
+      preserveScroll: true,
     });
   };
 
@@ -263,6 +289,76 @@ export default function AppSettingsIndex({
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-2" id="mail-footer">
+            <CardHeader>
+              <CardTitle>Footer des mails</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={saveMailFooter} className="space-y-4">
+                <div className="flex items-center gap-3 rounded-md border border-border p-3">
+                  <input
+                    id="mail_footer_enabled"
+                    type="checkbox"
+                    checked={footerEnabled}
+                    onChange={(e) => setFooterEnabled(e.target.checked)}
+                  />
+                  <Label htmlFor="mail_footer_enabled">Activer le footer dans les mails</Label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mail_footer_content">Contenu du footer</Label>
+                  <textarea
+                    id="mail_footer_content"
+                    value={footerContent}
+                    onChange={(e) => setFooterContent(e.target.value)}
+                    rows={6}
+                    className="flex min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="Cordialement,\nSupportPC"
+                  />
+                  <p className="text-xs text-muted-foreground">Le footer sera ajouté aux mails de ticket et aux mails de test.</p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="mail_footer_image_url">Image du footer</Label>
+                    <Input
+                      id="mail_footer_image_url"
+                      value={footerImageUrl}
+                      onChange={(e) => setFooterImageUrl(e.target.value)}
+                      placeholder="https://votre-domaine.tld/logo.png"
+                    />
+                    <p className="text-xs text-muted-foreground">Utilise une URL absolue accessible depuis les destinataires des emails.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="mail_footer_image_alt">Texte alternatif de l'image</Label>
+                    <Input
+                      id="mail_footer_image_alt"
+                      value={footerImageAlt}
+                      onChange={(e) => setFooterImageAlt(e.target.value)}
+                      placeholder="Logo SupportPC"
+                    />
+                  </div>
+                </div>
+
+                {footerImageUrl.trim() && (
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <p className="text-sm font-medium">Aperçu</p>
+                    <img
+                      src={footerImageUrl.trim()}
+                      alt={footerImageAlt.trim() || 'Footer image'}
+                      className="max-h-20 max-w-full object-contain"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button type="submit">Enregistrer le footer</Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
         </div>

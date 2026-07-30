@@ -17,7 +17,6 @@ use App\Support\TicketTimelineTemplateSettings;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Throwable;
 use Illuminate\Validation\Rule;
 use Inertia\Response;
 
@@ -193,6 +192,46 @@ class TicketController extends Controller
         }
 
         return Str::limit($value, 500, '');
+    }
+
+    private function resolveTicketNotificationPreference(
+        ?string $requestedPreference,
+        ?string $email,
+        ?string $phone,
+        bool $requireExplicitChoice = false
+    ): ?string
+    {
+        $availablePreferences = [];
+
+        if (! empty($email)) {
+            $availablePreferences[] = 'Email';
+        }
+
+        if (! empty($phone)) {
+            $availablePreferences[] = 'SMS';
+        }
+
+        if (empty($availablePreferences)) {
+            return 'None';
+        }
+
+        if (count($availablePreferences) === 1) {
+            return $availablePreferences[0];
+        }
+
+        $requestedPreference = in_array($requestedPreference, ['SMS', 'Email'], true)
+            ? $requestedPreference
+            : null;
+
+        if ($requestedPreference !== null && in_array($requestedPreference, $availablePreferences, true)) {
+            return $requestedPreference;
+        }
+
+        if (! $requireExplicitChoice) {
+            return $availablePreferences[0];
+        }
+
+        return null;
     }
 
     private function syncTicketPasswordToDevice(Ticket $ticket, Device $device): void
@@ -686,6 +725,7 @@ class TicketController extends Controller
                     'id' => $u->id,
                     'name' => $u->first_name . ' ' . $u->last_name,
                     'email' => $u->email,
+                    'phone' => $u->phone,
                     'devices' => $u->devices->map(fn(Device $device) => $this->serializeDevice($device))->values(),
                 ])->toArray();
         }
@@ -853,6 +893,19 @@ class TicketController extends Controller
             $ticket->user_id = Auth::id() ?? 1;
         }
 
+        $ticketUser = \App\Models\User::find($ticket->user_id);
+        $resolvedNotificationPreference = $this->resolveTicketNotificationPreference(
+            $data['notify_by'] ?? null,
+            $ticketUser?->email,
+            $ticketUser?->phone
+        );
+
+        if ($resolvedNotificationPreference === null) {
+            return back()->withErrors([
+                'notify_by' => 'Choisissez Email ou SMS lorsque les deux moyens de contact sont disponibles.',
+            ])->withInput();
+        }
+
         if (!empty($data['device_id'])) {
             $device = Device::query()
                 ->where('id', $data['device_id'])
@@ -890,6 +943,9 @@ class TicketController extends Controller
         $ticket->message = $data['message'] ?? null;
         $ticket->device_password = $normalizedDevicePassword;
         $ticket->no_device_password = $normalizedDevicePassword ? false : $noDevicePassword;
+        $ticket->notify_by = $resolvedNotificationPreference;
+        $ticket->contact_email = $ticketUser?->email;
+        $ticket->contact_phone = $ticketUser?->phone;
         $ticketKind = $data['ticket_kind'] ?? ($specialOnly ? 'bug' : 'standard');
         if ($supportsTicketKind) {
             $ticket->ticket_kind = $ticketKind;
@@ -1088,7 +1144,8 @@ class TicketController extends Controller
         $ticket->ticket_kind = 'standard';
         $ticket->priority = 'low';
         $ticket->status = 'open';
-        $ticket->notify_by = !empty($email) ? 'Email' : (!empty($data['phone']) ? 'SMS' : 'None');
+        $ticket->notify_by = $this->resolveTicketNotificationPreference(null, $email, $data['phone'] ?? null)
+            ?? (!empty($email) ? 'Email' : (!empty($data['phone']) ? 'SMS' : 'None'));
         $ticket->contact_phone = $data['phone'] ?? null;
         $ticket->contact_email = $email;
         if (!empty($data['category_id'])) {
@@ -1412,6 +1469,19 @@ class TicketController extends Controller
             }
         }
 
+            $resolvedNotificationPreference = $this->resolveTicketNotificationPreference(
+                $data['notify_by'] ?? null,
+                $data['contact_email'] ?? null,
+                $data['contact_phone'] ?? null,
+                true
+            );
+
+            if ($resolvedNotificationPreference === null) {
+                return back()->withErrors([
+                    'notify_by' => 'Choisissez Email ou SMS lorsque les deux moyens de contact sont disponibles.',
+                ])->withInput();
+            }
+
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
         $ticket->priority = $request->input('priority', $ticket->priority);
@@ -1419,7 +1489,7 @@ class TicketController extends Controller
         $ticket->assignee_id = $assigneeId;
         $ticket->device_id = $data['device_id'] ?? null;
         $ticket->invoice_id = $data['invoice_id'] ?? null;
-        $ticket->notify_by = $data['notify_by'] ?? 'None';
+            $ticket->notify_by = $resolvedNotificationPreference;
         $ticket->contact_phone = $data['contact_phone'] ?? null;
         $ticket->contact_email = $data['contact_email'] ?? null;
         $ticket->is_resolved = $data['is_resolved'] ?? false;

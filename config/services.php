@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    'smsfactory' => [
+        'enabled' => env('SMSFACTORY_ENABLED', false),
+        'base_url' => env('SMSFACTORY_BASE_URL', 'https://api.smsfactor.com'),
+        'send_path' => env('SMSFACTORY_SEND_PATH', '/send'),
+        'api_key' => env('SMSFACTORY_API_KEY'),
+        'auth_header' => env('SMSFACTORY_AUTH_HEADER', 'X-API-KEY'),
+        'auth_prefix' => env('SMSFACTORY_AUTH_PREFIX', ''),
+        'sender' => env('SMSFACTORY_SENDER', env('APP_NAME', 'SupportPC')),
+        'signature' => env('SMSFACTORY_SIGNATURE', "Planete-Computers 2.0\n03.89.82.76.33"),
+        'timeout' => (float) env('SMSFACTORY_TIMEOUT', 10),
+        'verify_ssl' => env('SMSFACTORY_VERIFY_SSL', true),
+    ],
+
 ];

@@ -1193,7 +1193,17 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
             {isAgent ? (
               <div className="grid gap-3 xl:grid-cols-2">
                 <div id="ticket-discussion" className="min-w-0 scroll-mt-20">
-                  <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} mentionCandidates={agents} />
+                  <TicketChat
+                    ticketId={ticket.id}
+                    currentUserId={auth.user?.id}
+                    isAgent={isAgent}
+                    notifyBy={ticket.notify_by ?? 'None'}
+                    contactEmail={ticket.contact_email ?? null}
+                    contactPhone={ticket.contact_phone ?? null}
+                    requesterEmail={ticket.user?.email ?? null}
+                    requesterPhone={ticket.user?.phone ?? null}
+                    mentionCandidates={agents}
+                  />
                 </div>
                 <Card
                   id="ticket-suivi-tech"
@@ -1398,7 +1408,17 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 </Card>
               </div>
             ) : (
-              <TicketChat ticketId={ticket.id} currentUserId={auth.user?.id} isAgent={isAgent} mentionCandidates={agents} />
+              <TicketChat
+                ticketId={ticket.id}
+                currentUserId={auth.user?.id}
+                isAgent={isAgent}
+                notifyBy={ticket.notify_by ?? 'None'}
+                contactEmail={ticket.contact_email ?? null}
+                contactPhone={ticket.contact_phone ?? null}
+                requesterEmail={ticket.user?.email ?? null}
+                requesterPhone={ticket.user?.phone ?? null}
+                mentionCandidates={agents}
+              />
             )}
           </div>
 

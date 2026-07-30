@@ -20,6 +20,15 @@ if (csrfToken) {
 }
 
 createInertiaApp({
+    defaults: {
+        visitOptions: (_href, options) => ({
+            ...options,
+            headers: {
+                ...options.headers,
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            },
+        }),
+    },
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) => {
         const pages = import.meta.glob('./pages/**/*.tsx');

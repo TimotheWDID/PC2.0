@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Commande;
 use App\Notifications\AgentMentionNotification;
+use App\Notifications\AgentTicketReplyNotification;
+use App\Notifications\InboundMailNeedsReviewNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -238,7 +240,11 @@ class DashboardController extends Controller
 
         try {
             $notifications = $user->unreadNotifications()
-                ->where('type', 'App\\Notifications\\AgentMentionNotification')
+                ->whereIn('type', [
+                    AgentMentionNotification::class,
+                    AgentTicketReplyNotification::class,
+                    InboundMailNeedsReviewNotification::class,
+                ])
                 ->latest()
                 ->limit(12)
                 ->get();
@@ -272,24 +278,63 @@ class DashboardController extends Controller
 
         return $notifications->map(function ($notification) use ($ticketsById) {
             $data = is_array($notification->data) ? $notification->data : [];
+            $notificationType = (string) ($data['type'] ?? '');
+
+            if ($notificationType === 'inbound_mail_needs_review') {
+                $sender = trim((string) ($data['sender_email'] ?? ''));
+                $subject = trim((string) ($data['subject'] ?? ''));
+                $reason = 'Un mail entrant ne peut pas etre rattache automatiquement.';
+
+                if ($sender !== '') {
+                    $reason .= ' Expediteur: ' . $sender . '.';
+                }
+
+                if ($subject !== '') {
+                    $reason .= ' Objet: ' . $subject . '.';
+                }
+
+                return $this->makeInsight([
+                    'kind' => 'ticket',
+                    'severity' => 'notification',
+                    'title' => 'Mail entrant a valider',
+                    'reason' => $reason,
+                    'action_label' => 'Traiter les mails entrants',
+                    'href' => is_string($data['href'] ?? null) ? $data['href'] : '/tickets/inbound-mails',
+                    'entity_id' => 'inbound-' . $notification->id,
+                    'age_label' => $this->formatSinceLabel($notification->created_at),
+                    'tags' => ['Notification', 'Mail entrant'],
+                    'ticket' => null,
+                ]);
+            }
+
             $ticketId = (int) ($data['ticket_id'] ?? 0);
             $ticket = $ticketId > 0 ? $ticketsById->get($ticketId) : null;
             $ticketTitle = $data['ticket_title'] ?? ($ticket?->title ?: ('Ticket n°' . ($ticketId ?: '-')));
             $excerpt = trim((string) ($data['excerpt'] ?? ''));
-            $baseReason = trim((string) ($data['reason'] ?? 'Mention interne reçue.'));
+            $baseReason = trim((string) ($data['reason'] ?? 'Notification ticket.'));
             $reason = $excerpt !== '' ? ($baseReason . ' « ' . $excerpt . ' »') : $baseReason;
             $href = is_string($data['href'] ?? null) ? $data['href'] : ('/tickets/' . $ticketId);
+
+            $title = 'Notification d\'equipe';
+            $tags = ['Notification'];
+
+            if ($notificationType === 'ticket_customer_reply') {
+                $title = 'Reponse client recue';
+                $tags[] = 'Reponse ticket';
+            } else {
+                $tags[] = 'Mention @';
+            }
 
             return $this->makeInsight([
                 'kind' => 'ticket',
                 'severity' => 'notification',
-                'title' => 'Notification d\'equipe',
+                'title' => $title,
                 'reason' => $reason,
                 'action_label' => 'Voir la notification',
                 'href' => $href,
                 'entity_id' => 'mention-' . $notification->id,
                 'age_label' => $this->formatSinceLabel($notification->created_at),
-                'tags' => ['Notification', 'Mention @'],
+                'tags' => $tags,
                 'ticket' => $ticket ? $this->serializeTicket($ticket) : [
                     'id' => $ticketId,
                     'title' => $ticketTitle,
@@ -668,7 +713,10 @@ class DashboardController extends Controller
 
         try {
             $ownedUnread = $user->unreadNotifications()
-                ->where('type', AgentMentionNotification::class)
+                ->whereIn('type', [
+                    AgentMentionNotification::class,
+                    AgentTicketReplyNotification::class,
+                ])
                 ->where('data->ticket_id', $ticketId)
                 ->get();
         } catch (Throwable $exception) {
@@ -691,7 +739,10 @@ class DashboardController extends Controller
         }
 
         DatabaseNotification::query()
-            ->where('type', AgentMentionNotification::class)
+            ->whereIn('type', [
+                AgentMentionNotification::class,
+                AgentTicketReplyNotification::class,
+            ])
             ->whereIn('data->message_id', $messageIds->all())
             ->whereNull('read_at')
             ->update([

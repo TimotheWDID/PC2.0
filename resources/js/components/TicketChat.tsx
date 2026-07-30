@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Send, Loader2, Trash2, MessageSquare } from 'lucide-react';
 import axios from 'axios';
 import { formatDateTimeFr } from '@/lib/datetime';
@@ -31,6 +33,11 @@ interface TicketChatProps {
   ticketId: number;
   currentUserId: number;
   isAgent?: boolean;
+  notifyBy?: 'SMS' | 'Email' | 'None' | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  requesterEmail?: string | null;
+  requesterPhone?: string | null;
   mentionCandidates?: Array<{
     id: number;
     name: string;
@@ -38,7 +45,17 @@ interface TicketChatProps {
   }>;
 }
 
-export default function TicketChat({ ticketId, currentUserId, isAgent = false, mentionCandidates = [] }: TicketChatProps) {
+export default function TicketChat({
+  ticketId,
+  currentUserId,
+  isAgent = false,
+  notifyBy = null,
+  contactEmail = null,
+  contactPhone = null,
+  requesterEmail = null,
+  requesterPhone = null,
+  mentionCandidates = [],
+}: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [mentionFeedback, setMentionFeedback] = useState<string[]>([]);
@@ -46,7 +63,62 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false, m
   const [isSending, setIsSending] = useState(false);
   const [validatingMentionMessageId, setValidatingMentionMessageId] = useState<number | null>(null);
   const [sendingMode, setSendingMode] = useState<'public' | 'internal'>('public');
+  const [isPublicValidationOpen, setIsPublicValidationOpen] = useState(false);
+  const [publicNotificationChannel, setPublicNotificationChannel] = useState<'SMS' | 'Email' | 'None'>('None');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const normalizedEmail = (contactEmail ?? requesterEmail ?? '').trim();
+  const normalizedPhone = (contactPhone ?? requesterPhone ?? '').trim();
+
+  const availableNotificationChannels = React.useMemo(() => {
+    const channels: Array<'SMS' | 'Email'> = [];
+
+    if (normalizedEmail !== '') {
+      channels.push('Email');
+    }
+
+    if (normalizedPhone !== '') {
+      channels.push('SMS');
+    }
+
+    return channels;
+  }, [normalizedEmail, normalizedPhone]);
+
+  const resolveDefaultPublicChannel = React.useMemo(() => {
+    const requested = typeof notifyBy === 'string' ? notifyBy : null;
+
+    if (requested === 'Email' && availableNotificationChannels.includes('Email')) {
+      return 'Email' as const;
+    }
+
+    if (requested === 'SMS' && availableNotificationChannels.includes('SMS')) {
+      return 'SMS' as const;
+    }
+
+    if (availableNotificationChannels.includes('Email')) {
+      return 'Email' as const;
+    }
+
+    if (availableNotificationChannels.includes('SMS')) {
+      return 'SMS' as const;
+    }
+
+    return 'None' as const;
+  }, [notifyBy, availableNotificationChannels]);
+
+  useEffect(() => {
+    setPublicNotificationChannel((current) => {
+      if (current === 'Email' && availableNotificationChannels.includes('Email')) {
+        return current;
+      }
+
+      if (current === 'SMS' && availableNotificationChannels.includes('SMS')) {
+        return current;
+      }
+
+      return resolveDefaultPublicChannel;
+    });
+  }, [availableNotificationChannels, resolveDefaultPublicChannel]);
 
   const normalizeMentionToken = (value: string): string => {
     return value
@@ -159,16 +231,22 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false, m
     setNewMessage(`${base}${replacement}`);
   };
 
-  const sendMessage = async (internal: boolean) => {
+  const sendMessage = async (internal: boolean, channelOverride?: 'SMS' | 'Email' | 'None') => {
     if (!newMessage.trim()) return;
 
     setSendingMode(internal ? 'internal' : 'public');
     setIsSending(true);
     try {
-      const response = await axios.post(`/tickets/${ticketId}/messages`, {
+      const payload: Record<string, unknown> = {
         content: newMessage,
         is_internal: internal,
-      });
+      };
+
+      if (!internal && isAgent) {
+        payload.notification_channel = channelOverride ?? publicNotificationChannel;
+      }
+
+      const response = await axios.post(`/tickets/${ticketId}/messages`, payload);
 
       const mentionWarnings: string[] = response.data?.meta?.mention_warnings ?? [];
       setMentionFeedback(internal ? mentionWarnings : []);
@@ -178,7 +256,10 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false, m
       setTimeout(() => scrollToBottom(true), 50);
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
-      alert('Erreur lors de l\'envoi du message');
+      const message = axios.isAxiosError(error)
+        ? (error.response?.data?.message ?? 'Erreur lors de l\'envoi du message')
+        : 'Erreur lors de l\'envoi du message';
+      alert(message);
     } finally {
       setIsSending(false);
     }
@@ -186,7 +267,22 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false, m
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!newMessage.trim()) {
+      return;
+    }
+
+    if (isAgent) {
+      setIsPublicValidationOpen(true);
+      return;
+    }
+
     await sendMessage(false);
+  };
+
+  const handleConfirmPublicSend = async () => {
+    setIsPublicValidationOpen(false);
+    await sendMessage(false, publicNotificationChannel);
   };
 
   const handleDeleteMessage = async (messageId: number) => {
@@ -413,6 +509,73 @@ export default function TicketChat({ ticketId, currentUserId, isAgent = false, m
               </Button>
             </div>
           </form>
+
+          <Dialog open={isPublicValidationOpen} onOpenChange={setIsPublicValidationOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Validation avant envoi</DialogTitle>
+                <DialogDescription>
+                  Ce controle ne s&apos;applique qu&apos;a &quot;Envoyer&quot;. Les notes internes ne sont pas concernees.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 text-sm">
+                <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <p className="font-medium text-foreground">Canal de notification client</p>
+                  <p className="text-muted-foreground">
+                    {publicNotificationChannel === 'Email'
+                      ? 'Le message sera notifie par email.'
+                      : publicNotificationChannel === 'SMS'
+                        ? 'Le message sera notifie par SMS.'
+                        : 'Aucun canal disponible: le message sera enregistre sur le ticket sans notification.'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <p className="text-muted-foreground">Email client: {normalizedEmail || 'non renseigne'}</p>
+                  <p className="text-muted-foreground">Telephone client: {normalizedPhone || 'non renseigne'}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="font-medium text-foreground">Type d&apos;envoi</p>
+                  <Select
+                    value={publicNotificationChannel}
+                    onValueChange={(value) => setPublicNotificationChannel(value as 'SMS' | 'Email' | 'None')}
+                    disabled={availableNotificationChannels.length <= 1}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selectionner un canal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Email" disabled={!availableNotificationChannels.includes('Email')}>
+                        Email
+                      </SelectItem>
+                      <SelectItem value="SMS" disabled={!availableNotificationChannels.includes('SMS')}>
+                        SMS
+                      </SelectItem>
+                      <SelectItem value="None">Aucune notification</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {availableNotificationChannels.length <= 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      {availableNotificationChannels.length === 1
+                        ? 'Un seul canal disponible: selection automatique.'
+                        : 'Aucun canal disponible sur la fiche client.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsPublicValidationOpen(false)}>
+                  Annuler
+                </Button>
+                <Button type="button" onClick={handleConfirmPublicSend} disabled={isSending || !newMessage.trim()}>
+                  Confirmer et envoyer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardContent>
     </Card>

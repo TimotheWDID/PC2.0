@@ -39,6 +39,21 @@ const baseNavItems: NavItem[] = [
 ];
 
 const agentAdminNavItems: NavItem[] = [
+    {
+        title: 'Mails entrants',
+        href: '/settings/inbound-mail-review',
+        icon: null,
+    },
+    {
+        title: 'Debug Mail',
+        href: '/settings/mail-debug',
+        icon: null,
+    },
+    {
+        title: 'Debug SMS',
+        href: '/settings/sms-debug',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

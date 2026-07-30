@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
 use App\Models\User;
 use App\Notifications\AgentMentionNotification;
+use App\Notifications\AgentTicketReplyNotification;
 use App\Notifications\TicketMessageNotification;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -222,6 +223,46 @@ class MessageController extends Controller
         return ! $previewAsNonAgent;
     }
 
+    private function notifyAgentsForCustomerReply(Ticket $ticket, Message $message): void
+    {
+        if ($message->is_internal) {
+            return;
+        }
+
+        $ticket->loadMissing([
+            'user:id,first_name,last_name',
+            'assignee:id',
+            'assignee.agent:id,user_id,is_active',
+        ]);
+
+        $customerName = trim(($ticket->user?->first_name ?? '') . ' ' . ($ticket->user?->last_name ?? ''));
+
+        $recipientIds = collect();
+
+        $assigneeIsActiveAgent = (bool) ($ticket->assignee?->agent?->is_active ?? false);
+        if ($assigneeIsActiveAgent && $ticket->assignee_id) {
+            $recipientIds->push((int) $ticket->assignee_id);
+        } else {
+            $recipientIds = User::query()
+                ->whereHas('agent', function ($query) {
+                    $query->where('is_active', true);
+                })
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+        }
+
+        if ($recipientIds->isEmpty()) {
+            return;
+        }
+
+        User::query()
+            ->whereIn('id', $recipientIds->unique()->values()->all())
+            ->get()
+            ->each(function (User $recipient) use ($ticket, $message, $customerName) {
+                $recipient->notify(new AgentTicketReplyNotification($ticket, $message, $customerName));
+            });
+    }
+
     private function authorizeTicketAccess(Ticket $ticket): void
     {
         $user = Auth::user();
@@ -262,6 +303,89 @@ class MessageController extends Controller
             'happened_at' => now(),
         ]);
     }
+
+    /**
+     * @return array{channels: array<int, string>, email: ?string, phone: ?string}
+     */
+    private function resolveTicketNotificationContext(Ticket $ticket): array
+    {
+        $ticket->loadMissing('user:id,email,phone');
+
+        $email = trim((string) ($ticket->contact_email ?: ($ticket->user?->email ?? '')));
+        $phone = trim((string) ($ticket->contact_phone ?: ($ticket->user?->phone ?? '')));
+
+        $channels = [];
+
+        if ($email !== '') {
+            $channels[] = 'Email';
+        }
+
+        if ($phone !== '') {
+            $channels[] = 'SMS';
+        }
+
+        return [
+            'channels' => $channels,
+            'email' => $email !== '' ? $email : null,
+            'phone' => $phone !== '' ? $phone : null,
+        ];
+    }
+
+    private function resolvePublicNotificationChannel(Ticket $ticket, ?string $requestedChannel): ?string
+    {
+        $context = $this->resolveTicketNotificationContext($ticket);
+        $availableChannels = $context['channels'];
+
+        if ($requestedChannel !== null) {
+            if ($requestedChannel === 'None') {
+                return 'None';
+            }
+
+            if (in_array($requestedChannel, $availableChannels, true)) {
+                return $requestedChannel;
+            }
+
+            return null;
+        }
+
+        $current = is_string($ticket->notify_by ?? null)
+            ? trim((string) $ticket->notify_by)
+            : 'None';
+
+        if (in_array($current, $availableChannels, true)) {
+            return $current;
+        }
+
+        if (in_array('Email', $availableChannels, true)) {
+            return 'Email';
+        }
+
+        if (in_array('SMS', $availableChannels, true)) {
+            return 'SMS';
+        }
+
+        return 'None';
+    }
+
+    private function applyPublicNotificationPreference(Ticket $ticket, string $channel): void
+    {
+        $context = $this->resolveTicketNotificationContext($ticket);
+
+        $ticket->notify_by = $channel;
+
+        if (empty($ticket->contact_email) && ! empty($context['email'])) {
+            $ticket->contact_email = $context['email'];
+        }
+
+        if (empty($ticket->contact_phone) && ! empty($context['phone'])) {
+            $ticket->contact_phone = $context['phone'];
+        }
+
+        if ($ticket->isDirty(['notify_by', 'contact_email', 'contact_phone'])) {
+            $ticket->save();
+        }
+    }
+
     /**
      * Get all messages for a specific ticket
      */
@@ -327,13 +451,39 @@ class MessageController extends Controller
             'content' => 'required|string|max:5000',
             'is_internal' => 'nullable|boolean',
             'attachments' => 'nullable|array',
+            'notification_channel' => 'nullable|in:SMS,Email,None',
         ]);
+
+        $isInternal = $request->boolean('is_internal');
+        $notificationChannel = null;
+
+        if (! $isInternal && $this->isAgentContext()) {
+            $notificationChannel = $this->resolvePublicNotificationChannel(
+                $ticket,
+                isset($validated['notification_channel']) ? (string) $validated['notification_channel'] : null
+            );
+
+            if ($notificationChannel === null) {
+                $context = $this->resolveTicketNotificationContext($ticket);
+
+                return response()->json([
+                    'message' => 'Le canal choisi n\'est pas disponible pour ce client.',
+                    'meta' => [
+                        'available_channels' => $context['channels'],
+                        'contact_email' => $context['email'],
+                        'contact_phone' => $context['phone'],
+                    ],
+                ], 422);
+            }
+
+            $this->applyPublicNotificationPreference($ticket, $notificationChannel);
+        }
 
         $message = Message::create([
             'ticket_id' => $ticket->id,
             'author_id' => Auth::id(),
             'content' => $validated['content'],
-            'is_internal' => $validated['is_internal'] ?? false,
+            'is_internal' => $isInternal,
             'attachments' => $validated['attachments'] ?? [],
         ]);
 
@@ -348,12 +498,13 @@ class MessageController extends Controller
             'unread_count' => 0,
         ];
 
-        // Envoyer une notification email si le message n'est pas interne
-        if (!$message->is_internal && $ticket->user && $ticket->user->email) {
-            // Ne notifier que si l'auteur n'est pas le user lui-même
-            if ($message->author_id !== $ticket->user_id) {
-                $ticket->user->notify(new TicketMessageNotification($ticket, $message));
-            }
+        // Ne notifier que si l'auteur n'est pas le user lui-meme.
+        if (! $message->is_internal && $ticket->user && $message->author_id !== $ticket->user_id) {
+            $ticket->user->notify(new TicketMessageNotification($ticket, $message));
+        }
+
+        if (! $message->is_internal && $message->author_id === $ticket->user_id) {
+            $this->notifyAgentsForCustomerReply($ticket, $message);
         }
 
         return response()->json([
@@ -372,6 +523,7 @@ class MessageController extends Controller
             ],
             'meta' => [
                 'mention_warnings' => $mentionWarnings,
+                'notification_channel' => $notificationChannel,
             ],
         ], 201);
     }
