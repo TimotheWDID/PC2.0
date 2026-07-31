@@ -26,7 +26,7 @@ class SmsDebugController extends Controller
 
         $validated = $request->validate([
             'to' => ['required', 'string', 'max:30'],
-            'message' => ['required', 'string', 'max:500'],
+            'message' => ['required', 'string', 'max:120'],
             'sender' => ['nullable', 'string', 'max:20'],
             'base_url' => ['nullable', 'string', 'max:255'],
             'send_path' => ['nullable', 'string', 'max:255'],

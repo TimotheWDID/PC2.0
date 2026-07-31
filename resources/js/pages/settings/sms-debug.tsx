@@ -94,7 +94,8 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
 
                 <div className="grid gap-2">
                   <Label htmlFor="message">Message</Label>
-                  <Textarea id="message" rows={4} value={data.message} onChange={(event) => setData('message', event.target.value)} />
+                  <Textarea id="message" rows={4} maxLength={120} value={data.message} onChange={(event) => setData('message', event.target.value)} />
+                  <p className="text-xs text-muted-foreground">Maximum 120 caractères (limite appliquée à tous les SMS).</p>
                   <InputError message={errors.message} />
                 </div>
 

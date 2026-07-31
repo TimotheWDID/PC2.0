@@ -39,6 +39,7 @@ return [
         'enabled' => env('SMSFACTORY_ENABLED', false),
         'base_url' => env('SMSFACTORY_BASE_URL', 'https://api.smsfactor.com'),
         'send_path' => env('SMSFACTORY_SEND_PATH', '/send'),
+        'max_length' => (int) env('SMSFACTORY_MAX_LENGTH', 120),
         'api_key' => env('SMSFACTORY_API_KEY'),
         'auth_header' => env('SMSFACTORY_AUTH_HEADER', 'X-API-KEY'),
         'auth_prefix' => env('SMSFACTORY_AUTH_PREFIX', ''),

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Head, Link, router } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import Heading from '@/components/heading'
 import MobileNativeNav from '@/components/mobile-native-nav'
@@ -89,7 +89,30 @@ const eventTypeLabels: Record<string, string> = {
 }
 
 export default function DeviceShow({ device, tickets, events, stats, isAgent }: DeviceShowProps) {
+  const { auth } = usePage().props as any
+  const isCurrentUserOwner = auth?.user?.id === device.user?.id
   const [showPassword, setShowPassword] = useState(false)
+  const [editingDevice, setEditingDevice] = useState(false)
+  const [deviceForm, setDeviceForm] = useState({
+    device_type: device.device_type || 'computer',
+    brand: device.brand || '',
+    model: device.model || '',
+    serial_number: device.serial_number || '',
+    asset_tag: device.asset_tag || '',
+    purchase_date: device.purchase_date || '',
+    warranty_start_date: device.warranty_start_date || '',
+    warranty_end_date: device.warranty_end_date || '',
+    vendor_name: device.vendor_name || '',
+    status: device.status || 'active',
+    imei: device.imei || '',
+    sim_number: device.sim_number || '',
+    phone_number: device.phone_number || '',
+    os_name: device.os_name || '',
+    ram_gb: device.ram_gb ? String(device.ram_gb) : '',
+    storage_gb: device.storage_gb ? String(device.storage_gb) : '',
+    cpu: device.cpu || '',
+    notes: device.notes || '',
+  })
   const [eventForm, setEventForm] = useState({
     event_type: 'maintenance',
     summary: '',
@@ -123,6 +146,18 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent }: 
           ticket_id: '',
         })
       },
+    })
+  }
+
+  const submitDeviceUpdate = (e: React.FormEvent) => {
+    e.preventDefault()
+    router.patch(`/users/${device.user?.id ?? 0}/devices/${device.id}`, {
+      ...deviceForm,
+      ram_gb: deviceForm.ram_gb ? Number(deviceForm.ram_gb) : null,
+      storage_gb: deviceForm.storage_gb ? Number(deviceForm.storage_gb) : null,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => setEditingDevice(false),
     })
   }
 
@@ -196,6 +231,11 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent }: 
                 {device.user && (
                   <Button asChild size="sm" variant="outline"><Link href={`/users/${device.user.id}/edit#tickets-client`}>Fiche client</Link></Button>
                 )}
+                {(isAgent || isCurrentUserOwner) && (
+                  <Button type="button" size="sm" onClick={() => setEditingDevice((v) => !v)}>
+                    {editingDevice ? 'Fermer edition' : 'Modifier appareil'}
+                  </Button>
+                )}
                 {isAgent && (
                   <Button asChild size="sm"><Link href="/tickets/create">Nouveau ticket</Link></Button>
                 )}
@@ -208,6 +248,119 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent }: 
               <CardTitle className="flex items-center gap-2"><Wrench className="h-4 w-4" /> Tracking interventions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {editingDevice && (isAgent || isCurrentUserOwner) && (
+                <form onSubmit={submitDeviceUpdate} className="space-y-3 rounded-md border p-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Type</Label>
+                      <select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={deviceForm.device_type} onChange={(e) => setDeviceForm({ ...deviceForm, device_type: e.target.value })}>
+                        <option value="computer">Ordinateur</option>
+                        <option value="phone">Téléphone</option>
+                        <option value="tablet">Tablette</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Statut</Label>
+                      <select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={deviceForm.status} onChange={(e) => setDeviceForm({ ...deviceForm, status: e.target.value })}>
+                        <option value="active">Actif</option>
+                        <option value="in_repair">En reparation</option>
+                        <option value="archived">Archive</option>
+                        <option value="lost">Perdu</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Marque</Label>
+                      <Input value={deviceForm.brand} onChange={(e) => setDeviceForm({ ...deviceForm, brand: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Modèle</Label>
+                      <Input value={deviceForm.model} onChange={(e) => setDeviceForm({ ...deviceForm, model: e.target.value })} required />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Numéro de série</Label>
+                      <Input value={deviceForm.serial_number} onChange={(e) => setDeviceForm({ ...deviceForm, serial_number: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Numéro de suivi</Label>
+                      <Input value={deviceForm.asset_tag} onChange={(e) => setDeviceForm({ ...deviceForm, asset_tag: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Date d'achat</Label>
+                      <Input type="date" value={deviceForm.purchase_date} onChange={(e) => setDeviceForm({ ...deviceForm, purchase_date: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Début garantie</Label>
+                      <Input type="date" value={deviceForm.warranty_start_date} onChange={(e) => setDeviceForm({ ...deviceForm, warranty_start_date: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Fin garantie</Label>
+                      <Input type="date" value={deviceForm.warranty_end_date} onChange={(e) => setDeviceForm({ ...deviceForm, warranty_end_date: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Fournisseur</Label>
+                      <Input value={deviceForm.vendor_name} onChange={(e) => setDeviceForm({ ...deviceForm, vendor_name: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>IMEI</Label>
+                      <Input value={deviceForm.imei} onChange={(e) => setDeviceForm({ ...deviceForm, imei: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Numéro SIM</Label>
+                      <Input value={deviceForm.sim_number} onChange={(e) => setDeviceForm({ ...deviceForm, sim_number: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Téléphone</Label>
+                      <Input value={deviceForm.phone_number} onChange={(e) => setDeviceForm({ ...deviceForm, phone_number: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>OS</Label>
+                      <Input value={deviceForm.os_name} onChange={(e) => setDeviceForm({ ...deviceForm, os_name: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>RAM (Go)</Label>
+                      <Input type="number" min="1" value={deviceForm.ram_gb} onChange={(e) => setDeviceForm({ ...deviceForm, ram_gb: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Stockage (Go)</Label>
+                      <Input type="number" min="1" value={deviceForm.storage_gb} onChange={(e) => setDeviceForm({ ...deviceForm, storage_gb: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>CPU</Label>
+                    <Input value={deviceForm.cpu} onChange={(e) => setDeviceForm({ ...deviceForm, cpu: e.target.value })} />
+                  </div>
+
+                  <div>
+                    <Label>Notes</Label>
+                    <Textarea rows={3} value={deviceForm.notes} onChange={(e) => setDeviceForm({ ...deviceForm, notes: e.target.value })} />
+                  </div>
+
+                  <Button type="submit">Enregistrer les modifications</Button>
+                </form>
+              )}
               {isAgent && (
                 <form onSubmit={submitEvent} className="space-y-3 rounded-md border p-3">
                   <div className="grid gap-3 md:grid-cols-2">

@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Log;
 
 class SmsFactoryClient
 {
+    private const DEFAULT_MAX_SMS_LENGTH = 120;
+
     public function send(string $to, string $message, ?string $sender = null): bool
     {
         return (bool) ($this->sendDetailed($to, $message, $sender)['ok'] ?? false);
@@ -168,6 +170,7 @@ class SmsFactoryClient
     private function buildPayload(string $recipient, string $message, string $sender): array
     {
         $message = $this->applySignature($message);
+        $message = $this->enforceMaxLength($message);
 
         return [
             'sms' => [
@@ -242,5 +245,67 @@ class SmsFactoryClient
         }
 
         return $normalizedMessage . "\n\n" . $signature;
+    }
+
+    private function enforceMaxLength(string $message): string
+    {
+        $configuredLength = (int) config('services.smsfactory.max_length', self::DEFAULT_MAX_SMS_LENGTH);
+
+        if ($configuredLength <= 0) {
+            $configuredLength = self::DEFAULT_MAX_SMS_LENGTH;
+        }
+
+        $maxLength = min($configuredLength, self::DEFAULT_MAX_SMS_LENGTH);
+
+        if (mb_strlen($message) <= $maxLength) {
+            return $message;
+        }
+
+        [$contentWithoutProtectedSuffix, $protectedSuffix] = $this->extractProtectedSuffix($message);
+        $remainingLength = $maxLength - mb_strlen($protectedSuffix);
+
+        if ($remainingLength <= 0) {
+            return $protectedSuffix;
+        }
+
+        $truncatedContent = rtrim(mb_substr(rtrim($contentWithoutProtectedSuffix), 0, $remainingLength));
+
+        return $truncatedContent . $protectedSuffix;
+    }
+
+    /**
+     * Protects trailing blocks that must not be truncated (reply link and signature).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function extractProtectedSuffix(string $message): array
+    {
+        $working = $message;
+        $protectedSuffix = '';
+
+        $signature = trim((string) config('services.smsfactory.signature', ''));
+        if ($signature !== '') {
+            $signatureSuffix = "\n\n" . $signature;
+
+            if (str_ends_with($working, $signatureSuffix)) {
+                $working = mb_substr($working, 0, mb_strlen($working) - mb_strlen($signatureSuffix));
+                $protectedSuffix = $signatureSuffix . $protectedSuffix;
+            } elseif (trim($working) === $signature) {
+                $working = '';
+                $protectedSuffix = $signature;
+            }
+        }
+
+        if (preg_match('/(\n\n?[^\n]*https?:\/\/\S+)\s*$/u', $working, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $fullMatch = $matches[1][0] ?? '';
+            $byteOffset = $matches[1][1] ?? null;
+
+            if (is_string($fullMatch) && is_int($byteOffset)) {
+                $working = rtrim(substr($working, 0, $byteOffset));
+                $protectedSuffix = $fullMatch . $protectedSuffix;
+            }
+        }
+
+        return [$working, $protectedSuffix];
     }
 }
