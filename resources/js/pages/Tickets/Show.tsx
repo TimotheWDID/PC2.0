@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2 } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -201,6 +201,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [pendingStatusValue, setPendingStatusValue] = useState<string | null>(null);
   const [pendingPriorityValue, setPendingPriorityValue] = useState<string | null>(null);
   const [isSavingTicket, setIsSavingTicket] = useState(false);
+  const [copiedMagicLink, setCopiedMagicLink] = useState(false);
   const [isSavingInternalNote, setIsSavingInternalNote] = useState(false);
   const [isAddingTimelineEvent, setIsAddingTimelineEvent] = useState(false);
   const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
@@ -459,6 +460,22 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
         onFinish: () => setIsCreatingDevice(false),
       },
     );
+  };
+
+  const handleCopyMagicLink = async () => {
+    const url = ticket?.magic_link_url as string | undefined;
+
+    if (!url) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedMagicLink(true);
+      window.setTimeout(() => setCopiedMagicLink(false), 1800);
+    } catch {
+      setCopiedMagicLink(false);
+    }
   };
 
   const timelineTechnicians = useMemo(() => {
@@ -1063,6 +1080,18 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       Imprimer etiquette
                     </Button>
                   </Link>
+                  {ticket.magic_link_url ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={ticketActionBtnClass}
+                      type="button"
+                      onClick={handleCopyMagicLink}
+                    >
+                      <Link2 className="mr-1 h-3.5 w-3.5" />
+                      {copiedMagicLink ? 'Lien client copie' : 'Copier lien client'}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>

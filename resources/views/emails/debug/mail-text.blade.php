@@ -1,18 +1,34 @@
 {{ $subject }}
 
+Bonjour,
+
+Vous avez un nouveau message sur votre ticket support.
+
 {{ $body }}
 
-@if (!empty($mailFooter['enabled'] ?? false) && !empty(trim((string) ($mailFooter['content'] ?? ''))))
+@php
+	$footerEnabled = !empty($mailFooter['enabled'] ?? false);
+	$footerText = trim((string) ($mailFooter['content'] ?? ''));
+	$footerImage = trim((string) ($mailFooter['image_url'] ?? ''));
+	$hasFooterText = $footerEnabled && $footerText !== '';
+	$hasFooterImage = $footerEnabled && $footerImage !== '';
+@endphp
+
+@if ($hasFooterText || $hasFooterImage)
 
 ---
 
-@if (!empty(trim((string) ($mailFooter['image_url'] ?? ''))))
-[Image] {{ $mailFooter['image_alt'] ?? 'Logo SupportPC' }}: {{ $mailFooter['image_url'] }}
+@if ($hasFooterImage)
+[Image] {{ $mailFooter['image_alt'] ?? 'Logo SupportPC' }}: {{ $footerImage }}
 
 @endif
 
-{{ $mailFooter['content'] }}
+@if ($hasFooterText)
+{{ $footerText }}
+@endif
 @endif
 
---
+@if (! $hasFooterText)
+Cordialement,
 {{ config('app.name') }}
+@endif

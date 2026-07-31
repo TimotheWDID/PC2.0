@@ -1,4 +1,18 @@
 @component('mail::message')
+@php
+	$footerEnabled = !empty($mailFooter['enabled'] ?? false);
+	$footerText = trim((string) ($mailFooter['content'] ?? ''));
+	$footerImage = trim((string) ($mailFooter['image_url'] ?? ''));
+	$hasFooterText = $footerEnabled && $footerText !== '';
+	$hasFooterImage = $footerEnabled && $footerImage !== '';
+@endphp
+
+@if ($hasFooterImage)
+<p style="text-align: right; margin: 0 0 8px 0;">
+<img src="{{ $footerImage }}" alt="{{ $mailFooter['image_alt'] ?? 'Logo SupportPC' }}" style="max-width: 56px; height: auto; display: inline-block;">
+</p>
+@endif
+
 # Ticket #{{ $ticket->id }}: {{ $ticket->title }}
 
 Bonjour {{ $recipientFirstName ?? 'client' }},
@@ -9,26 +23,22 @@ Vous avez un nouveau message sur votre ticket {{ strtolower($ticketKindLabel ?? 
 {!! nl2br(e($messageBody)) !!}
 @endcomponent
 
-@component('mail::button', ['url' => route('tickets.show', ['ticket' => $ticket->id])])
+@component('mail::button', ['url' => !empty($magicLinkUrl) ? $magicLinkUrl : route('tickets.show', ['ticket' => $ticket->id])])
 Voir le ticket
 @endcomponent
 
-Vous pouvez aussi répondre directement à cet email pour ajouter une réponse au ticket.
-
-@if (!empty($mailFooter['enabled'] ?? false) && !empty(trim((string) ($mailFooter['content'] ?? ''))))
+@if ($hasFooterText || $hasFooterImage)
 
 ---
 
-@if (!empty(trim((string) ($mailFooter['image_url'] ?? ''))))
-
-<p>
-<img src="{{ $mailFooter['image_url'] }}" alt="{{ $mailFooter['image_alt'] ?? 'Logo SupportPC' }}" style="max-width: 220px; height: auto; display: block; margin-bottom: 12px;">
-</p>
+@if ($hasFooterText)
+{!! nl2br(e($footerText)) !!}
 @endif
 
-{!! nl2br(e($mailFooter['content'])) !!}
 @endif
 
+@if (! $hasFooterText)
 Cordialement,
 {{ config('app.name') }}
+@endif
 @endcomponent

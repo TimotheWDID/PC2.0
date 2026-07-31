@@ -3,8 +3,22 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\InternalTicketController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TicketMagicLinkController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Settings\InboundMailReviewController;
+
+Route::get('t/{token}', [TicketMagicLinkController::class, 'show'])
+    ->where('token', '(?:[A-Fa-f0-9]{64}|[A-Za-z0-9_-]{43}|[A-Za-z0-9_-]{22})')
+    ->middleware('throttle:ticket-magic-link')
+    ->name('tickets.magic.show');
+
+// Public chat access is guarded in MessageController by magic token validation.
+Route::get('tickets/{ticket}/messages', [MessageController::class, 'index'])
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.messages.index');
+Route::post('tickets/{ticket}/messages', [MessageController::class, 'store'])
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.messages.store');
 
 Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
@@ -62,8 +76,6 @@ Route::middleware('auth')->group(function () {
     Route::post('tickets/{ticket}/create-device', [TicketController::class, 'createAndAttachDevice'])->name('tickets.createDevice');
 
     // Chat/Messages routes for tickets
-    Route::get('tickets/{ticket}/messages', [MessageController::class, 'index'])->name('tickets.messages.index');
-    Route::post('tickets/{ticket}/messages', [MessageController::class, 'store'])->name('tickets.messages.store');
     Route::post('tickets/{ticket}/messages/{message}/validate-mention', [MessageController::class, 'validateMention'])->name('tickets.messages.validateMention');
     Route::delete('tickets/{ticket}/messages/{message}', [MessageController::class, 'destroy'])->name('tickets.messages.destroy');
 });

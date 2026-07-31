@@ -19,6 +19,20 @@ use Throwable;
 
 class MessageController extends Controller
 {
+    private function hasMagicTokenAccess(Request $request, Ticket $ticket): bool
+    {
+        $token = trim((string) $request->query('token', ''));
+
+        if ($token === '' || ! Ticket::looksLikeMagicToken($token)) {
+            return false;
+        }
+
+        $hashedToken = Ticket::hashMagicToken($token);
+
+        return hash_equals((string) $ticket->ticket_token_hash, $hashedToken)
+            && ! $ticket->isMagicTokenExpired();
+    }
+
     private function resolveDeliveryChannelFromViaEntry(mixed $viaEntry): ?string
     {
         if (! is_string($viaEntry)) {
@@ -300,12 +314,16 @@ class MessageController extends Controller
             });
     }
 
-    private function authorizeTicketAccess(Ticket $ticket): void
+    private function authorizeTicketAccess(Request $request, Ticket $ticket): void
     {
         $user = Auth::user();
 
         if (!$user) {
-            abort(403, 'Acces non autorise.');
+            if ($this->hasMagicTokenAccess($request, $ticket)) {
+                return;
+            }
+
+            abort(403, 'Acces au ticket refuse: lien invalide ou expire.');
         }
 
         if ($this->isAgentContext()) {
@@ -434,7 +452,7 @@ class MessageController extends Controller
         }
 
         $ticket = Ticket::findOrFail($ticketId);
-        $this->authorizeTicketAccess($ticket);
+        $this->authorizeTicketAccess(request(), $ticket);
 
         $messageModels = $ticket->messages()
             ->with('author:id,first_name,last_name,email')
@@ -488,7 +506,9 @@ class MessageController extends Controller
     public function store(Request $request, $ticketId)
     {
         $ticket = Ticket::findOrFail($ticketId);
-        $this->authorizeTicketAccess($ticket);
+        $this->authorizeTicketAccess($request, $ticket);
+
+        $isAuthenticated = Auth::check();
 
         $validated = $request->validate([
             'content' => 'required|string|max:5000',
@@ -497,10 +517,16 @@ class MessageController extends Controller
             'notification_channel' => 'nullable|in:SMS,Email,None',
         ]);
 
-        $isInternal = $request->boolean('is_internal');
+        $isInternal = $isAuthenticated ? $request->boolean('is_internal') : false;
         $notificationChannel = null;
 
-        if (! $isInternal && $this->isAgentContext()) {
+        if (! $isAuthenticated && $isInternal) {
+            return response()->json([
+                'message' => 'Les notes internes ne sont pas autorisees via ce lien.',
+            ], 403);
+        }
+
+        if ($isAuthenticated && ! $isInternal && $this->isAgentContext()) {
             $notificationChannel = $this->resolvePublicNotificationChannel(
                 $ticket,
                 isset($validated['notification_channel']) ? (string) $validated['notification_channel'] : null
@@ -522,9 +548,13 @@ class MessageController extends Controller
             $this->applyPublicNotificationPreference($ticket, $notificationChannel);
         }
 
+        $authorId = $isAuthenticated
+            ? (int) Auth::id()
+            : (int) $ticket->user_id;
+
         $message = Message::create([
             'ticket_id' => $ticket->id,
-            'author_id' => Auth::id(),
+            'author_id' => $authorId,
             'content' => $validated['content'],
             'is_internal' => $isInternal,
             'attachments' => $validated['attachments'] ?? [],
@@ -543,7 +573,8 @@ class MessageController extends Controller
 
         // Ne notifier que si l'auteur n'est pas le user lui-meme.
         if (! $message->is_internal && $ticket->user && $message->author_id !== $ticket->user_id) {
-            $notification = new TicketMessageNotification($ticket, $message);
+            $magicLink = $ticket->issueMagicLink();
+            $notification = new TicketMessageNotification($ticket, $message, $magicLink['url'] ?? null);
             $ticketNotificationContext = $this->resolveTicketNotificationContext($ticket);
             $anonymousNotifiable = new AnonymousNotifiable();
 
@@ -613,7 +644,7 @@ class MessageController extends Controller
             ->firstOrFail();
 
         $ticket = Ticket::findOrFail($ticketId);
-        $this->authorizeTicketAccess($ticket);
+        $this->authorizeTicketAccess(request(), $ticket);
 
         // Only allow the author or an admin to delete
         if ($message->author_id !== Auth::id()) {
@@ -634,7 +665,7 @@ class MessageController extends Controller
     public function validateMention($ticketId, $messageId)
     {
         $ticket = Ticket::findOrFail($ticketId);
-        $this->authorizeTicketAccess($ticket);
+        $this->authorizeTicketAccess(request(), $ticket);
 
         if (! $this->isAgentContext()) {
             abort(403, 'Action non autorisee.');

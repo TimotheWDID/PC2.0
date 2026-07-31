@@ -1206,6 +1206,8 @@ class TicketController extends Controller
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
         $ticket->load(['user.devices', 'assignee', 'category', 'device']);
+        $agentContext = $this->isAgentContext();
+        $magicLinkUrl = $agentContext ? ($ticket->getOrCreateMagicLink()['url'] ?? null) : null;
 
         $categories = Category::query()->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
@@ -1247,7 +1249,7 @@ class TicketController extends Controller
             ]);
 
         $timelineEvents = [];
-        if ($this->isAgentContext()) {
+        if ($agentContext) {
             $timelineEvents = $ticket->timelineEvents()
                 ->withTrashed()
                 ->with([
@@ -1324,6 +1326,7 @@ class TicketController extends Controller
                 'contact_email' => $ticket->contact_email,
                 'is_resolved' => $ticket->is_resolved,
                 'is_locked' => $ticket->is_locked,
+                'magic_link_url' => $magicLinkUrl,
                 'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
                 'user' => $ticket->user ? [
                     'id' => $ticket->user->id,
@@ -1363,8 +1366,8 @@ class TicketController extends Controller
             'userDevices' => $ticket->user ? $ticket->user->devices->map(fn(Device $device) => $this->serializeDevice($device))->values() : [],
             'timelineEvents' => $timelineEvents,
             'deviceEvents' => $deviceEvents,
-            'timelineTemplateSettings' => $this->isAgentContext() ? TicketTimelineTemplateSettings::load() : ['templates' => []],
-            'actionListSettings' => $this->isAgentContext() ? TicketActionListSettings::load() : ['lists' => []],
+            'timelineTemplateSettings' => $agentContext ? TicketTimelineTemplateSettings::load() : ['templates' => []],
+            'actionListSettings' => $agentContext ? TicketActionListSettings::load() : ['lists' => []],
         ]);
     }
 

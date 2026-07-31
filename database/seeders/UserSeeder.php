@@ -15,18 +15,21 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         // Créer un agent administrateur
-        $admin = User::create([
-            'first_name' => 'Admin',
-            'last_name' => 'Support',
-            'email' => 'admin@support.com',
-            'password' => Hash::make('password'),
-            'phone' => '+33612345678',
-            'address' => '123 Rue de la Tech, Paris',
-            'default_notification_preference' => 'Email',
-        ]);
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@support.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'Support',
+                'password' => Hash::make('password'),
+                'phone' => '+33612345678',
+                'address' => '123 Rue de la Tech, Paris',
+                'default_notification_preference' => 'Email',
+            ]
+        );
 
-        Agent::create([
+        Agent::updateOrCreate([
             'user_id' => $admin->id,
+        ], [
             'is_admin' => true,
         ]);
 
@@ -38,17 +41,20 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($agents as $agentData) {
-            $user = User::create([
-                'first_name' => $agentData['first_name'],
-                'last_name' => $agentData['last_name'],
-                'email' => $agentData['email'],
-                'password' => Hash::make('password'),
-                'phone' => '+336' . rand(10000000, 99999999),
-                'default_notification_preference' => 'Email',
-            ]);
+            $user = User::updateOrCreate(
+                ['email' => $agentData['email']],
+                [
+                    'first_name' => $agentData['first_name'],
+                    'last_name' => $agentData['last_name'],
+                    'password' => Hash::make('password'),
+                    'phone' => '+336' . rand(10000000, 99999999),
+                    'default_notification_preference' => 'Email',
+                ]
+            );
 
-            Agent::create([
+            Agent::updateOrCreate([
                 'user_id' => $user->id,
+            ], [
                 'is_admin' => false,
             ]);
         }
@@ -66,15 +72,17 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($clients as $clientData) {
-            User::create([
-                'first_name' => $clientData['first_name'],
-                'last_name' => $clientData['last_name'],
-                'email' => $clientData['email'],
-                'password' => Hash::make('password'),
-                'phone' => '+336' . rand(10000000, 99999999),
-                'address' => rand(1, 999) . ' Rue ' . ['de la Paix', 'Victor Hugo', 'Voltaire', 'Molière'][rand(0, 3)] . ', ' . ['Paris', 'Lyon', 'Marseille', 'Toulouse'][rand(0, 3)],
-                'default_notification_preference' => ['SMS', 'Email', 'None'][rand(0, 2)],
-            ]);
+            User::updateOrCreate(
+                ['email' => $clientData['email']],
+                [
+                    'first_name' => $clientData['first_name'],
+                    'last_name' => $clientData['last_name'],
+                    'password' => Hash::make('password'),
+                    'phone' => '+336' . rand(10000000, 99999999),
+                    'address' => rand(1, 999) . ' Rue ' . ['de la Paix', 'Victor Hugo', 'Voltaire', 'Molière'][rand(0, 3)] . ', ' . ['Paris', 'Lyon', 'Marseille', 'Toulouse'][rand(0, 3)],
+                    'default_notification_preference' => ['SMS', 'Email', 'None'][rand(0, 2)],
+                ]
+            );
         }
     }
 }

@@ -29,7 +29,8 @@ class TicketMessageNotification extends Notification implements ShouldQueue
 
     public function __construct(
         public Ticket $ticket,
-        public Message $message
+        public Message $message,
+        public ?string $magicLinkUrl = null
     ) {}
 
     /**
@@ -76,6 +77,7 @@ class TicketMessageNotification extends Notification implements ShouldQueue
                 'recipientFirstName' => $recipientFirstName,
                 'ticket' => $this->ticket,
                 'messageBody' => $this->message->content,
+                'magicLinkUrl' => $this->magicLinkUrl,
                 'ticketKindLabel' => $kindLabel,
                 'mailFooter' => MailFooterSettings::load(),
             ]);
@@ -89,17 +91,17 @@ class TicketMessageNotification extends Notification implements ShouldQueue
             return null;
         }
 
-        $kindLabel = $this->getTicketKindLabel();
         $title = Str::limit((string) ($this->ticket->title ?? ''), 70, '...');
-        $excerpt = Str::limit(
-            trim(preg_replace('/\s+/u', ' ', strip_tags((string) ($this->message->content ?? ''))) ?? ''),
-            120,
-            '...'
-        );
+        $agentMessage = trim(strip_tags((string) ($this->message->content ?? '')));
 
-        $content = "[{$kindLabel}] Ticket #{$this->ticket->id}: {$title}";
-        if ($excerpt !== '') {
-            $content .= " - {$excerpt}";
+        if ($agentMessage === '') {
+            $agentMessage = 'Nouveau message de votre agent.';
+        }
+
+        $content = "[Support] Ticket #{$this->ticket->id}: {$title}\n\n{$agentMessage}";
+
+        if (! empty($this->magicLinkUrl)) {
+            $content .= "\n\nPour repondre : {$this->magicLinkUrl}";
         }
 
         return (new SmsFactoryMessage($content))

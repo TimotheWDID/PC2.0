@@ -39,6 +39,8 @@ interface TicketChatProps {
   ticketId: number;
   currentUserId: number;
   isAgent?: boolean;
+  magicToken?: string | null;
+  canSend?: boolean;
   notifyBy?: 'SMS' | 'Email' | 'None' | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
@@ -55,6 +57,8 @@ export default function TicketChat({
   ticketId,
   currentUserId,
   isAgent = false,
+  magicToken = null,
+  canSend = true,
   notifyBy = null,
   contactEmail = null,
   contactPhone = null,
@@ -72,6 +76,15 @@ export default function TicketChat({
   const [isPublicValidationOpen, setIsPublicValidationOpen] = useState(false);
   const [publicNotificationChannel, setPublicNotificationChannel] = useState<'SMS' | 'Email' | 'None'>('None');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const withMagicToken = (path: string): string => {
+    if (!magicToken) {
+      return path;
+    }
+
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}token=${encodeURIComponent(magicToken)}`;
+  };
 
   const normalizedEmail = (contactEmail ?? requesterEmail ?? '').trim();
   const normalizedPhone = (contactPhone ?? requesterPhone ?? '').trim();
@@ -149,7 +162,7 @@ export default function TicketChat({
   const fetchMessages = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`/tickets/${ticketId}/messages`);
+      const response = await axios.get(withMagicToken(`/tickets/${ticketId}/messages`));
       setMessages(response.data.messages);
       setTimeout(() => scrollToBottom(true), 100);
     } catch (error) {
@@ -252,7 +265,7 @@ export default function TicketChat({
         payload.notification_channel = channelOverride ?? publicNotificationChannel;
       }
 
-      const response = await axios.post(`/tickets/${ticketId}/messages`, payload);
+      const response = await axios.post(withMagicToken(`/tickets/${ticketId}/messages`), payload);
 
       const mentionWarnings: string[] = response.data?.meta?.mention_warnings ?? [];
       setMentionFeedback(internal ? mentionWarnings : []);
@@ -273,6 +286,10 @@ export default function TicketChat({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canSend) {
+      return;
+    }
 
     if (!newMessage.trim()) {
       return;
@@ -295,7 +312,7 @@ export default function TicketChat({
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) return;
 
     try {
-      await axios.delete(`/tickets/${ticketId}/messages/${messageId}`);
+      await axios.delete(withMagicToken(`/tickets/${ticketId}/messages/${messageId}`));
       setMessages(messages.filter((msg) => msg.id !== messageId));
     } catch (error) {
       console.error('Erreur lors de la suppression du message:', error);
@@ -311,7 +328,7 @@ export default function TicketChat({
     setValidatingMentionMessageId(messageId);
 
     try {
-      await axios.post(`/tickets/${ticketId}/messages/${messageId}/validate-mention`);
+      await axios.post(withMagicToken(`/tickets/${ticketId}/messages/${messageId}/validate-mention`));
       await fetchMessages();
     } catch (error) {
       console.error('Erreur lors de la validation de la notification:', error);
@@ -508,10 +525,10 @@ export default function TicketChat({
             <Textarea
               value={newMessage}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
-              placeholder="Tapez votre message..."
+              placeholder={canSend ? 'Tapez votre message...' : 'Lecture seule'}
               className="resize-none"
               rows={2}
-              disabled={isSending}
+              disabled={isSending || !canSend}
             />
             {isAgent && (
               <div className="space-y-1">
@@ -548,7 +565,7 @@ export default function TicketChat({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={isSending || !newMessage.trim()}
+                  disabled={isSending || !newMessage.trim() || !canSend}
                   onClick={() => sendMessage(true)}
                 >
                   {isSending && sendingMode === 'internal' ? (
@@ -564,7 +581,7 @@ export default function TicketChat({
                   )}
                 </Button>
               )}
-              <Button type="submit" disabled={isSending || !newMessage.trim()}>
+              <Button type="submit" disabled={isSending || !newMessage.trim() || !canSend}>
                 {isSending && sendingMode === 'public' ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -578,6 +595,9 @@ export default function TicketChat({
                 )}
               </Button>
             </div>
+            {!canSend && (
+              <p className="text-xs text-muted-foreground">Ce lien est en lecture seule.</p>
+            )}
           </form>
 
           <Dialog open={isPublicValidationOpen} onOpenChange={setIsPublicValidationOpen}>
