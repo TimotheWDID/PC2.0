@@ -43,6 +43,8 @@ return [
         'api_key' => env('SMSFACTORY_API_KEY'),
         'auth_header' => env('SMSFACTORY_AUTH_HEADER', 'X-API-KEY'),
         'auth_prefix' => env('SMSFACTORY_AUTH_PREFIX', ''),
+        'header' => env('SMSFACTORY_HEADER', ''),
+        'footer' => env('SMSFACTORY_FOOTER', env('SMSFACTORY_SIGNATURE', "Planete-Computers 2.0\n03.89.82.76.33")),
         'sender' => env('SMSFACTORY_SENDER', env('APP_NAME', 'SupportPC')),
         'signature' => env('SMSFACTORY_SIGNATURE', "Planete-Computers 2.0\n03.89.82.76.33"),
         'timeout' => (float) env('SMSFACTORY_TIMEOUT', 10),

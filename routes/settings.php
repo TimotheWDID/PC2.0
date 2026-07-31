@@ -11,6 +11,7 @@ use App\Http\Controllers\Settings\TicketTimelineTemplateController;
 use App\Http\Controllers\Settings\DashboardInsightController;
 use App\Http\Controllers\Settings\InboundMailReviewController;
 use App\Http\Controllers\Settings\MailDebugController;
+use App\Http\Controllers\Settings\SmsSettingsController;
 use App\Http\Controllers\Settings\SmsDebugController;
 use App\Http\Controllers\Settings\EditableDataController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,13 @@ Route::middleware('auth')->group(function () {
     Route::post('settings/sms-debug', [SmsDebugController::class, 'send'])
         ->middleware('admin')
         ->name('sms-debug.send');
+
+    Route::get('settings/sms', [SmsSettingsController::class, 'edit'])
+        ->middleware('admin')
+        ->name('sms.edit');
+    Route::put('settings/sms', [SmsSettingsController::class, 'update'])
+        ->middleware('admin')
+        ->name('sms.update');
 
     Route::get('settings/mail-debug', [MailDebugController::class, 'edit'])
         ->middleware('admin')

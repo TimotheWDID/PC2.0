@@ -40,6 +40,11 @@ const baseNavItems: NavItem[] = [
 
 const agentAdminNavItems: NavItem[] = [
     {
+        title: 'Paramètres SMS',
+        href: '/settings/sms',
+        icon: null,
+    },
+    {
         title: 'Mails entrants',
         href: '/settings/inbound-mail-review',
         icon: null,

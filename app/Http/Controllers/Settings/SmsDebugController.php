@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Support\SmsFactoryClient;
+use App\Support\SmsFactorySettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -26,7 +27,7 @@ class SmsDebugController extends Controller
 
         $validated = $request->validate([
             'to' => ['required', 'string', 'max:30'],
-            'message' => ['required', 'string', 'max:120'],
+            'message' => ['required', 'string', 'max:1000'],
             'sender' => ['nullable', 'string', 'max:20'],
             'base_url' => ['nullable', 'string', 'max:255'],
             'send_path' => ['nullable', 'string', 'max:255'],
@@ -34,6 +35,7 @@ class SmsDebugController extends Controller
             'auth_header' => ['nullable', 'string', 'max:100'],
             'auth_prefix' => ['nullable', 'string', 'max:50'],
             'verify_ssl' => ['nullable', 'boolean'],
+            'bypass_decorations' => ['nullable', 'boolean'],
         ]);
 
         $result = $client->sendDetailed(
@@ -48,6 +50,7 @@ class SmsDebugController extends Controller
                 'auth_prefix' => $validated['auth_prefix'] ?? config('services.smsfactory.auth_prefix'),
                 'verify_ssl' => $request->boolean('verify_ssl'),
                 'sender' => $validated['sender'] ?? config('services.smsfactory.sender'),
+                'bypass_decorations' => $request->boolean('bypass_decorations'),
             ]
         );
 
@@ -71,6 +74,7 @@ class SmsDebugController extends Controller
                 'auth_header' => $validated['auth_header'] ?? config('services.smsfactory.auth_header'),
                 'auth_prefix' => $validated['auth_prefix'] ?? config('services.smsfactory.auth_prefix'),
                 'verify_ssl' => $request->boolean('verify_ssl'),
+                'bypass_decorations' => $request->boolean('bypass_decorations'),
             ],
         ]);
     }
@@ -86,16 +90,19 @@ class SmsDebugController extends Controller
 
     private function defaults(): array
     {
+        $settings = SmsFactorySettings::load();
+
         return [
             'to' => '',
             'message' => 'Test SMSFactor depuis SupportPC',
-            'sender' => (string) config('services.smsfactory.sender', config('app.name', 'SupportPC')),
-            'base_url' => (string) config('services.smsfactory.base_url', 'https://api.smsfactor.com'),
-            'send_path' => (string) config('services.smsfactory.send_path', '/send'),
-            'api_key' => (string) config('services.smsfactory.api_key', ''),
-            'auth_header' => (string) config('services.smsfactory.auth_header', 'Authorization'),
-            'auth_prefix' => (string) config('services.smsfactory.auth_prefix', 'Bearer'),
-            'verify_ssl' => (bool) config('services.smsfactory.verify_ssl', true),
+            'sender' => (string) ($settings['sender'] ?? config('app.name', 'SupportPC')),
+            'base_url' => (string) ($settings['base_url'] ?? 'https://api.smsfactor.com'),
+            'send_path' => (string) ($settings['send_path'] ?? '/send'),
+            'api_key' => (string) ($settings['api_key'] ?? ''),
+            'auth_header' => (string) ($settings['auth_header'] ?? 'Authorization'),
+            'auth_prefix' => (string) ($settings['auth_prefix'] ?? 'Bearer'),
+            'verify_ssl' => (bool) ($settings['verify_ssl'] ?? true),
+            'bypass_decorations' => false,
         ];
     }
 }

@@ -20,6 +20,7 @@ type DebugDefaults = {
   auth_header: string;
   auth_prefix: string;
   verify_ssl: boolean;
+  bypass_decorations: boolean;
 };
 
 type DebugResult = {
@@ -50,6 +51,7 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
     auth_header: defaults.auth_header,
     auth_prefix: defaults.auth_prefix,
     verify_ssl: defaults.verify_ssl,
+    bypass_decorations: defaults.bypass_decorations,
   });
 
   const submit = (event: React.FormEvent) => {
@@ -94,8 +96,8 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
 
                 <div className="grid gap-2">
                   <Label htmlFor="message">Message</Label>
-                  <Textarea id="message" rows={4} maxLength={120} value={data.message} onChange={(event) => setData('message', event.target.value)} />
-                  <p className="text-xs text-muted-foreground">Maximum 120 caractères (limite appliquée à tous les SMS).</p>
+                  <Textarea id="message" rows={4} maxLength={1000} value={data.message} onChange={(event) => setData('message', event.target.value)} />
+                  <p className="text-xs text-muted-foreground">La limite effective dépend du paramétrage SMS courant.</p>
                   <InputError message={errors.message} />
                 </div>
 
@@ -134,9 +136,16 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                     <InputError message={errors.api_key} />
                   </div>
 
-                  <div className="flex items-end gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                    <input id="verify_ssl" type="checkbox" checked={data.verify_ssl} onChange={(event) => setData('verify_ssl', event.target.checked)} className="h-4 w-4 rounded border-input" />
-                    <Label htmlFor="verify_ssl" className="cursor-pointer">Vérifier le certificat SSL</Label>
+                  <div className="space-y-3">
+                    <div className="flex items-end gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                      <input id="verify_ssl" type="checkbox" checked={data.verify_ssl} onChange={(event) => setData('verify_ssl', event.target.checked)} className="h-4 w-4 rounded border-input" />
+                      <Label htmlFor="verify_ssl" className="cursor-pointer">Vérifier le certificat SSL</Label>
+                    </div>
+
+                    <div className="flex items-end gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                      <input id="bypass_decorations" type="checkbox" checked={data.bypass_decorations} onChange={(event) => setData('bypass_decorations', event.target.checked)} className="h-4 w-4 rounded border-input" />
+                      <Label htmlFor="bypass_decorations" className="cursor-pointer">Ignorer header/footer</Label>
+                    </div>
                   </div>
                 </div>
 

@@ -32,6 +32,7 @@ class SmsFactoryChannel
                 (string) ($message['content'] ?? ''),
                 isset($message['recipient']) ? (string) $message['recipient'] : null,
                 isset($message['sender']) ? (string) $message['sender'] : null,
+                (bool) ($message['bypassDecorations'] ?? $message['bypass_decorations'] ?? false),
             );
         }
 
@@ -54,7 +55,9 @@ class SmsFactoryChannel
             return;
         }
 
-        $result = $this->client->sendDetailed((string) $recipient, $message->content, $message->sender);
+        $result = $this->client->sendDetailed((string) $recipient, $message->content, $message->sender, [
+            'bypass_decorations' => $message->bypassDecorations,
+        ]);
 
         if (! (bool) ($result['ok'] ?? false)) {
             $status = $result['http_status'] ?? null;

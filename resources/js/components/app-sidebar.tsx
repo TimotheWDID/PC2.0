@@ -199,7 +199,7 @@ export function AppSidebar() {
         </div>
     ) : null;
 
-    const adminOnlyPrefixes = ['/admin', '/agents', '/tickets/print-settings', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/dashboard-insights', '/app-settings'];
+    const adminOnlyPrefixes = ['/admin', '/agents', '/tickets/print-settings', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/dashboard-insights', '/settings/sms', '/app-settings'];
 
     const isAdminOnlyPath = (path: string) => adminOnlyPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 

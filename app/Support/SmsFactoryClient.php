@@ -130,15 +130,18 @@ class SmsFactoryClient
 
     public function isEnabled(array $options = []): bool
     {
-        return (bool) $this->resolveOption($options, 'enabled', config('services.smsfactory.enabled', false))
-            && ! empty($this->resolveOption($options, 'api_key', config('services.smsfactory.api_key')));
+        $settings = $this->resolveSettings($options);
+
+        return (bool) ($settings['enabled'] ?? false)
+            && ! empty($settings['api_key'] ?? null);
     }
 
     private function buildHeaders(array $options = []): array
     {
-        $apiKey = (string) $this->resolveOption($options, 'api_key', config('services.smsfactory.api_key', ''));
-        $headerName = (string) $this->resolveOption($options, 'auth_header', config('services.smsfactory.auth_header', 'X-API-KEY'));
-        $prefix = trim((string) $this->resolveOption($options, 'auth_prefix', config('services.smsfactory.auth_prefix', '')));
+        $settings = $this->resolveSettings($options);
+        $apiKey = (string) ($settings['api_key'] ?? '');
+        $headerName = (string) ($settings['auth_header'] ?? 'X-API-KEY');
+        $prefix = trim((string) ($settings['auth_prefix'] ?? ''));
 
         if ($apiKey === '' || $headerName === '') {
             return [];
@@ -151,15 +154,18 @@ class SmsFactoryClient
 
     private function resolveUrl(array $options = []): string
     {
-        $baseUrl = rtrim((string) $this->resolveOption($options, 'base_url', config('services.smsfactory.base_url')), '/');
-        $sendPath = ltrim((string) $this->resolveOption($options, 'send_path', config('services.smsfactory.send_path', '/send')), '/');
+        $settings = $this->resolveSettings($options);
+        $baseUrl = rtrim((string) ($settings['base_url'] ?? ''), '/');
+        $sendPath = ltrim((string) ($settings['send_path'] ?? '/send'), '/');
 
         return $baseUrl . '/' . $sendPath;
     }
 
     private function resolveSender(array $options = []): string
     {
-        return (string) $this->resolveOption($options, 'sender', config('services.smsfactory.sender', 'SupportPC'));
+        $settings = $this->resolveSettings($options);
+
+        return (string) ($settings['sender'] ?? config('app.name', 'SupportPC'));
     }
 
     private function resolveOption(array $options, string $key, mixed $default): mixed
@@ -167,10 +173,10 @@ class SmsFactoryClient
         return array_key_exists($key, $options) ? $options[$key] : $default;
     }
 
-    private function buildPayload(string $recipient, string $message, string $sender): array
+    private function buildPayload(string $recipient, string $message, string $sender, array $options = []): array
     {
-        $message = $this->applySignature($message);
-        $message = $this->enforceMaxLength($message);
+        $settings = $this->resolveSettings($options);
+        $message = $this->prepareMessage($message, $settings, (bool) ($options['bypass_decorations'] ?? false));
 
         return [
             'sms' => [
@@ -227,85 +233,60 @@ class SmsFactoryClient
         return $normalized;
     }
 
-    private function applySignature(string $message): string
+    private function resolveSettings(array $options = []): array
     {
-        $signature = trim((string) config('services.smsfactory.signature', ''));
-
-        if ($signature === '') {
-            return $message;
-        }
-
-        $normalizedMessage = rtrim($message);
-        if ($normalizedMessage === '') {
-            return $signature;
-        }
-
-        if (str_contains($normalizedMessage, $signature)) {
-            return $normalizedMessage;
-        }
-
-        return $normalizedMessage . "\n\n" . $signature;
+        return array_merge(SmsFactorySettings::load(), $options);
     }
 
-    private function enforceMaxLength(string $message): string
+    private function prepareMessage(string $message, array $settings, bool $bypassDecorations): string
     {
-        $configuredLength = (int) config('services.smsfactory.max_length', self::DEFAULT_MAX_SMS_LENGTH);
+        $content = trim($message);
 
-        if ($configuredLength <= 0) {
-            $configuredLength = self::DEFAULT_MAX_SMS_LENGTH;
+        if ($bypassDecorations) {
+            return $content;
         }
 
-        $maxLength = min($configuredLength, self::DEFAULT_MAX_SMS_LENGTH);
+        $header = trim((string) ($settings['header'] ?? ''));
+        $footer = trim((string) ($settings['footer'] ?? $settings['signature'] ?? ''));
+        $segments = array_values(array_filter([$header, $content, $footer], static fn (string $segment): bool => $segment !== ''));
 
-        if (mb_strlen($message) <= $maxLength) {
-            return $message;
+        if ($segments === []) {
+            return '';
         }
 
-        [$contentWithoutProtectedSuffix, $protectedSuffix] = $this->extractProtectedSuffix($message);
-        $remainingLength = $maxLength - mb_strlen($protectedSuffix);
+        $decorated = implode("\n\n", $segments);
+        $maxLength = (int) ($settings['max_length'] ?? self::DEFAULT_MAX_SMS_LENGTH);
 
-        if ($remainingLength <= 0) {
-            return $protectedSuffix;
+        if ($maxLength <= 0) {
+            $maxLength = self::DEFAULT_MAX_SMS_LENGTH;
         }
 
-        $truncatedContent = rtrim(mb_substr(rtrim($contentWithoutProtectedSuffix), 0, $remainingLength));
-
-        return $truncatedContent . $protectedSuffix;
-    }
-
-    /**
-     * Protects trailing blocks that must not be truncated (reply link and signature).
-     *
-     * @return array{0: string, 1: string}
-     */
-    private function extractProtectedSuffix(string $message): array
-    {
-        $working = $message;
-        $protectedSuffix = '';
-
-        $signature = trim((string) config('services.smsfactory.signature', ''));
-        if ($signature !== '') {
-            $signatureSuffix = "\n\n" . $signature;
-
-            if (str_ends_with($working, $signatureSuffix)) {
-                $working = mb_substr($working, 0, mb_strlen($working) - mb_strlen($signatureSuffix));
-                $protectedSuffix = $signatureSuffix . $protectedSuffix;
-            } elseif (trim($working) === $signature) {
-                $working = '';
-                $protectedSuffix = $signature;
-            }
+        if (mb_strlen($decorated) <= $maxLength) {
+            return $decorated;
         }
 
-        if (preg_match('/(\n\n?[^\n]*https?:\/\/\S+)\s*$/u', $working, $matches, PREG_OFFSET_CAPTURE) === 1) {
-            $fullMatch = $matches[1][0] ?? '';
-            $byteOffset = $matches[1][1] ?? null;
-
-            if (is_string($fullMatch) && is_int($byteOffset)) {
-                $working = rtrim(substr($working, 0, $byteOffset));
-                $protectedSuffix = $fullMatch . $protectedSuffix;
-            }
+        if ($content === '') {
+            return mb_substr($decorated, 0, $maxLength);
         }
 
-        return [$working, $protectedSuffix];
+        $separatorLength = 0;
+
+        if ($header !== '') {
+            $separatorLength += 2;
+        }
+
+        if ($footer !== '') {
+            $separatorLength += 2;
+        }
+
+        $availableContentLength = $maxLength - mb_strlen($header) - mb_strlen($footer) - $separatorLength;
+
+        if ($availableContentLength <= 0) {
+            return mb_substr($decorated, 0, $maxLength);
+        }
+
+        $truncatedContent = rtrim(mb_substr($content, 0, $availableContentLength));
+
+        return implode("\n\n", array_values(array_filter([$header, $truncatedContent, $footer], static fn (string $segment): bool => $segment !== '')));
     }
 }
