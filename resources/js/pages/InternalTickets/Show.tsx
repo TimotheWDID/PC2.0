@@ -1,4 +1,5 @@
-import { Head, Link, useForm } from '@inertiajs/react'
+import { Head, Link, router } from '@inertiajs/react'
+import { useState } from 'react'
 import AppLayout from '@/layouts/app-layout'
 import Heading from '@/components/heading'
 import { type BreadcrumbItem } from '@/types'
@@ -28,7 +29,7 @@ type Ticket = {
 }
 
 export default function ShowInternalTicket({ ticket, canProcess }: { ticket: Ticket; canProcess: boolean }) {
-  const { post, processing } = useForm({})
+  const [processing, setProcessing] = useState(false)
   const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? ''
 
   const breadcrumbs: BreadcrumbItem[] = [
@@ -38,11 +39,12 @@ export default function ShowInternalTicket({ ticket, canProcess }: { ticket: Tic
 
   const handleProcess = () => {
     // Use method spoofing for better compatibility on hosts that restrict PATCH requests.
-    post(`/internal-tickets/${ticket.id}/process`, {
-      data: {
-        _method: 'patch',
-        ...(csrfToken ? { _token: csrfToken } : {}),
-      },
+    setProcessing(true)
+    router.post(`/internal-tickets/${ticket.id}/process`, {
+      _method: 'patch',
+      ...(csrfToken ? { _token: csrfToken } : {}),
+    }, {
+      onFinish: () => setProcessing(false),
     })
   }
 
