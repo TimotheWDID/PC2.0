@@ -84,6 +84,12 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/sms', [SmsSettingsController::class, 'edit'])
         ->middleware('admin')
         ->name('sms.edit');
+    Route::get('settings/sms/templates', [SmsSettingsController::class, 'templates'])
+        ->middleware('admin')
+        ->name('sms.templates');
+    Route::put('settings/sms/templates', [SmsSettingsController::class, 'updateTemplates'])
+        ->middleware('admin')
+        ->name('sms.templates.update');
     Route::put('settings/sms', [SmsSettingsController::class, 'update'])
         ->middleware('admin')
         ->name('sms.update');

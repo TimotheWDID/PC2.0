@@ -35,6 +35,12 @@ interface Message {
   };
 }
 
+interface SmsTemplateOption {
+  id: string;
+  title: string;
+  content: string;
+}
+
 interface TicketChatProps {
   ticketId: number;
   currentUserId: number;
@@ -51,6 +57,9 @@ interface TicketChatProps {
     name: string;
     mention_aliases?: string[];
   }>;
+  smsTemplates?: SmsTemplateOption[];
+  smsChannelAvailable?: boolean;
+  smsMaxLength?: number;
 }
 
 export default function TicketChat({
@@ -65,6 +74,9 @@ export default function TicketChat({
   requesterEmail = null,
   requesterPhone = null,
   mentionCandidates = [],
+  smsTemplates = [],
+  smsChannelAvailable = true,
+  smsMaxLength = 160,
 }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -74,7 +86,9 @@ export default function TicketChat({
   const [validatingMentionMessageId, setValidatingMentionMessageId] = useState<number | null>(null);
   const [sendingMode, setSendingMode] = useState<'public' | 'internal'>('public');
   const [isPublicValidationOpen, setIsPublicValidationOpen] = useState(false);
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
   const [publicNotificationChannel, setPublicNotificationChannel] = useState<'SMS' | 'Email' | 'None'>('None');
+  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('none');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const withMagicToken = (path: string): string => {
@@ -96,12 +110,12 @@ export default function TicketChat({
       channels.push('Email');
     }
 
-    if (normalizedPhone !== '') {
+    if (normalizedPhone !== '' && smsChannelAvailable) {
       channels.push('SMS');
     }
 
     return channels;
-  }, [normalizedEmail, normalizedPhone]);
+  }, [normalizedEmail, normalizedPhone, smsChannelAvailable]);
 
   const resolveDefaultPublicChannel = React.useMemo(() => {
     const requested = typeof notifyBy === 'string' ? notifyBy : null;
@@ -250,6 +264,24 @@ export default function TicketChat({
     setNewMessage(`${base}${replacement}`);
   };
 
+  const applyTemplate = (templateId: string) => {
+    if (templateId === 'none') {
+      setSelectedSmsTemplateId('none');
+      setNewMessage('');
+      setIsTemplatePickerOpen(false);
+      return;
+    }
+
+    const selectedTemplate = smsTemplates.find((template) => template.id === templateId);
+    if (!selectedTemplate) {
+      return;
+    }
+
+    setSelectedSmsTemplateId(selectedTemplate.id);
+    setNewMessage(selectedTemplate.content);
+    setIsTemplatePickerOpen(false);
+  };
+
   const sendMessage = async (internal: boolean, channelOverride?: 'SMS' | 'Email' | 'None') => {
     if (!newMessage.trim()) return;
 
@@ -260,6 +292,17 @@ export default function TicketChat({
         content: newMessage,
         is_internal: internal,
       };
+
+      if (!internal && isAgent && selectedSmsTemplateId !== 'none') {
+        const selectedTemplate = smsTemplates.find((template) => template.id === selectedSmsTemplateId);
+
+        if (selectedTemplate) {
+          payload.sms_template = {
+            ...selectedTemplate,
+            content: newMessage.trim(),
+          };
+        }
+      }
 
       if (!internal && isAgent) {
         payload.notification_channel = channelOverride ?? publicNotificationChannel;
@@ -530,6 +573,33 @@ export default function TicketChat({
               rows={2}
               disabled={isSending || !canSend}
             />
+            {isAgent && publicNotificationChannel === 'SMS' && selectedSmsTemplateId !== 'none' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className={newMessage.trim().length > smsMaxLength ? 'text-destructive' : 'text-muted-foreground'}>
+                  SMS : {newMessage.trim().length}/{smsMaxLength} caractères
+                </span>
+                {newMessage.trim().length > smsMaxLength && (
+                  <span className="text-destructive">
+                    Message trop long de {newMessage.trim().length - smsMaxLength} caractère{newMessage.trim().length - smsMaxLength > 1 ? 's' : ''} — il sera tronqué à l'envoi (le lien et la signature sont conservés).
+                  </span>
+                )}
+              </div>
+            )}
+            {isAgent && smsTemplates.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsTemplatePickerOpen(true)}>
+                    Modèle SMS
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedSmsTemplateId === 'none' ? 'Aucun modèle sélectionné' : 'Modèle prêt à envoyer'}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choisissez un modèle dans la modale, puis modifiez-le si besoin avant d’envoyer.
+                </p>
+              </div>
+            )}
             {isAgent && (
               <div className="space-y-1">
                 {mentionSuggestions.length > 0 && mentionQuery !== null && (
@@ -599,6 +669,40 @@ export default function TicketChat({
               <p className="text-xs text-muted-foreground">Ce lien est en lecture seule.</p>
             )}
           </form>
+
+          <Dialog open={isTemplatePickerOpen} onOpenChange={setIsTemplatePickerOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Choisir un modèle SMS</DialogTitle>
+                <DialogDescription>
+                  Sélectionnez un modèle prédéfini et il sera chargé dans la zone d’édition.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-2">
+                <Button type="button" variant="outline" className="w-full justify-start" onClick={() => applyTemplate('none')}>
+                  Aucun modèle
+                </Button>
+                {smsTemplates.map((template) => (
+                  <Button
+                    key={template.id}
+                    type="button"
+                    variant={selectedSmsTemplateId === template.id ? 'default' : 'outline'}
+                    className="w-full justify-start"
+                    onClick={() => applyTemplate(template.id)}
+                  >
+                    {template.title}
+                  </Button>
+                ))}
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsTemplatePickerOpen(false)}>
+                  Fermer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={isPublicValidationOpen} onOpenChange={setIsPublicValidationOpen}>
             <DialogContent className="sm:max-w-md">

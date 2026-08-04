@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Support\SmsFactoryClient;
-use App\Support\SmsFactorySettings;
+use App\Support\Sms\PhoneNumber;
+use App\Support\Sms\SmsComposer;
+use App\Support\Sms\SmsFactorClient;
+use App\Support\Sms\SmsSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -21,7 +23,7 @@ class SmsDebugController extends Controller
         ]);
     }
 
-    public function send(Request $request, SmsFactoryClient $client)
+    public function send(Request $request, SmsFactorClient $client)
     {
         $this->ensureAdmin();
 
@@ -35,24 +37,31 @@ class SmsDebugController extends Controller
             'auth_header' => ['nullable', 'string', 'max:100'],
             'auth_prefix' => ['nullable', 'string', 'max:50'],
             'verify_ssl' => ['nullable', 'boolean'],
-            'bypass_decorations' => ['nullable', 'boolean'],
+            'with_decorations' => ['nullable', 'boolean'],
         ]);
 
-        $result = $client->sendDetailed(
+        $settings = SmsSettings::load();
+        $withDecorations = $request->boolean('with_decorations');
+
+        $overrides = array_filter([
+            'base_url' => $validated['base_url'] ?? null,
+            'send_path' => $validated['send_path'] ?? null,
+            'api_key' => trim((string) ($validated['api_key'] ?? '')) !== '' ? trim((string) $validated['api_key']) : null,
+            'auth_header' => $validated['auth_header'] ?? null,
+            'auth_prefix' => $validated['auth_prefix'] ?? null,
+            'sender' => $validated['sender'] ?? null,
+        ], static fn ($value) => $value !== null);
+        $overrides['verify_ssl'] = $request->boolean('verify_ssl');
+
+        $normalizedTo = PhoneNumber::normalize(
             $validated['to'],
-            $validated['message'],
-            $validated['sender'] ?? null,
-            [
-                'base_url' => $validated['base_url'] ?? config('services.smsfactory.base_url'),
-                'send_path' => $validated['send_path'] ?? config('services.smsfactory.send_path'),
-                'api_key' => $validated['api_key'] ?? config('services.smsfactory.api_key'),
-                'auth_header' => $validated['auth_header'] ?? config('services.smsfactory.auth_header'),
-                'auth_prefix' => $validated['auth_prefix'] ?? config('services.smsfactory.auth_prefix'),
-                'verify_ssl' => $request->boolean('verify_ssl'),
-                'sender' => $validated['sender'] ?? config('services.smsfactory.sender'),
-                'bypass_decorations' => $request->boolean('bypass_decorations'),
-            ]
+            (string) ($settings['default_country_code'] ?? '+33')
         );
+
+        $text = (new SmsComposer(array_merge($settings, $overrides)))
+            ->compose($validated['message'], [], $withDecorations);
+
+        $result = $client->send((string) $normalizedTo, $text, $validated['sender'] ?? null, $overrides);
 
         return Inertia::render('settings/sms-debug', [
             'defaults' => $this->defaults(),
@@ -64,17 +73,18 @@ class SmsDebugController extends Controller
                 'decoded' => $result['decoded'],
                 'url' => $result['url'],
                 'request' => $result['request'],
+                'normalized_to' => $normalizedTo,
             ],
             'submitted' => [
                 'to' => $validated['to'],
                 'message' => $validated['message'],
                 'sender' => $validated['sender'] ?? null,
-                'base_url' => $validated['base_url'] ?? config('services.smsfactory.base_url'),
-                'send_path' => $validated['send_path'] ?? config('services.smsfactory.send_path'),
-                'auth_header' => $validated['auth_header'] ?? config('services.smsfactory.auth_header'),
-                'auth_prefix' => $validated['auth_prefix'] ?? config('services.smsfactory.auth_prefix'),
+                'base_url' => $validated['base_url'] ?? (string) ($settings['base_url'] ?? ''),
+                'send_path' => $validated['send_path'] ?? (string) ($settings['send_path'] ?? ''),
+                'auth_header' => $validated['auth_header'] ?? (string) ($settings['auth_header'] ?? ''),
+                'auth_prefix' => $validated['auth_prefix'] ?? (string) ($settings['auth_prefix'] ?? ''),
                 'verify_ssl' => $request->boolean('verify_ssl'),
-                'bypass_decorations' => $request->boolean('bypass_decorations'),
+                'with_decorations' => $withDecorations,
             ],
         ]);
     }
@@ -90,7 +100,7 @@ class SmsDebugController extends Controller
 
     private function defaults(): array
     {
-        $settings = SmsFactorySettings::load();
+        $settings = SmsSettings::load();
 
         return [
             'to' => '',
@@ -98,11 +108,12 @@ class SmsDebugController extends Controller
             'sender' => (string) ($settings['sender'] ?? config('app.name', 'SupportPC')),
             'base_url' => (string) ($settings['base_url'] ?? 'https://api.smsfactor.com'),
             'send_path' => (string) ($settings['send_path'] ?? '/send'),
-            'api_key' => (string) ($settings['api_key'] ?? ''),
-            'auth_header' => (string) ($settings['auth_header'] ?? 'Authorization'),
-            'auth_prefix' => (string) ($settings['auth_prefix'] ?? 'Bearer'),
+            'api_key' => '',
+            'api_key_set' => trim((string) ($settings['api_key'] ?? '')) !== '',
+            'auth_header' => (string) ($settings['auth_header'] ?? 'X-API-KEY'),
+            'auth_prefix' => (string) ($settings['auth_prefix'] ?? ''),
             'verify_ssl' => (bool) ($settings['verify_ssl'] ?? true),
-            'bypass_decorations' => false,
+            'with_decorations' => false,
         ];
     }
 }

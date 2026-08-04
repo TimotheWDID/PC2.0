@@ -12,6 +12,7 @@ use App\Models\TicketTimelineEvent;
 use Coderflex\LaravelTicket\Models\Category;
 use Illuminate\Support\Facades\Auth;
 use App\Support\TicketLabelSettings;
+use App\Support\Sms\SmsSettings;
 use App\Support\TicketActionListSettings;
 use App\Support\TicketTimelineTemplateSettings;
 use Illuminate\Support\Facades\Hash;
@@ -1310,6 +1311,8 @@ class TicketController extends Controller
                 ]);
         }
 
+        $smsSettings = SmsSettings::load();
+
         return Inertia::render('Tickets/Show', [
             'ticket' => [
                 'id' => $ticket->id,
@@ -1327,6 +1330,8 @@ class TicketController extends Controller
                 'is_resolved' => $ticket->is_resolved,
                 'is_locked' => $ticket->is_locked,
                 'magic_link_url' => $magicLinkUrl,
+                'sms_channel_available' => SmsSettings::isEnabled($smsSettings),
+                'sms_max_length' => (int) ($smsSettings['max_length'] ?? SmsSettings::DEFAULT_LENGTH),
                 'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
                 'user' => $ticket->user ? [
                     'id' => $ticket->user->id,
@@ -1359,6 +1364,15 @@ class TicketController extends Controller
                         'no_access_password' => (bool) $ticket->device->no_access_password,
                     ]
                 ) : null,
+                'sms_templates' => collect($smsSettings['templates'] ?? [])
+                    ->filter(fn ($template) => is_array($template))
+                    ->map(fn ($template) => [
+                        'id' => (string) ($template['id'] ?? $template['title'] ?? ''),
+                        'title' => (string) ($template['title'] ?? ''),
+                        'content' => (string) ($template['content'] ?? ''),
+                    ])
+                    ->values()
+                    ->all(),
             ],
             'categories' => $categories,
             'agents' => $agents,

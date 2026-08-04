@@ -15,7 +15,6 @@ import { Plus, Trash2 } from 'lucide-react';
 type SmsTemplate = {
   title: string;
   content: string;
-  bypass_decorations: boolean;
 };
 
 type SmsSettings = {
@@ -24,12 +23,21 @@ type SmsSettings = {
   send_path: string;
   max_length: number;
   api_key: string;
+  api_key_set: boolean;
   auth_header: string;
   auth_prefix: string;
   sender: string;
   header: string;
   footer: string;
+  default_country_code: string;
+  timeout: number;
+  verify_ssl: boolean;
   templates: SmsTemplate[];
+};
+
+type SmsLimits = {
+  max_length_min: number;
+  max_length_max: number;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Paramètres SMS', href: '/settings/sms' }];
@@ -37,34 +45,38 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Paramètres SMS', href: '/setti
 const createEmptyTemplate = (): SmsTemplate => ({
   title: '',
   content: '',
-  bypass_decorations: false,
 });
 
 export default function SmsSettingsPage({
   settings,
   defaults,
+  limits,
   canManage,
 }: {
   settings: SmsSettings;
   defaults: SmsSettings;
+  limits: SmsLimits;
   canManage: boolean;
 }) {
-  const [form, setForm] = useState<SmsSettings>(settings?.templates?.length ? settings : { ...settings, templates: defaults.templates });
+  const [form, setForm] = useState<SmsSettings>(settings);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setForm(settings?.templates?.length ? settings : { ...settings, templates: defaults.templates });
-  }, [settings, defaults.templates]);
+    setForm(settings);
+  }, [settings]);
+
+  const clampLength = (value: number) =>
+    Math.max(limits.max_length_min, Math.min(limits.max_length_max, value));
 
   const normalized = useMemo<SmsSettings>(() => ({
     ...form,
-    max_length: Number.isFinite(Number(form.max_length)) ? Math.max(1, Math.min(1000, Number(form.max_length))) : defaults.max_length,
+    max_length: Number.isFinite(Number(form.max_length)) ? clampLength(Number(form.max_length)) : defaults.max_length,
+    timeout: Number.isFinite(Number(form.timeout)) ? Math.max(1, Math.min(60, Number(form.timeout))) : defaults.timeout,
     templates: form.templates.map((template) => ({
       title: template.title.slice(0, 120),
-      content: template.content.slice(0, 1000),
-      bypass_decorations: !!template.bypass_decorations,
+      content: template.content.slice(0, limits.max_length_max),
     })),
-  }), [form, defaults.max_length]);
+  }), [form, defaults.max_length, defaults.timeout, limits.max_length_min, limits.max_length_max]);
 
   const updateTemplate = (index: number, patch: Partial<SmsTemplate>) => {
     setForm((current) => ({
@@ -132,8 +144,8 @@ export default function SmsSettingsPage({
 
                   <div className="grid gap-2">
                     <Label htmlFor="max_length">Limite de caractères</Label>
-                    <Input id="max_length" type="number" min={1} max={1000} value={form.max_length} onChange={(event) => setForm((current) => ({ ...current, max_length: Number(event.target.value || defaults.max_length) }))} disabled={!canManage} />
-                    <p className="text-xs text-muted-foreground">Appliquée après ajout du header et du footer sur les messages normaux.</p>
+                    <Input id="max_length" type="number" min={limits.max_length_min} max={limits.max_length_max} value={form.max_length} onChange={(event) => setForm((current) => ({ ...current, max_length: Number(event.target.value || defaults.max_length) }))} disabled={!canManage} />
+                    <p className="text-xs text-muted-foreground">Le lien de suivi et le footer sont toujours conservés intégralement lors de la troncature.</p>
                   </div>
                 </div>
 
@@ -144,32 +156,64 @@ export default function SmsSettingsPage({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="base_url">Base URL</Label>
-                    <Input id="base_url" value={form.base_url} onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))} disabled={!canManage} />
+                    <Label htmlFor="default_country_code">Indicatif pays par défaut</Label>
+                    <Input id="default_country_code" value={form.default_country_code} onChange={(event) => setForm((current) => ({ ...current, default_country_code: event.target.value }))} disabled={!canManage} placeholder="+33" />
+                    <p className="text-xs text-muted-foreground">Utilisé pour convertir les numéros locaux (06 12 34 56 78 → +33612345678).</p>
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="base_url">Base URL</Label>
+                    <Input id="base_url" value={form.base_url} onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))} disabled={!canManage} />
+                  </div>
+
                   <div className="grid gap-2">
                     <Label htmlFor="send_path">Chemin d'envoi</Label>
                     <Input id="send_path" value={form.send_path} onChange={(event) => setForm((current) => ({ ...current, send_path: event.target.value }))} disabled={!canManage} />
                   </div>
+                </div>
 
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="api_key">Token API</Label>
-                    <Input id="api_key" value={form.api_key} onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))} disabled={!canManage} />
+                    <Input
+                      id="api_key"
+                      type="password"
+                      autoComplete="new-password"
+                      value={form.api_key}
+                      onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))}
+                      disabled={!canManage}
+                      placeholder={settings.api_key_set ? '•••••••• (laisser vide pour conserver la clé actuelle)' : 'Token SMSFactor'}
+                    />
+                    {settings.api_key_set && (
+                      <p className="text-xs text-muted-foreground">Une clé est déjà configurée. Elle n'est jamais affichée ; saisissez une nouvelle valeur pour la remplacer.</p>
+                    )}
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth_header">Header d'authentification</Label>
+                    <Input id="auth_header" value={form.auth_header} onChange={(event) => setForm((current) => ({ ...current, auth_header: event.target.value }))} disabled={!canManage} placeholder="X-API-KEY" />
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label htmlFor="auth_header">Header d'authentification</Label>
-                    <Input id="auth_header" value={form.auth_header} onChange={(event) => setForm((current) => ({ ...current, auth_header: event.target.value }))} disabled={!canManage} />
+                    <Label htmlFor="auth_prefix">Préfixe auth</Label>
+                    <Input id="auth_prefix" value={form.auth_prefix} onChange={(event) => setForm((current) => ({ ...current, auth_prefix: event.target.value }))} disabled={!canManage} />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="auth_prefix">Préfixe auth</Label>
-                    <Input id="auth_prefix" value={form.auth_prefix} onChange={(event) => setForm((current) => ({ ...current, auth_prefix: event.target.value }))} disabled={!canManage} />
+                    <Label htmlFor="timeout">Timeout (secondes)</Label>
+                    <Input id="timeout" type="number" min={1} max={60} value={form.timeout} onChange={(event) => setForm((current) => ({ ...current, timeout: Number(event.target.value || defaults.timeout) }))} disabled={!canManage} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                  <Checkbox id="verify_ssl" checked={form.verify_ssl} onCheckedChange={(value) => setForm((current) => ({ ...current, verify_ssl: value === true }))} disabled={!canManage} />
+                  <div className="space-y-1">
+                    <Label htmlFor="verify_ssl" className="cursor-pointer">Vérifier le certificat SSL</Label>
+                    <p className="text-xs text-muted-foreground">À ne désactiver que pour le débogage en environnement local.</p>
                   </div>
                 </div>
 
@@ -182,18 +226,21 @@ export default function SmsSettingsPage({
                   <div className="grid gap-2">
                     <Label htmlFor="footer">Footer SMS</Label>
                     <Textarea id="footer" rows={4} value={form.footer} onChange={(event) => setForm((current) => ({ ...current, footer: event.target.value }))} disabled={!canManage} />
+                    <p className="text-xs text-muted-foreground">Insérez [signature] dans un message prédéfini pour y injecter ce footer.</p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
-                  Les messages prédéfinis peuvent contourner le header et le footer. Ils sont utiles pour les réponses courtes, les notifications internes ou les messages déjà formatés.
+                <div className="flex justify-end">
+                  <Button type="button" variant="outline" size="sm" onClick={() => router.visit('/settings/sms/templates')}>
+                    Gérer les messages prédéfinis
+                  </Button>
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold">Messages prédéfinis</h3>
-                      <p className="text-xs text-muted-foreground">Chaque modèle peut ignorer les décorations globales.</p>
+                      <p className="text-xs text-muted-foreground">Placeholders disponibles : [MagicLink] (lien de suivi du ticket) et [signature] (footer).</p>
                     </div>
 
                     <Button type="button" variant="outline" size="sm" onClick={addTemplate} disabled={!canManage}>
@@ -210,22 +257,23 @@ export default function SmsSettingsPage({
                     )}
 
                     {form.templates.map((template, index) => (
-                      <div key={`${index}-${template.title}`} className="space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
-                        <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                          <div className="grid gap-2">
-                            <Label htmlFor={`template-title-${index}`}>Titre</Label>
-                            <Input id={`template-title-${index}`} value={template.title} onChange={(event) => updateTemplate(index, { title: event.target.value })} disabled={!canManage} placeholder="Réponse rapide" />
-                          </div>
-
-                          <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                            <Checkbox id={`template-bypass-${index}`} checked={template.bypass_decorations} onCheckedChange={(value) => updateTemplate(index, { bypass_decorations: value === true })} disabled={!canManage} />
-                            <Label htmlFor={`template-bypass-${index}`} className="cursor-pointer text-sm">Ignorer header/footer</Label>
-                          </div>
+                      <div key={index} className="space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
+                        <div className="grid gap-2">
+                          <Label htmlFor={`template-title-${index}`}>Titre</Label>
+                          <Input id={`template-title-${index}`} value={template.title} onChange={(event) => updateTemplate(index, { title: event.target.value })} disabled={!canManage} placeholder="Réponse rapide" />
                         </div>
 
                         <div className="grid gap-2">
-                          <Label htmlFor={`template-content-${index}`}>Contenu</Label>
-                          <Textarea id={`template-content-${index}`} rows={5} value={template.content} onChange={(event) => updateTemplate(index, { content: event.target.value })} disabled={!canManage} />
+                          <div className="flex items-center justify-between gap-2">
+                            <Label htmlFor={`template-content-${index}`}>Contenu</Label>
+                            <span className={`text-xs ${template.content.length > form.max_length ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {template.content.length}/{form.max_length}
+                            </span>
+                          </div>
+                          <Textarea id={`template-content-${index}`} rows={5} value={template.content} onChange={(event) => updateTemplate(index, { content: event.target.value.slice(0, limits.max_length_max) })} disabled={!canManage} />
+                          {template.content.length > form.max_length && (
+                            <p className="text-xs text-muted-foreground">Le message sera tronqué à l'envoi ; le lien et le footer resteront intacts.</p>
+                          )}
                         </div>
 
                         <div className="flex justify-end">
@@ -253,9 +301,9 @@ export default function SmsSettingsPage({
               <CardTitle>Rappel du format</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Les SMS standards sont assemblés dans cet ordre: header, contenu, footer.</p>
-              <p>Les messages prédéfinis cochés comme ignorants les décorations partent tels quels, sans ajout automatique.</p>
-              <p>Le limiteur de caractères reste appliqué au flux standard pour éviter les messages trop longs.</p>
+              <p>Les SMS de réponse aux tickets partent tels quels : le contenu du message prédéfini est rendu ([MagicLink], [signature]) puis tronqué à la limite configurée.</p>
+              <p>Lors de la troncature, le lien de suivi et le footer sont toujours conservés en entier ; seul le corps du message est raccourci.</p>
+              <p>Les numéros locaux sont convertis automatiquement au format international avec l'indicatif par défaut.</p>
             </CardContent>
           </Card>
         </div>

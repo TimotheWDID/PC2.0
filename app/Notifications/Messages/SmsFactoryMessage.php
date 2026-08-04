@@ -2,13 +2,15 @@
 
 namespace App\Notifications\Messages;
 
+/**
+ * DTO du SMS prêt à l'envoi : le contenu est final (composé et tronqué en amont).
+ */
 class SmsFactoryMessage
 {
     public function __construct(
         public string $content,
         public ?string $recipient = null,
         public ?string $sender = null,
-        public bool $bypassDecorations = false,
     ) {}
 
     public function to(string $recipient): self
@@ -21,13 +23,6 @@ class SmsFactoryMessage
     public function from(string $sender): self
     {
         $this->sender = $sender;
-
-        return $this;
-    }
-
-    public function withoutDecorations(): self
-    {
-        $this->bypassDecorations = true;
 
         return $this;
     }

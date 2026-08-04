@@ -17,10 +17,11 @@ type DebugDefaults = {
   base_url: string;
   send_path: string;
   api_key: string;
+  api_key_set: boolean;
   auth_header: string;
   auth_prefix: string;
   verify_ssl: boolean;
-  bypass_decorations: boolean;
+  with_decorations: boolean;
 };
 
 type DebugResult = {
@@ -31,6 +32,7 @@ type DebugResult = {
   decoded: Record<string, unknown> | null;
   url: string;
   request: Record<string, unknown> | null;
+  normalized_to: string | null;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -51,7 +53,7 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
     auth_header: defaults.auth_header,
     auth_prefix: defaults.auth_prefix,
     verify_ssl: defaults.verify_ssl,
-    bypass_decorations: defaults.bypass_decorations,
+    with_decorations: defaults.with_decorations,
   });
 
   const submit = (event: React.FormEvent) => {
@@ -71,7 +73,7 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
         <div className="space-y-6">
           <HeadingSmall
             title="Debug SMSFactor"
-            description="Envoie un SMS de test et affiche le code HTTP, le code API retourné et le corps brut de la réponse."
+            description="Envoie un SMS de test et affiche le numéro normalisé, le code HTTP, le code API retourné et le corps brut de la réponse."
           />
 
           <Card className="border-border/70 shadow-sm">
@@ -83,7 +85,8 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="to">Numéro destinataire</Label>
-                    <Input id="to" value={data.to} onChange={(event) => setData('to', event.target.value)} placeholder="+33612345678" />
+                    <Input id="to" value={data.to} onChange={(event) => setData('to', event.target.value)} placeholder="06 12 34 56 78 ou +33612345678" />
+                    <p className="text-xs text-muted-foreground">Les numéros locaux sont convertis automatiquement (06… → +336…).</p>
                     <InputError message={errors.to} />
                   </div>
 
@@ -118,13 +121,13 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="auth_header">Header d'authentification</Label>
-                    <Input id="auth_header" value={data.auth_header} onChange={(event) => setData('auth_header', event.target.value)} placeholder="Authorization" />
+                    <Input id="auth_header" value={data.auth_header} onChange={(event) => setData('auth_header', event.target.value)} placeholder="X-API-KEY" />
                     <InputError message={errors.auth_header} />
                   </div>
 
                   <div className="grid gap-2">
                     <Label htmlFor="auth_prefix">Préfixe auth</Label>
-                    <Input id="auth_prefix" value={data.auth_prefix} onChange={(event) => setData('auth_prefix', event.target.value)} placeholder="Bearer" />
+                    <Input id="auth_prefix" value={data.auth_prefix} onChange={(event) => setData('auth_prefix', event.target.value)} />
                     <InputError message={errors.auth_prefix} />
                   </div>
                 </div>
@@ -132,7 +135,14 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="api_key">Token API</Label>
-                    <Input id="api_key" value={data.api_key} onChange={(event) => setData('api_key', event.target.value)} placeholder="Token SMSFactor" />
+                    <Input
+                      id="api_key"
+                      type="password"
+                      autoComplete="new-password"
+                      value={data.api_key}
+                      onChange={(event) => setData('api_key', event.target.value)}
+                      placeholder={defaults.api_key_set ? 'Vide = clé configurée dans les paramètres' : 'Token SMSFactor'}
+                    />
                     <InputError message={errors.api_key} />
                   </div>
 
@@ -143,8 +153,8 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                     </div>
 
                     <div className="flex items-end gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                      <input id="bypass_decorations" type="checkbox" checked={data.bypass_decorations} onChange={(event) => setData('bypass_decorations', event.target.checked)} className="h-4 w-4 rounded border-input" />
-                      <Label htmlFor="bypass_decorations" className="cursor-pointer">Ignorer header/footer</Label>
+                      <input id="with_decorations" type="checkbox" checked={data.with_decorations} onChange={(event) => setData('with_decorations', event.target.checked)} className="h-4 w-4 rounded border-input" />
+                      <Label htmlFor="with_decorations" className="cursor-pointer">Appliquer header/footer</Label>
                     </div>
                   </div>
                 </div>
@@ -163,10 +173,11 @@ export default function SmsDebug({ defaults, result }: { defaults: DebugDefaults
                 <CardTitle>Résultat</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <ResultPill label="Statut" value={result.ok ? 'OK' : 'Erreur'} />
                   <ResultPill label="HTTP" value={result.http_status ?? 'n/a'} />
                   <ResultPill label="Code API" value={result.api_code ?? 'n/a'} />
+                  <ResultPill label="Numéro normalisé" value={result.normalized_to ?? 'Invalide'} />
                 </div>
 
                 <div className="space-y-2">

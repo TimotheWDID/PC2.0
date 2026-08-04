@@ -6,32 +6,36 @@ use App\Models\User;
 use App\Models\Ticket;
 use App\Models\Message;
 use App\Support\MailFooterSettings;
+use App\Support\Sms\PhoneNumber;
+use App\Support\Sms\SmsComposer;
+use App\Support\Sms\SmsSettings;
 use App\Notifications\Channels\SmsFactoryChannel;
 use App\Notifications\Messages\SmsFactoryMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Str;
 
 class TicketMessageNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    private function getTicketKindLabel(): string
-    {
-        return match ($this->ticket->ticket_kind) {
-            'bug' => 'Bug',
-            'improvement' => 'Amelioration',
-            default => 'Support',
-        };
-    }
+    public int $tries = 3;
 
     public function __construct(
         public Ticket $ticket,
         public Message $message,
-        public ?string $magicLinkUrl = null
+        public ?string $magicLinkUrl = null,
+        public array $smsContext = []
     ) {}
+
+    /**
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [15, 60, 180];
+    }
 
     /**
      * Get the notification's delivery channels.
@@ -39,20 +43,18 @@ class TicketMessageNotification extends Notification implements ShouldQueue
     public function via(object $notifiable): array
     {
         $preference = $this->resolveNotificationPreference($notifiable);
-        $phone = $this->resolveSmsPhone($notifiable);
-        $email = $this->resolveEmailAddress($notifiable);
-        $smsAvailable = $this->isSmsChannelAvailable() && $phone !== null;
-
-        if ($preference === 'None') {
-            return [];
-        }
 
         if ($preference === 'SMS') {
-            return $smsAvailable ? [SmsFactoryChannel::class] : [];
+            $settings = SmsSettings::load();
+            $phone = $this->resolveSmsPhone($notifiable, $settings);
+
+            return SmsSettings::isEnabled($settings) && $phone !== null
+                ? [SmsFactoryChannel::class]
+                : [];
         }
 
         if ($preference === 'Email') {
-            return ! empty($email) ? ['mail'] : [];
+            return $this->resolveEmailAddress($notifiable) !== null ? ['mail'] : [];
         }
 
         return [];
@@ -85,27 +87,61 @@ class TicketMessageNotification extends Notification implements ShouldQueue
 
     public function toSmsFactory(object $notifiable): ?SmsFactoryMessage
     {
-        $recipient = $this->resolveSmsPhone($notifiable);
+        $settings = SmsSettings::load();
+        $recipient = $this->resolveSmsPhone($notifiable, $settings);
 
         if ($recipient === null) {
             return null;
         }
 
-        $title = Str::limit((string) ($this->ticket->title ?? ''), 70, '...');
-        $agentMessage = trim(strip_tags((string) ($this->message->content ?? '')));
+        $template = $this->resolveTemplate($settings);
+        $content = trim((string) ($template['content'] ?? ''));
 
-        if ($agentMessage === '') {
-            $agentMessage = 'Nouveau message de votre agent.';
+        if ($content === '') {
+            $content = 'Vous avez un nouveau message concernant votre demande sur [MagicLink] [signature]';
         }
 
-        $content = "[Support] Ticket #{$this->ticket->id}: {$title}\n\n{$agentMessage}";
+        $content = (new SmsComposer($settings))->compose($content, [
+            'magic_link' => $this->magicLinkUrl,
+        ]);
 
-        if (! empty($this->magicLinkUrl)) {
-            $content .= "\n\nPour repondre : {$this->magicLinkUrl}";
+        return new SmsFactoryMessage($content, $recipient);
+    }
+
+    private function resolveTemplate(array $settings): array
+    {
+        $requestTemplate = $this->smsContext['template'] ?? null;
+
+        if (is_array($requestTemplate) && ! empty($requestTemplate['content'] ?? null)) {
+            return [
+                'id' => (string) ($requestTemplate['id'] ?? ''),
+                'title' => (string) ($requestTemplate['title'] ?? ''),
+                'content' => (string) $requestTemplate['content'],
+            ];
         }
 
-        return (new SmsFactoryMessage($content))
-            ->to($recipient);
+        $templates = is_array($settings['templates'] ?? null) ? $settings['templates'] : [];
+
+        foreach ($templates as $template) {
+            if (! is_array($template)) {
+                continue;
+            }
+
+            $id = (string) ($template['id'] ?? $template['title'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+
+            if (($template['selected'] ?? false) || ($template['default'] ?? false)) {
+                return [
+                    'id' => $id,
+                    'title' => (string) ($template['title'] ?? ''),
+                    'content' => (string) ($template['content'] ?? ''),
+                ];
+            }
+        }
+
+        return ['id' => '', 'title' => '', 'content' => ''];
     }
 
     private function resolveNotificationPreference(object $notifiable): string
@@ -131,11 +167,15 @@ class TicketMessageNotification extends Notification implements ShouldQueue
         return 'None';
     }
 
-    private function resolveSmsPhone(object $notifiable): ?string
+    private function resolveSmsPhone(object $notifiable, array $settings): ?string
     {
         $candidate = trim((string) ($this->ticket->contact_phone ?: ($notifiable->phone ?? '')));
 
-        return $candidate !== '' ? $candidate : null;
+        if ($candidate === '') {
+            return null;
+        }
+
+        return PhoneNumber::normalize($candidate, (string) ($settings['default_country_code'] ?? '+33'));
     }
 
     private function resolveEmailAddress(object $notifiable): ?string
@@ -155,9 +195,12 @@ class TicketMessageNotification extends Notification implements ShouldQueue
         return $candidate !== '' ? $candidate : null;
     }
 
-    private function isSmsChannelAvailable(): bool
+    private function getTicketKindLabel(): string
     {
-        return (bool) config('services.smsfactory.enabled', false)
-            && ! empty(config('services.smsfactory.api_key'));
+        return match ($this->ticket->ticket_kind) {
+            'bug' => 'Bug',
+            'improvement' => 'Amelioration',
+            default => 'Support',
+        };
     }
 }

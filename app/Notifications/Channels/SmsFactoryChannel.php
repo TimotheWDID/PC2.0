@@ -3,15 +3,15 @@
 namespace App\Notifications\Channels;
 
 use App\Notifications\Messages\SmsFactoryMessage;
-use App\Support\SmsFactoryClient;
+use App\Support\Sms\PhoneNumber;
+use App\Support\Sms\SmsFactorClient;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
 class SmsFactoryChannel
 {
-    public function __construct(private SmsFactoryClient $client)
+    public function __construct(private SmsFactorClient $client)
     {
     }
 
@@ -27,42 +27,31 @@ class SmsFactoryChannel
             return;
         }
 
-        if (is_array($message)) {
-            $message = new SmsFactoryMessage(
-                (string) ($message['content'] ?? ''),
-                isset($message['recipient']) ? (string) $message['recipient'] : null,
-                isset($message['sender']) ? (string) $message['sender'] : null,
-                (bool) ($message['bypassDecorations'] ?? $message['bypass_decorations'] ?? false),
-            );
-        }
-
         if (! $message instanceof SmsFactoryMessage) {
-            throw new InvalidArgumentException('toSmsFactory must return SmsFactoryMessage, array or null.');
+            throw new InvalidArgumentException('toSmsFactory must return SmsFactoryMessage or null.');
         }
 
         $recipient = $message->recipient;
 
-        if (empty($recipient) && method_exists($notifiable, 'routeNotificationForSmsfactory')) {
-            $recipient = $notifiable->routeNotificationForSmsfactory($notification);
+        if (empty($recipient) && method_exists($notifiable, 'routeNotificationFor')) {
+            $route = $notifiable->routeNotificationFor('smsfactory', $notification);
+            $recipient = is_string($route) ? $route : null;
         }
 
-        if (empty($recipient)) {
-            Log::warning('SMSFactory recipient is missing for notification.', [
-                'notification' => $notification::class,
-                'notifiable' => $notifiable::class,
-            ]);
+        $normalized = PhoneNumber::normalize((string) $recipient);
 
-            return;
+        if ($normalized === null) {
+            // L'exception déclenche NotificationFailed → notification_error renseignée
+            // sur le message au lieu d'un statut « pending » fantôme.
+            throw new RuntimeException('Numéro de téléphone invalide pour le SMS : ' . (string) $recipient);
         }
 
-        $result = $this->client->sendDetailed((string) $recipient, $message->content, $message->sender, [
-            'bypass_decorations' => $message->bypassDecorations,
-        ]);
+        $result = $this->client->send($normalized, $message->content, $message->sender);
 
         if (! (bool) ($result['ok'] ?? false)) {
             $status = $result['http_status'] ?? null;
             $body = is_string($result['body'] ?? null) ? trim((string) $result['body']) : '';
-            $errorMessage = 'Echec envoi SMSFactory';
+            $errorMessage = 'Echec envoi SMSFactor';
 
             if ($status !== null) {
                 $errorMessage .= ' (HTTP ' . (string) $status . ')';

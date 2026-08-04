@@ -10,6 +10,8 @@ use App\Notifications\AgentMentionNotification;
 use App\Notifications\AgentTicketReplyNotification;
 use App\Notifications\TicketMessageNotification;
 use App\Notifications\Channels\SmsFactoryChannel;
+use App\Support\Sms\PhoneNumber;
+use App\Support\Sms\SmsSettings;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -375,7 +377,7 @@ class MessageController extends Controller
             $channels[] = 'Email';
         }
 
-        if ($phone !== '') {
+        if ($phone !== '' && SmsSettings::isEnabled() && PhoneNumber::normalize($phone) !== null) {
             $channels[] = 'SMS';
         }
 
@@ -515,6 +517,7 @@ class MessageController extends Controller
             'is_internal' => 'nullable|boolean',
             'attachments' => 'nullable|array',
             'notification_channel' => 'nullable|in:SMS,Email,None',
+            'sms_template' => 'nullable|array',
         ]);
 
         $isInternal = $isAuthenticated ? $request->boolean('is_internal') : false;
@@ -534,9 +537,24 @@ class MessageController extends Controller
 
             if ($notificationChannel === null) {
                 $context = $this->resolveTicketNotificationContext($ticket);
+                $requested = isset($validated['notification_channel']) ? (string) $validated['notification_channel'] : null;
+
+                $errorMessage = 'Le canal choisi n\'est pas disponible pour ce client.';
+
+                if ($requested === 'SMS') {
+                    if (! SmsSettings::isEnabled()) {
+                        $errorMessage = 'Le canal SMS est desactive dans les parametres SMS (ou la cle API est absente).';
+                    } elseif ($context['phone'] === null) {
+                        $errorMessage = 'Aucun numero de telephone renseigne pour ce client.';
+                    } elseif (PhoneNumber::normalize($context['phone']) === null) {
+                        $errorMessage = 'Le numero de telephone du client est invalide : ' . $context['phone'];
+                    }
+                } elseif ($requested === 'Email' && $context['email'] === null) {
+                    $errorMessage = 'Aucune adresse email renseignee pour ce client.';
+                }
 
                 return response()->json([
-                    'message' => 'Le canal choisi n\'est pas disponible pour ce client.',
+                    'message' => $errorMessage,
                     'meta' => [
                         'available_channels' => $context['channels'],
                         'contact_email' => $context['email'],
@@ -574,7 +592,9 @@ class MessageController extends Controller
         // Ne notifier que si l'auteur n'est pas le user lui-meme.
         if (! $message->is_internal && $ticket->user && $message->author_id !== $ticket->user_id) {
             $magicLink = $ticket->issueMagicLink();
-            $notification = new TicketMessageNotification($ticket, $message, $magicLink['url'] ?? null);
+            $notification = new TicketMessageNotification($ticket, $message, $magicLink['url'] ?? null, [
+                'template' => $validated['sms_template'] ?? null,
+            ]);
             $ticketNotificationContext = $this->resolveTicketNotificationContext($ticket);
             $anonymousNotifiable = new AnonymousNotifiable();
 

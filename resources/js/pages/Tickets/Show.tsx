@@ -1232,6 +1232,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     requesterEmail={ticket.user?.email ?? null}
                     requesterPhone={ticket.user?.phone ?? null}
                     mentionCandidates={agents}
+                    smsTemplates={ticket.sms_templates ?? []}
+                    smsChannelAvailable={ticket.sms_channel_available ?? true}
+                    smsMaxLength={ticket.sms_max_length ?? 160}
                   />
                 </div>
                 <Card
@@ -1447,6 +1450,9 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 requesterEmail={ticket.user?.email ?? null}
                 requesterPhone={ticket.user?.phone ?? null}
                 mentionCandidates={agents}
+                smsTemplates={ticket.sms_templates ?? []}
+                smsChannelAvailable={ticket.sms_channel_available ?? true}
+                smsMaxLength={ticket.sms_max_length ?? 160}
               />
             )}
           </div>
