@@ -573,31 +573,22 @@ export default function TicketChat({
               rows={2}
               disabled={isSending || !canSend}
             />
-            {isAgent && publicNotificationChannel === 'SMS' && selectedSmsTemplateId !== 'none' && (
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className={newMessage.trim().length > smsMaxLength ? 'text-destructive' : 'text-muted-foreground'}>
-                  SMS : {newMessage.trim().length}/{smsMaxLength} caractères
-                </span>
-                {newMessage.trim().length > smsMaxLength && (
-                  <span className="text-destructive">
-                    Message trop long de {newMessage.trim().length - smsMaxLength} caractère{newMessage.trim().length - smsMaxLength > 1 ? 's' : ''} — il sera tronqué à l'envoi (le lien et la signature sont conservés).
-                  </span>
-                )}
-              </div>
-            )}
             {isAgent && smsTemplates.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="flex items-center gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => setIsTemplatePickerOpen(true)}>
-                    Modèle SMS
+                    Modèle
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    {selectedSmsTemplateId === 'none' ? 'Aucun modèle sélectionné' : 'Modèle prêt à envoyer'}
+                    {selectedSmsTemplateId === 'none' ? 'Aucun modèle' : 'Prêt à envoyer'}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Choisissez un modèle dans la modale, puis modifiez-le si besoin avant d’envoyer.
-                </p>
+                {publicNotificationChannel === 'SMS' && (
+                  <span className={`text-xs ${newMessage.trim().length > smsMaxLength ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
+                    SMS : {newMessage.trim().length}/{smsMaxLength} car.
+                    {newMessage.trim().length > smsMaxLength && ` (+${newMessage.trim().length - smsMaxLength})`}
+                  </span>
+                )}
               </div>
             )}
             {isAgent && (
