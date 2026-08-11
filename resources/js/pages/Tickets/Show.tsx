@@ -98,6 +98,7 @@ const formatTimelineDetailValue = (value: unknown): string => {
 
 const builtInEventTypeLabels: Record<string, string> = {
   ticket_created_by_technician: 'Creation',
+  ticket_creation_customer_notified: 'Notification client',
   ticket_updated: 'Modification',
   status_changed: 'Statut',
   priority_changed: 'Priorite',

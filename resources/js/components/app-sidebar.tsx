@@ -79,7 +79,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Parametrage App',
-        href: '/app-settings',
+        href: '/settings/application',
         icon: Wrench,
     },
 ];
@@ -199,7 +199,7 @@ export function AppSidebar() {
         </div>
     ) : null;
 
-    const adminOnlyPrefixes = ['/admin', '/agents', '/tickets/print-settings', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/dashboard-insights', '/settings/sms', '/app-settings'];
+    const adminOnlyPrefixes = ['/admin', '/agents', '/tickets/print-settings', '/settings/application', '/settings/ticket-label', '/settings/ticket-timeline-templates', '/settings/ticket-action-lists', '/settings/dashboard-insights', '/settings/sms', '/settings/sms-debug', '/settings/mail-debug', '/settings/inbound-mail-review', '/app-settings'];
 
     const isAdminOnlyPath = (path: string) => adminOnlyPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 

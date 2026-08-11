@@ -13,7 +13,8 @@ use App\Http\Controllers\Settings\InboundMailReviewController;
 use App\Http\Controllers\Settings\MailDebugController;
 use App\Http\Controllers\Settings\SmsSettingsController;
 use App\Http\Controllers\Settings\SmsDebugController;
-use App\Http\Controllers\Settings\EditableDataController;
+use App\Http\Controllers\Settings\TicketCreatedNotificationSettingsController;
+use App\Http\Controllers\AppSettingsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -101,6 +102,13 @@ Route::middleware('auth')->group(function () {
         ->middleware('admin')
         ->name('mail-debug.send');
 
+    Route::get('settings/ticket-created-notification', [TicketCreatedNotificationSettingsController::class, 'edit'])
+        ->middleware('admin')
+        ->name('ticket-created-notification.edit');
+    Route::put('settings/ticket-created-notification', [TicketCreatedNotificationSettingsController::class, 'update'])
+        ->middleware('admin')
+        ->name('ticket-created-notification.update');
+
     Route::get('settings/inbound-mail-review', [InboundMailReviewController::class, 'index'])
         ->middleware('admin')
         ->name('inbound-mail-review.index');
@@ -111,23 +119,45 @@ Route::middleware('auth')->group(function () {
         ->middleware('admin')
         ->name('inbound-mail-review.dismiss');
 
-    Route::get('settings/application', function () {
-        return redirect('/app-settings');
-    })->middleware('admin')->name('application-settings.edit');
+    Route::get('settings/application', [AppSettingsController::class, 'edit'])
+        ->middleware('admin')
+        ->name('application-settings.edit');
 
-    Route::get('settings/editable-data', [EditableDataController::class, 'edit'])
+    Route::post('settings/application/mail-footer', [AppSettingsController::class, 'updateMailFooter'])
+        ->middleware('admin')
+        ->name('application-settings.mail-footer.update');
+
+    Route::post('settings/application/categories', [AppSettingsController::class, 'storeCategory'])
+        ->middleware('admin')
+        ->name('application-settings.categories.store');
+
+    Route::delete('settings/application/categories/{category}', [AppSettingsController::class, 'destroyCategory'])
+        ->middleware('admin')
+        ->name('application-settings.categories.destroy');
+
+    Route::post('settings/application/specialities', [AppSettingsController::class, 'storeSpeciality'])
+        ->middleware('admin')
+        ->name('application-settings.specialities.store');
+
+    Route::delete('settings/application/specialities/{speciality}', [AppSettingsController::class, 'destroySpeciality'])
+        ->middleware('admin')
+        ->name('application-settings.specialities.destroy');
+
+    Route::get('settings/editable-data', function () {
+        return redirect('/settings/application#business-data');
+    })
         ->middleware('admin')
         ->name('editable-data.edit');
-    Route::post('settings/editable-data/categories', [EditableDataController::class, 'storeCategory'])
+    Route::post('settings/editable-data/categories', [AppSettingsController::class, 'storeCategory'])
         ->middleware('admin')
         ->name('editable-data.categories.store');
-    Route::delete('settings/editable-data/categories/{category}', [EditableDataController::class, 'destroyCategory'])
+    Route::delete('settings/editable-data/categories/{category}', [AppSettingsController::class, 'destroyCategory'])
         ->middleware('admin')
         ->name('editable-data.categories.destroy');
-    Route::post('settings/editable-data/specialities', [EditableDataController::class, 'storeSpeciality'])
+    Route::post('settings/editable-data/specialities', [AppSettingsController::class, 'storeSpeciality'])
         ->middleware('admin')
         ->name('editable-data.specialities.store');
-    Route::delete('settings/editable-data/specialities/{speciality}', [EditableDataController::class, 'destroySpeciality'])
+    Route::delete('settings/editable-data/specialities/{speciality}', [AppSettingsController::class, 'destroySpeciality'])
         ->middleware('admin')
         ->name('editable-data.specialities.destroy');
 

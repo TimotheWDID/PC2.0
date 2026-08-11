@@ -18,7 +18,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('admin/dashboard', [\App\Http\Controllers\AdminDashboardController::class, 'index'])->name('admin.dashboard');
-    Route::get('app-settings', [AppSettingsController::class, 'edit'])->name('app-settings.edit');
+    Route::get('app-settings', function () {
+        return redirect()->route('application-settings.edit');
+    })->name('app-settings.edit');
     Route::post('app-settings/mail-footer', [AppSettingsController::class, 'updateMailFooter'])->name('app-settings.mail-footer.update');
     Route::post('app-settings/categories', [AppSettingsController::class, 'storeCategory'])->name('app-settings.categories.store');
     Route::delete('app-settings/categories/{category}', [AppSettingsController::class, 'destroyCategory'])->name('app-settings.categories.destroy');

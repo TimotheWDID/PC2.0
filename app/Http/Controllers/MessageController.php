@@ -499,6 +499,12 @@ class MessageController extends Controller
 
         return response()->json([
             'messages' => $messages,
+            'ticket_created_notification' => [
+                'channel' => $ticket->creation_notification_channel,
+                'status' => $ticket->creation_notification_status,
+                'error' => $ticket->creation_notification_error,
+                'sent_at' => $ticket->creation_notified_at?->toISOString(),
+            ],
         ]);
     }
 

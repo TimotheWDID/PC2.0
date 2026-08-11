@@ -4,19 +4,23 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Models\Category;
 use App\Models\Ticket;
 use App\Models\Commande;
 use App\Models\Device;
 use App\Models\DeviceEvent;
 use App\Models\TicketTimelineEvent;
-use Coderflex\LaravelTicket\Models\Category;
-use Illuminate\Support\Facades\Auth;
-use App\Support\TicketLabelSettings;
+use App\Notifications\TicketCreatedCustomerNotification;
 use App\Support\Sms\SmsSettings;
 use App\Support\TicketActionListSettings;
+use App\Support\TicketCreatedNotificationSettings;
+use App\Support\TicketLabelSettings;
 use App\Support\TicketTimelineTemplateSettings;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Response;
@@ -233,6 +237,143 @@ class TicketController extends Controller
         }
 
         return null;
+    }
+
+    private function notifyCustomerTicketCreated(Ticket $ticket): void
+    {
+        $ticket->loadMissing('user');
+
+        $anonymousNotifiable = new AnonymousNotifiable();
+        $contactEmail = trim((string) ($ticket->contact_email ?: ($ticket->user?->email ?? '')));
+        $contactPhone = trim((string) ($ticket->contact_phone ?: ($ticket->user?->phone ?? '')));
+
+        if ($contactEmail !== '') {
+            $anonymousNotifiable->route('mail', $contactEmail);
+        }
+
+        if ($contactPhone !== '') {
+            $anonymousNotifiable->route('smsfactory', $contactPhone);
+        }
+
+        $magicLink = $ticket->issueMagicLink();
+        $notification = new TicketCreatedCustomerNotification($ticket, (string) ($magicLink['url'] ?? ''));
+        $viaChannels = $notification->via($anonymousNotifiable);
+
+        if ($viaChannels === []) {
+            $this->updateTicketCreationDeliveryState(
+                $ticket,
+                'skipped',
+                null,
+                $this->resolveTicketCreationSkipReason($ticket)
+            );
+
+            return;
+        }
+
+        $channel = $this->resolveTicketCreationDeliveryChannelFromViaEntry($viaChannels[0] ?? null)
+            ?? ($ticket->notify_by === 'SMS' ? 'SMS' : ($ticket->notify_by === 'Email' ? 'Email' : null));
+
+        $this->updateTicketCreationDeliveryState($ticket, 'pending', $channel);
+
+        try {
+            $anonymousNotifiable->notify($notification);
+            $this->updateTicketCreationDeliveryState($ticket, 'sent', $channel, null, true);
+            $channelLabel = $channel === 'SMS' ? 'SMS' : 'Email';
+            $this->logTechnicianTimeline(
+                $ticket,
+                'ticket_creation_customer_notified',
+                "Creation du ticket notifiee au client par {$channelLabel}",
+                [
+                    'channel' => $channelLabel,
+                ]
+            );
+        } catch (\Throwable $exception) {
+            $this->updateTicketCreationDeliveryState(
+                $ticket,
+                'failed',
+                $channel,
+                $exception->getMessage()
+            );
+
+            Log::warning('Ticket creation notification failed.', [
+                'ticket_id' => $ticket->id,
+                'notify_by' => $ticket->notify_by,
+                'contact_email' => $ticket->contact_email,
+                'contact_phone' => $ticket->contact_phone,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function resolveTicketCreationDeliveryChannelFromViaEntry(mixed $viaEntry): ?string
+    {
+        if (! is_string($viaEntry)) {
+            return null;
+        }
+
+        if ($viaEntry === 'mail') {
+            return 'Email';
+        }
+
+        if ($viaEntry === \App\Notifications\Channels\SmsFactoryChannel::class) {
+            return 'SMS';
+        }
+
+        return null;
+    }
+
+    private function updateTicketCreationDeliveryState(
+        Ticket $ticket,
+        string $status,
+        ?string $channel = null,
+        ?string $error = null,
+        bool $markAsSent = false
+    ): void {
+        $ticket->creation_notification_status = $status;
+
+        if ($channel !== null) {
+            $ticket->creation_notification_channel = $channel;
+        }
+
+        $ticket->creation_notification_error = $error;
+        $ticket->creation_notified_at = $markAsSent ? now() : null;
+        $ticket->save();
+    }
+
+    private function resolveTicketCreationSkipReason(Ticket $ticket): string
+    {
+        $settings = TicketCreatedNotificationSettings::load();
+
+        if (! (bool) ($settings['enabled'] ?? false)) {
+            return 'Notification de creation desactivee dans les parametres.';
+        }
+
+        if (($ticket->notify_by ?? 'None') === 'None') {
+            return 'Canal de notification defini a Aucune.';
+        }
+
+        if (($ticket->notify_by ?? null) === 'SMS') {
+            if (! SmsSettings::isEnabled()) {
+                return 'Canal SMS indisponible (desactive ou cle API absente).';
+            }
+
+            $phone = trim((string) ($ticket->contact_phone ?: ($ticket->user?->phone ?? '')));
+            if ($phone === '') {
+                return 'Aucun numero de telephone renseigne pour ce client.';
+            }
+
+            return 'Numero de telephone invalide pour envoi SMS.';
+        }
+
+        if (($ticket->notify_by ?? null) === 'Email') {
+            $email = trim((string) ($ticket->contact_email ?: ($ticket->user?->email ?? '')));
+
+            if ($email === '') {
+                return 'Aucune adresse email renseignee pour ce client.';
+            }
+        }
+
+        return 'Aucun canal de notification disponible pour ce ticket.';
     }
 
     private function syncTicketPasswordToDevice(Ticket $ticket, Device $device): void
@@ -796,6 +937,7 @@ class TicketController extends Controller
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
             'device_password' => 'nullable|string|max:500',
+            'notify_by' => 'nullable|in:SMS,Email,None',
             'no_device_password' => 'nullable|boolean',
             'password_empty_confirmed' => 'nullable|boolean',
             'category_id' => 'nullable|integer',
@@ -1056,6 +1198,8 @@ class TicketController extends Controller
             }
         }
 
+        $this->notifyCustomerTicketCreated($ticket);
+
         if ($request->boolean('print_label')) {
             return redirect()->route('tickets.printLabel', $ticket->id);
         }
@@ -1153,6 +1297,8 @@ class TicketController extends Controller
             $ticket->category_id = $data['category_id'];
         }
         $ticket->save();
+
+        $this->notifyCustomerTicketCreated($ticket);
 
         return redirect()->route('kiosk.tickets.create', [
             'success' => 1,
@@ -1327,6 +1473,12 @@ class TicketController extends Controller
                 'notify_by' => $ticket->notify_by,
                 'contact_phone' => $ticket->contact_phone,
                 'contact_email' => $ticket->contact_email,
+                'creation_notification' => [
+                    'channel' => $ticket->creation_notification_channel,
+                    'status' => $ticket->creation_notification_status,
+                    'error' => $ticket->creation_notification_error,
+                    'sent_at' => $ticket->creation_notified_at?->toIso8601String(),
+                ],
                 'is_resolved' => $ticket->is_resolved,
                 'is_locked' => $ticket->is_locked,
                 'magic_link_url' => $magicLinkUrl,

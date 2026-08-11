@@ -39,6 +39,7 @@ interface SmsTemplateOption {
   id: string;
   title: string;
   content: string;
+  hasMagicLink?: boolean;
 }
 
 interface TicketChatProps {
@@ -60,6 +61,7 @@ interface TicketChatProps {
   smsTemplates?: SmsTemplateOption[];
   smsChannelAvailable?: boolean;
   smsMaxLength?: number;
+  magicLinkExample?: string | null;
 }
 
 export default function TicketChat({
@@ -77,6 +79,7 @@ export default function TicketChat({
   smsTemplates = [],
   smsChannelAvailable = true,
   smsMaxLength = 160,
+  magicLinkExample = null,
 }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -152,6 +155,22 @@ export default function TicketChat({
       return resolveDefaultPublicChannel;
     });
   }, [availableNotificationChannels, resolveDefaultPublicChannel]);
+
+  const magicLinkLength = React.useMemo(
+    () => (magicLinkExample ? magicLinkExample.length : 0),
+    [magicLinkExample],
+  );
+
+  const currentTemplate = React.useMemo(
+    () => smsTemplates.find((t) => t.id === selectedSmsTemplateId) ?? null,
+    [smsTemplates, selectedSmsTemplateId],
+  );
+
+  // Max chars available for message content when a magic-link template is active
+  const effectiveSmsMax = React.useMemo(() => {
+    if (!currentTemplate?.hasMagicLink || !magicLinkLength) return smsMaxLength;
+    return smsMaxLength - magicLinkLength - 1; // -1 for the space before the link
+  }, [currentTemplate, smsMaxLength, magicLinkLength]);
 
   const normalizeMentionToken = (value: string): string => {
     return value
@@ -297,9 +316,16 @@ export default function TicketChat({
         const selectedTemplate = smsTemplates.find((template) => template.id === selectedSmsTemplateId);
 
         if (selectedTemplate) {
+          // Truncate SMS content if it exceeds the space left after the magic link
+          let smsContent = newMessage.trim();
+          const effectiveChannel = channelOverride ?? publicNotificationChannel;
+          if (effectiveChannel === 'SMS' && selectedTemplate.hasMagicLink && smsContent.length > effectiveSmsMax) {
+            smsContent = smsContent.slice(0, effectiveSmsMax - 3) + '...';
+          }
+
           payload.sms_template = {
             ...selectedTemplate,
-            content: newMessage.trim(),
+            content: smsContent,
           };
         }
       }
@@ -584,10 +610,21 @@ export default function TicketChat({
                   </span>
                 </div>
                 {publicNotificationChannel === 'SMS' && (
-                  <span className={`text-xs ${newMessage.trim().length > smsMaxLength ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
-                    SMS : {newMessage.trim().length}/{smsMaxLength} car.
-                    {newMessage.trim().length > smsMaxLength && ` (+${newMessage.trim().length - smsMaxLength})`}
-                  </span>
+                  selectedSmsTemplateId === 'none'
+                    ? <span className="text-xs text-muted-foreground">SMS automatique</span>
+                    : (() => {
+                        const len = newMessage.length;
+                        const over = len - effectiveSmsMax;
+                        return (
+                          <span className={`text-xs ${over > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
+                            SMS : {len}/{effectiveSmsMax} car.
+                            {currentTemplate?.hasMagicLink && magicLinkLength > 0 && (
+                              <span className="opacity-60"> (+{magicLinkLength} lien)</span>
+                            )}
+                            {over > 0 && <span> — tronqué à l’envoi</span>}
+                          </span>
+                        );
+                      })()
                 )}
               </div>
             )}
@@ -662,29 +699,58 @@ export default function TicketChat({
           </form>
 
           <Dialog open={isTemplatePickerOpen} onOpenChange={setIsTemplatePickerOpen}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle>Choisir un modèle SMS</DialogTitle>
+                <DialogTitle>Choisir un modèle</DialogTitle>
                 <DialogDescription>
                   Sélectionnez un modèle prédéfini et il sera chargé dans la zone d’édition.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-2">
-                <Button type="button" variant="outline" className="w-full justify-start" onClick={() => applyTemplate('none')}>
-                  Aucun modèle
-                </Button>
-                {smsTemplates.map((template) => (
-                  <Button
-                    key={template.id}
-                    type="button"
-                    variant={selectedSmsTemplateId === template.id ? 'default' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => applyTemplate(template.id)}
-                  >
-                    {template.title}
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                <div>
+                  <Button type="button" variant="outline" className="w-full justify-start" onClick={() => applyTemplate('none')}>
+                    Aucun modèle
                   </Button>
-                ))}
+                  {publicNotificationChannel === 'SMS' && (
+                    <p className="mt-1 px-1 text-xs text-muted-foreground">
+                      SMS automatique — format fixe envoyé par le système
+                    </p>
+                  )}
+                </div>
+                {smsTemplates.map((template) => {
+                  const previewContent = template.content + (template.hasMagicLink && magicLinkExample ? ' ' + magicLinkExample : '');
+                  const previewLen = previewContent.length;
+                  const overLimit = publicNotificationChannel === 'SMS' && previewLen > smsMaxLength;
+                  return (
+                    <div key={template.id} className="rounded-md border border-border p-2 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={selectedSmsTemplateId === template.id ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-1 justify-start"
+                          onClick={() => applyTemplate(template.id)}
+                        >
+                          {template.title}
+                        </Button>
+                        {template.hasMagicLink && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            Magic Link
+                          </Badge>
+                        )}
+                        {publicNotificationChannel === 'SMS' && (
+                          <span className={`text-xs shrink-0 ${overLimit ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                            {previewLen}/{smsMaxLength}
+                          </span>
+                        )}
+                      </div>
+                      <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1">
+                        {previewContent}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
 
               <DialogFooter>

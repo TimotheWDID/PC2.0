@@ -53,7 +53,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                     <DropdownMenuItem asChild>
                         <Link
                             className="block w-full"
-                            href="/app-settings"
+                            href="/settings/application"
                             as="button"
                             prefetch
                             onClick={cleanup}

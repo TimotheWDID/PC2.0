@@ -41,6 +41,10 @@ class Ticket extends Model
         'notify_by',
         'contact_phone',
         'contact_email',
+        'creation_notification_channel',
+        'creation_notification_status',
+        'creation_notification_error',
+        'creation_notified_at',
         'is_resolved',
         'is_locked',
         'ticket_token_hash',
@@ -53,6 +57,7 @@ class Ticket extends Model
         'no_device_password' => 'boolean',
         'is_resolved' => 'boolean',
         'is_locked' => 'boolean',
+        'creation_notified_at' => 'datetime',
         'token_expires_at' => 'datetime',
     ];
 
