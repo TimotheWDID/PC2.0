@@ -1,1 +1,0 @@
-import{j as s}from"./app-W0cEonp_.js";import{c as i}from"./button-CA7kmoUe.js";import{L as o}from"./loader-circle-8dIrjiiZ.js";function m({className:r,...a}){return s.jsx(o,{role:"status","aria-label":"Loading",className:i("size-4 animate-spin",r),...a})}export{m as S};

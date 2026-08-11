@@ -10,9 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import LogModal from '@/components/LogModal';
 import MobileNativeNav from '@/components/mobile-native-nav';
-import { Mail, MessageSquare, Loader2 } from 'lucide-react';
+import { Mail, MessageSquare, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -102,6 +103,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
   const [sendingSms, setSendingSms] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<number | null>(null);
   const [deletingDeviceId, setDeletingDeviceId] = useState<number | null>(null);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
 
   const { data, setData, put, processing, errors } = useForm<UserEditForm>({
     first_name: user?.first_name ?? '',
@@ -197,6 +199,25 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
     });
   };
 
+  const resetPasswordFields = () => {
+    setData('password', '');
+    setData('password_confirmation', '');
+  };
+
+  const closePasswordDialog = () => {
+    setIsPasswordDialogOpen(false);
+    resetPasswordFields();
+  };
+
+  const submitPasswordUpdate = () => {
+    put(`/users/${user?.id}`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        closePasswordDialog();
+      },
+    });
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Éditer un utilisateur" />
@@ -207,12 +228,20 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
           <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">
             <div className="flex items-center justify-between">
               <CardTitle>Modifier</CardTitle>
-              <LogModal
-                subjectType="App\\Models\\User"
-                subjectId={user?.id}
-                buttonVariant="ghost"
-                buttonSize="sm"
-              />
+              <div className="flex items-center gap-2">
+                <Link href={`/users/${user?.id}/show`}>
+                  <Button type="button" variant="outline" size="sm">
+                    <ArrowLeft className="mr-1 h-4 w-4" />
+                    Retour client
+                  </Button>
+                </Link>
+                <LogModal
+                  subjectType="App\\Models\\User"
+                  subjectId={user?.id}
+                  buttonVariant="ghost"
+                  buttonSize="sm"
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -332,40 +361,15 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                 </div>
 
                 {isAdmin && (
-                  <>
-                    <div className="mt-4 pt-4 border-t">
-                      <h3 className="text-sm font-semibold mb-3">Changer le mot de passe</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Laissez vide pour ne pas modifier le mot de passe
-                      </p>
-                      <div className="grid gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="password">Nouveau mot de passe</Label>
-                          <Input
-                            id="password"
-                            type="password"
-                            placeholder="Nouveau mot de passe"
-                            name="password"
-                            value={data.password}
-                            onChange={(e) => setData('password', e.target.value)}
-                          />
-                          {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="password_confirmation">Confirmer le mot de passe</Label>
-                          <Input
-                            id="password_confirmation"
-                            type="password"
-                            placeholder="Confirmer le mot de passe"
-                            name="password_confirmation"
-                            value={data.password_confirmation}
-                            onChange={(e) => setData('password_confirmation', e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </>
+                  <div className="mt-4 border-t pt-4">
+                    <h3 className="mb-2 text-sm font-semibold">Sécurité</h3>
+                    <p className="mb-3 text-sm text-muted-foreground">
+                      La modification du mot de passe se fait dans une fenêtre dédiée.
+                    </p>
+                    <Button type="button" variant="outline" onClick={() => setIsPasswordDialogOpen(true)}>
+                      Changer le mot de passe
+                    </Button>
+                  </div>
                 )}
 
                 <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:gap-2 lg:mt-6 lg:justify-end lg:border-t lg:pt-6">
@@ -376,7 +380,7 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => router.visit('/users')}
+                    onClick={() => router.visit(`/users/${user?.id}/show`)}
                     className="w-full sm:w-auto lg:min-w-[10rem]"
                   >
                     Annuler
@@ -415,6 +419,62 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
             )}
           </CardContent>
         </Card>
+
+        <Dialog
+          open={isPasswordDialogOpen}
+          onOpenChange={(open) => {
+            setIsPasswordDialogOpen(open);
+            if (!open) {
+              resetPasswordFields();
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Changer le mot de passe</DialogTitle>
+              <DialogDescription>
+                Saisissez un nouveau mot de passe pour cet utilisateur puis validez.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="password">Nouveau mot de passe</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Nouveau mot de passe"
+                  name="password"
+                  value={data.password}
+                  onChange={(e) => setData('password', e.target.value)}
+                />
+                {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="password_confirmation">Confirmer le mot de passe</Label>
+                <Input
+                  id="password_confirmation"
+                  type="password"
+                  placeholder="Confirmer le mot de passe"
+                  name="password_confirmation"
+                  value={data.password_confirmation}
+                  onChange={(e) => setData('password_confirmation', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closePasswordDialog}>
+                Annuler
+              </Button>
+              <Button type="button" onClick={submitPasswordUpdate} disabled={processing}>
+                {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {processing ? 'Enregistrement...' : 'Enregistrer le mot de passe'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Card id="tickets-client" className="scroll-mt-24 border-border/70 shadow-sm lg:shadow-md/10">
           <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">

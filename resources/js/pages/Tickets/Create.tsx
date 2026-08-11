@@ -208,6 +208,34 @@ export default function CreateTicket({
     }
   }, [])
 
+  useEffect(() => {
+    if (!isAgent || typeof window === 'undefined') {
+      return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const userIdFromUrl = params.get('user_id')
+    if (!userIdFromUrl) {
+      return
+    }
+
+    const parsedUserId = Number(userIdFromUrl)
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return
+    }
+
+    const matchedUser = users.find((candidate) => candidate.id === parsedUserId)
+    if (!matchedUser) {
+      return
+    }
+
+    setSelectedUser(matchedUser)
+    setSearchQuery('')
+    setData('user_selection', 'existing')
+    setData('user_id', matchedUser.id.toString())
+    setData('device_id', '')
+  }, [isAgent, setData, users])
+
   const submit = (e: React.SyntheticEvent, printLabel = false) => {
     e.preventDefault()
 

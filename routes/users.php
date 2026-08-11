@@ -8,6 +8,7 @@ Route::middleware('auth')->group(function () {
     Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::get('devices/{device}', [DeviceController::class, 'show'])->whereNumber('device')->name('devices.show');
     Route::post('devices/{device}/events', [DeviceController::class, 'storeEvent'])->whereNumber('device')->name('devices.events.store');
+    Route::get('users/{user}/show', [UserController::class, 'show'])->name('users.show-page');
     Route::resource('users', UserController::class);
     Route::patch('users/{user}/internal-note', [UserController::class, 'updateInternalNote'])->name('users.update-internal-note');
     Route::post('users/{user}/send-password-email', [UserController::class, 'sendPasswordSetupEmail'])->name('users.send-password-email');

@@ -74,7 +74,7 @@ export default function Index({ users }: { users: User[] }) {
               {filtered && filtered.length ? (
                 filtered.map((u) => (
                   <div key={u.id} className="rounded-md border p-3">
-                    <Link href={`/tickets?user_id=${u.id}&show_all=1`} className="block">
+                    <Link href={`/users/${u.id}/show`} className="block">
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold">#{u.id} - {u.name ?? '-'}</p>
                         <span className="text-xs text-muted-foreground">{formatDateTimeFr(u.created_at, { timeZone: 'Europe/Paris' })}</span>
@@ -130,7 +130,7 @@ export default function Index({ users }: { users: User[] }) {
                 <tbody>
                   {sortedFiltered && sortedFiltered.length ? (
                     sortedFiltered.map((u) => (
-                      <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/tickets?user_id=${u.id}&show_all=1`}>
+                      <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/users/${u.id}/show`}>
                         <td className="px-4 py-4 text-sm font-medium">{u.id}</td>
                         <td className="px-4 py-4 text-sm font-medium">{u.name ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.email ?? '-'}</td>

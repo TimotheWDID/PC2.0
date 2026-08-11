@@ -36,6 +36,56 @@ class UserController extends Controller
         ];
     }
 
+    private function serializeUser(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'address' => $user->address,
+            'internal_note' => $user->internal_note,
+            'hiboutik_id' => $user->hiboutik_id,
+            'default_notification_preference' => $user->default_notification_preference,
+            'created_at' => $user->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function getUserTickets(User $user)
+    {
+        return Ticket::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
+            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
+            ->map(function ($ticket) {
+                return [
+                    'id' => $ticket->id,
+                    'title' => $ticket->title,
+                    'status' => $ticket->status,
+                    'priority' => $ticket->priority,
+                    'created_at' => $ticket->created_at?->toIso8601String(),
+                    'device' => $ticket->device ? [
+                        'id' => $ticket->device->id,
+                        'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
+                        'serial_number' => $ticket->device->serial_number,
+                        'asset_tag' => $ticket->device->asset_tag,
+                    ] : null,
+                ];
+            })
+            ->values();
+    }
+
+    private function getUserDevices(User $user)
+    {
+        return $user->devices()
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn(Device $device) => $this->serializeDevice($device))
+            ->values();
+    }
+
     public function index()
     {
         $users = User::orderBy('id', 'desc')->get()->map(function ($u) {
@@ -84,33 +134,10 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $tickets = Ticket::where('user_id', $user->id)
-            ->orderByDesc('created_at')
-            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
-            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
-            ->map(function ($ticket) {
-                return [
-                    'id' => $ticket->id,
-                    'title' => $ticket->title,
-                    'status' => $ticket->status,
-                    'priority' => $ticket->priority,
-                    'created_at' => $ticket->created_at?->toIso8601String(),
-                    'device' => $ticket->device ? [
-                        'id' => $ticket->device->id,
-                        'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
-                        'serial_number' => $ticket->device->serial_number,
-                        'asset_tag' => $ticket->device->asset_tag,
-                    ] : null,
-                ];
-            })
-            ->values();
-
-        $devices = $user->devices()->orderByDesc('id')->get()->map(fn(Device $device) => $this->serializeDevice($device))->values();
-
-        return Inertia::render('Users/Edit', [
-            'user' => $user,
-            'tickets' => $tickets,
-            'devices' => $devices,
+        return Inertia::render('Users/Show', [
+            'user' => $this->serializeUser($user),
+            'tickets' => $this->getUserTickets($user),
+            'devices' => $this->getUserDevices($user),
         ]);
     }
 
@@ -118,43 +145,10 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $tickets = Ticket::where('user_id', $user->id)
-            ->orderByDesc('created_at')
-            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
-            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
-            ->map(function ($ticket) {
-                return [
-                    'id' => $ticket->id,
-                    'title' => $ticket->title,
-                    'status' => $ticket->status,
-                    'priority' => $ticket->priority,
-                    'created_at' => $ticket->created_at?->toIso8601String(),
-                    'device' => $ticket->device ? [
-                        'id' => $ticket->device->id,
-                        'name' => trim(($ticket->device->brand ?? '') . ' ' . ($ticket->device->model ?? '')) ?: ucfirst((string) $ticket->device->device_type),
-                        'serial_number' => $ticket->device->serial_number,
-                        'asset_tag' => $ticket->device->asset_tag,
-                    ] : null,
-                ];
-            })
-            ->values();
-
-        $devices = $user->devices()->orderByDesc('id')->get()->map(fn(Device $device) => $this->serializeDevice($device))->values();
-
         return Inertia::render('Users/Edit', [
-            'user' => [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'address' => $user->address,
-                'internal_note' => $user->internal_note,
-                'hiboutik_id' => $user->hiboutik_id,
-                'default_notification_preference' => $user->default_notification_preference,
-            ],
-            'tickets' => $tickets,
-            'devices' => $devices,
+            'user' => $this->serializeUser($user),
+            'tickets' => $this->getUserTickets($user),
+            'devices' => $this->getUserDevices($user),
         ]);
     }
 
