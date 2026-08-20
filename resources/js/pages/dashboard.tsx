@@ -782,10 +782,10 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
         const ticketId = item.ticket?.id ? Number(item.ticket.id) : null;
 
         const accentClass = isInbound
-            ? 'border-[#e6892e]/50 bg-[#fff4e8]'
+            ? 'border-amber-500/40 bg-amber-50/80 dark:border-amber-400/50 dark:bg-amber-950/20'
             : isTicketReply
-              ? 'border-[#22a06b]/40 bg-[#ecfdf3]'
-              : 'border-[#2a3ff5]/30 bg-[#eef1ff]';
+              ? 'border-emerald-500/40 bg-emerald-50/80 dark:border-emerald-400/50 dark:bg-emerald-950/20'
+              : 'border-indigo-500/40 bg-indigo-50/80 dark:border-indigo-400/50 dark:bg-indigo-950/20';
 
         return (
             <div key={item.id} className={`rounded-xl border p-4 ${accentClass}`}>
@@ -797,8 +797,8 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         {isMention && <Badge variant="outline">Mention</Badge>}
-                        {isTicketReply && <Badge variant="outline" className="border-[#22a06b] text-[#1c7a53]">Reponse client</Badge>}
-                        {isInbound && <Badge variant="outline" className="border-[#e6892e] text-[#b55f00]">Mail non lie</Badge>}
+                        {isTicketReply && <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:border-emerald-400/60 dark:text-emerald-300">Reponse client</Badge>}
+                        {isInbound && <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:border-amber-400/60 dark:text-amber-300">Mail non lie</Badge>}
                     </div>
                 </div>
 
