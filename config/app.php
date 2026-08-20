@@ -30,6 +30,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registration Feature Toggle
+    |--------------------------------------------------------------------------
+    |
+    | Set REGISTRATION_ENABLED=true in .env to re-enable public account
+    | creation. Disabled by default.
+    |
+    */
+
+    'registration_enabled' => env('REGISTRATION_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Debug Mode
     |--------------------------------------------------------------------------
     |

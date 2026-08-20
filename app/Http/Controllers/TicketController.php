@@ -559,7 +559,7 @@ class TicketController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Ticket::query()->with(['user', 'category', 'device', 'assignee.agent.specialities']);
+        $query = Ticket::query()->with(['user', 'category', 'categories', 'device', 'assignee.agent.specialities']);
         $user = Auth::user();
         $supportsTicketKind = $this->supportsTicketKind();
         $specialCategoryIds = $this->getSpecialCategoryIds();
@@ -639,6 +639,10 @@ class TicketController extends Controller
                     'id' => $t->category->id,
                     'name' => $t->category->name,
                 ] : null,
+                'categories' => $t->categories->map(fn ($category) => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                ])->values()->all(),
                 'suggested_specialities' => $suggestedSpecialities,
                 'user' => $t->user ? [
                     'id' => $t->user->id,
@@ -919,6 +923,61 @@ class TicketController extends Controller
             'categories' => $categories,
             'success' => $request->boolean('success'),
             'ticketId' => $request->query('ticket'),
+        ]);
+    }
+
+    /**
+     * Create (or reuse) a customer immediately from the ticket creation form, independently
+     * from the ticket submission, so the customer record survives even if the ticket POST fails.
+     */
+    public function quickCreateUser(Request $request)
+    {
+        $this->ensureAgentOrAbort();
+
+        $data = $request->validate([
+            'first_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:255',
+            'address' => 'nullable|string|max:255',
+            'postal_code' => 'nullable|string|max:20',
+            'city' => 'nullable|string|max:255',
+        ]);
+
+        $fullAddress = trim(($data['address'] ?? '') . ' ' . ($data['postal_code'] ?? '') . ' ' . ($data['city'] ?? ''));
+        $email = !empty($data['email']) ? $data['email'] : null;
+
+        if ($email) {
+            $user = \App\Models\User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'first_name' => $data['first_name'] ?? 'Client',
+                    'last_name' => $data['last_name'] ?? '',
+                    'password' => bcrypt('defaultpassword'),
+                    'phone' => $data['phone'] ?? '',
+                    'address' => $fullAddress,
+                    'default_notification_preference' => 'Email',
+                ]
+            );
+        } else {
+            $user = \App\Models\User::create([
+                'first_name' => $data['first_name'] ?? 'Client',
+                'last_name' => $data['last_name'] ?? '',
+                'password' => bcrypt('defaultpassword'),
+                'phone' => $data['phone'] ?? '',
+                'address' => $fullAddress,
+                'email' => null,
+                'default_notification_preference' => !empty($data['phone']) ? 'SMS' : 'None',
+            ]);
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => trim($user->first_name . ' ' . $user->last_name),
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ],
         ]);
     }
 
@@ -1352,7 +1411,7 @@ class TicketController extends Controller
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
-        $ticket->load(['user.devices', 'assignee', 'category', 'device']);
+        $ticket->load(['user.devices', 'assignee', 'category', 'categories', 'device']);
         $agentContext = $this->isAgentContext();
         $magicLinkUrl = $agentContext ? ($ticket->getOrCreateMagicLink()['url'] ?? null) : null;
 
@@ -1509,6 +1568,11 @@ class TicketController extends Controller
                     'id' => $ticket->category->id,
                     'name' => $ticket->category->name,
                 ] : null,
+                'categories' => $ticket->categories->map(fn ($category) => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                ])->values()->all(),
+                'category_ids' => $ticket->categories->pluck('id')->values()->all(),
                 'device' => $ticket->device ? array_merge(
                     $this->serializeDevice($ticket->device) ?? [],
                     [
@@ -1608,6 +1672,8 @@ class TicketController extends Controller
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
             'category_id' => 'nullable|integer',
+            'category_ids' => 'nullable|array',
+            'category_ids.*' => 'integer|exists:categories,id',
             'assignee_id' => 'nullable|integer',
             'device_id' => 'nullable|integer|exists:devices,id',
             'invoice_id' => 'nullable|string|max:255',
@@ -1617,6 +1683,13 @@ class TicketController extends Controller
             'is_resolved' => 'nullable|boolean',
             'is_locked' => 'nullable|boolean',
         ]);
+
+        $categoryIds = collect($request->input('category_ids', $data['category_id'] !== null ? [(int) $data['category_id']] : []))
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         $assigneeId = array_key_exists('assignee_id', $data) ? (int) $data['assignee_id'] : null;
         if ($assigneeId === 0) {
@@ -1658,7 +1731,8 @@ class TicketController extends Controller
         $ticket->assignee_id = $assigneeId;
         $ticket->device_id = $data['device_id'] ?? null;
         $ticket->invoice_id = $data['invoice_id'] ?? null;
-            $ticket->notify_by = $resolvedNotificationPreference;
+        $ticket->category_id = $categoryIds[0] ?? null;
+        $ticket->notify_by = $resolvedNotificationPreference;
         $ticket->contact_phone = $data['contact_phone'] ?? null;
         $ticket->contact_email = $data['contact_email'] ?? null;
         $ticket->is_resolved = $data['is_resolved'] ?? false;
@@ -1687,9 +1761,9 @@ class TicketController extends Controller
             }
         }
 
-        if (isset($data['category_id']) && method_exists($ticket, 'categories')) {
+        if (method_exists($ticket, 'categories')) {
             try {
-                $ticket->categories()->sync([$data['category_id']]);
+                $ticket->categories()->sync($categoryIds);
             } catch (\Exception $e) {
                 // ignore
             }

@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
-import { register } from '@/routes';
 import { request } from '@/routes/password';
 import { Form, Head } from '@inertiajs/react';
 
@@ -25,9 +24,14 @@ export default function Login({ status, canResetPassword }: LoginProps) {
     return (
         <AuthLayout
             title="Connectez-vous à votre compte"
-            description="Entrez votre email et mot de passe ci-dessous pour vous connecter"
+            description="Connexion reservee aux agents"
         >
             <Head title="Connexion" />
+
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-medium">Seuls les agents peuvent se connecter a cette interface.</p>
+                <p className="mt-1">Pour acceder a un ticket, utilisez le lien recu dans votre notification.</p>
+            </div>
 
             <Form
                 {...AuthenticatedSessionController.store.form()}
@@ -106,12 +110,9 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                             </Button>
                         </div>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Vous n'avez pas de compte ?{' '}
-                            <TextLink href={register()} tabIndex={5}>
-                                S'inscrire
-                            </TextLink>
-                        </div>
+                        <p className="text-center text-sm text-muted-foreground">
+                            La creation de compte est desactivee.
+                        </p>
                     </>
                 )}
             </Form>

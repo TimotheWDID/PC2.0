@@ -706,6 +706,7 @@ class DashboardController extends Controller
     public function validateTicketNotifications(Request $request, int $ticketId)
     {
         $user = Auth::user();
+        /** @var \App\Models\User|null $user */
 
         if (! $user || ! $this->isAgentContext()) {
             abort(403);
@@ -727,24 +728,8 @@ class DashboardController extends Controller
             return back();
         }
 
-        $messageIds = $ownedUnread
-            ->pluck('data.message_id')
-            ->filter(fn ($id) => ! is_null($id))
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        if ($messageIds->isEmpty()) {
-            return back();
-        }
-
         DatabaseNotification::query()
-            ->whereIn('type', [
-                AgentMentionNotification::class,
-                AgentTicketReplyNotification::class,
-            ])
-            ->whereIn('data->message_id', $messageIds->all())
-            ->whereNull('read_at')
+            ->whereIn('id', $ownedUnread->pluck('id')->all())
             ->update([
                 'read_at' => now(),
                 'updated_at' => now(),

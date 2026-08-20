@@ -148,6 +148,7 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
     const page = usePage();
     const user = (page.props as any).auth?.user ?? null;
     const isAgent = mode ? mode === 'agent' : !!user?.agent;
+    const isAdmin = !!(user?.is_admin || user?.agent?.is_admin || (page.props as any).preview?.canToggle);
     const currentUrl = page.url ?? '/';
     const currentPath = (page.url ?? '/').split('?')[0] || '/';
     const isNotificationView = currentUrl.includes('severity=notification');
@@ -576,6 +577,21 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
         return summaryMap;
     }, [notificationItems]);
 
+    const notificationDebug = useMemo(() => {
+        const listedCount = notificationItems.length;
+        const filteredCount = filteredNotificationItems.length;
+        const totalByTypes = notificationSummary.mention + notificationSummary.ticket_reply + notificationSummary.inbound;
+
+        return {
+            unreadCount,
+            listedCount,
+            filteredCount,
+            totalByTypes,
+            deltaUnreadVsListed: unreadCount - listedCount,
+            activeFilter: notificationKind,
+        };
+    }, [filteredNotificationItems.length, notificationItems.length, notificationKind, notificationSummary.inbound, notificationSummary.mention, notificationSummary.ticket_reply, unreadCount]);
+
     const validateTicketNotification = (ticketId: number) => {
         if (validatingTicketId !== null) {
             return;
@@ -893,6 +909,52 @@ export default function Dashboard({ mode, summary, actionItems, assignedTickets,
                             </div>
                         </CardContent>
                     </Card>
+
+                    {isAdmin && (
+                        <Card className="border-dashed border-border/80 bg-muted/30">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm">Debug notifications admin</CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid gap-2 text-xs sm:grid-cols-3">
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Pastille non lues</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.unreadCount}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Liste notifications</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.listedCount}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Delta pastille-liste</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.deltaUnreadVsListed}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Mentions</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationSummary.mention}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Reponses client</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationSummary.ticket_reply}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Mails non lies</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationSummary.inbound}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Somme des types</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.totalByTypes}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Filtrées affichées</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.filteredCount}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/70 bg-background p-2">
+                                    <div className="text-muted-foreground">Filtre actif</div>
+                                    <div className="text-lg font-semibold text-foreground">{notificationDebug.activeFilter}</div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     <section className="space-y-3">
                         {filteredNotificationItems.length === 0 ? (

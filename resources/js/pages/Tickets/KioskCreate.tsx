@@ -76,7 +76,8 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       }
 
       const detail = (event as CustomEvent<{ response?: { status?: number } }>).detail
-      if (detail?.response?.status === 419) {
+      // 419 = TokenMismatchException (session/CSRF expired). Some hosting layers may surface this as 403.
+      if (detail?.response?.status === 419 || detail?.response?.status === 403) {
         window.location.reload()
       }
     }
@@ -87,6 +88,27 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       document.removeEventListener('inertia:invalid', handleInertiaInvalid)
     }
   }, [])
+
+  // Restaurer le brouillon du localStorage au montage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('kiosk_ticket_form_draft')
+      if (saved) {
+        setData(JSON.parse(saved))
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [])
+
+  // Sauvegarder le brouillon dans localStorage à chaque changement
+  useEffect(() => {
+    try {
+      localStorage.setItem('kiosk_ticket_form_draft', JSON.stringify(data))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [data])
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -104,6 +126,14 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
 
     isSubmittingRef.current = true
     post('/kiosk/tickets', {
+      onSuccess: () => {
+        try {
+          const draftKey = 'kiosk_ticket_form_draft'
+          localStorage.removeItem(draftKey)
+        } catch {
+          // Ignore localStorage errors
+        }
+      },
       onFinish: () => {
         isSubmittingRef.current = false
       },

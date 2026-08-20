@@ -19,6 +19,8 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
+        abort_unless(config('app.registration_enabled'), 403, 'La creation de compte est desactivee.');
+
         return Inertia::render('auth/register');
     }
 
@@ -29,6 +31,8 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        abort_unless(config('app.registration_enabled'), 403, 'La creation de compte est desactivee.');
+
         $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',

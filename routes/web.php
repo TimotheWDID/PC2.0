@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\AppSettingsController;
+use App\Http\Controllers\GlobalSearchController;
 
 Route::get('/', function () {
     return auth()->check()
@@ -27,6 +28,11 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('app-settings/specialities', [AppSettingsController::class, 'storeSpeciality'])->name('app-settings.specialities.store');
     Route::delete('app-settings/specialities/{speciality}', [AppSettingsController::class, 'destroySpeciality'])->name('app-settings.specialities.destroy');
 });
+
+Route::middleware('auth')->group(function () {
+    Route::get('search/global', GlobalSearchController::class)->name('search.global');
+});
+
 require __DIR__.'/tickets.php';
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

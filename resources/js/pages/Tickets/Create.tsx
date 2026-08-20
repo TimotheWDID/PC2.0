@@ -1,4 +1,5 @@
 import { useForm, Head } from '@inertiajs/react'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
@@ -74,6 +75,8 @@ export default function CreateTicket({
   const [showQuickDeviceDialog, setShowQuickDeviceDialog] = useState(false)
   const [showQuickCommandeDialog, setShowQuickCommandeDialog] = useState(false)
   const isSubmittingRef = useRef(false)
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [createUserError, setCreateUserError] = useState<string | null>(null)
   const [newUserData, setNewUserData] = useState({
     first_name: '',
     last_name: '',
@@ -196,7 +199,8 @@ export default function CreateTicket({
       }
 
       const detail = (event as CustomEvent<{ response?: { status?: number } }>).detail
-      if (detail?.response?.status === 419) {
+      // 419 = TokenMismatchException (session/CSRF expired). Some hosting layers may surface this as 403.
+      if (detail?.response?.status === 419 || detail?.response?.status === 403) {
         window.location.reload()
       }
     }
@@ -207,6 +211,32 @@ export default function CreateTicket({
       document.removeEventListener('inertia:invalid', handleInertiaInvalid)
     }
   }, [])
+
+  // Restaurer le brouillon du localStorage au montage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const draftKey = `ticket_form_draft_${isAgent ? 'agent' : 'user'}`
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        const draft = JSON.parse(saved)
+        setData(draft)
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [])
+
+  // Sauvegarder le brouillon dans localStorage à chaque changement
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const draftKey = `ticket_form_draft_${isAgent ? 'agent' : 'user'}`
+      localStorage.setItem(draftKey, JSON.stringify(data))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [data, isAgent])
 
   useEffect(() => {
     if (!isAgent || typeof window === 'undefined') {
@@ -256,6 +286,14 @@ export default function CreateTicket({
     }))
     isSubmittingRef.current = true
     post('/tickets', {
+      onSuccess: () => {
+        try {
+          const draftKey = `ticket_form_draft_${isAgent ? 'agent' : 'user'}`
+          localStorage.removeItem(draftKey)
+        } catch {
+          // Ignore localStorage errors
+        }
+      },
       onFinish: () => {
         isSubmittingRef.current = false
         transform((current) => current)
@@ -295,26 +333,45 @@ export default function CreateTicket({
     proceedWithUserCreation()
   }
 
-  const proceedWithUserCreation = () => {
-    setData({
-      ...data,
-      user_selection: 'new',
-      user_email: newUserData.email,
-      user_first_name: newUserData.first_name,
-      user_last_name: newUserData.last_name,
-      user_phone: newUserData.phone,
-      user_address: newUserData.address,
-      user_postal_code: newUserData.postal_code,
-      user_city: newUserData.city,
-    })
-    setShowCreateDialog(false)
-    setShowConfirmDialog(false)
-    setSelectedUser({
-      id: 0,
-      name: `${newUserData.first_name} ${newUserData.last_name}`,
-      email: newUserData.email || 'Pas d\'email',
-      phone: newUserData.phone || undefined,
-    })
+  // Le client est créé immédiatement (indépendamment du ticket) pour qu'il reste
+  // enregistré même si la soumission du ticket échoue ensuite (ex: session expirée).
+  const proceedWithUserCreation = async () => {
+    setCreateUserError(null)
+    setCreatingUser(true)
+
+    try {
+      const response = await axios.post('/tickets/quick-user', {
+        first_name: newUserData.first_name,
+        last_name: newUserData.last_name,
+        email: newUserData.email,
+        phone: newUserData.phone,
+        address: newUserData.address,
+        postal_code: newUserData.postal_code,
+        city: newUserData.city,
+      })
+
+      const createdUser = response.data.user as User
+
+      setData({
+        ...data,
+        user_selection: 'existing',
+        user_id: createdUser.id.toString(),
+        user_email: '',
+        user_first_name: '',
+        user_last_name: '',
+        user_phone: '',
+        user_address: '',
+        user_postal_code: '',
+        user_city: '',
+      })
+      setShowCreateDialog(false)
+      setShowConfirmDialog(false)
+      setSelectedUser(createdUser)
+    } catch {
+      setCreateUserError("Impossible de créer le client pour le moment. Réessayez.")
+    } finally {
+      setCreatingUser(false)
+    }
   }
 
   return (
@@ -469,18 +526,24 @@ export default function CreateTicket({
                                     />
                                   </div>
                                 </div>
+                                {createUserError && (
+                                  <Alert variant="destructive">
+                                    <AlertDescription>{createUserError}</AlertDescription>
+                                  </Alert>
+                                )}
                                 <div className="flex gap-2 pt-4">
                                   <Button
                                     type="button"
                                     onClick={handleCreateUser}
-                                    disabled={!newUserData.first_name}
+                                    disabled={!newUserData.first_name || creatingUser}
                                   >
-                                    Créer l'utilisateur
+                                    {creatingUser ? 'Création...' : "Créer l'utilisateur"}
                                   </Button>
                                   <Button
                                     type="button"
                                     variant="secondary"
                                     onClick={() => setShowCreateDialog(false)}
+                                    disabled={creatingUser}
                                   >
                                     Annuler
                                   </Button>
@@ -505,13 +568,15 @@ export default function CreateTicket({
                             <Button
                               type="button"
                               onClick={proceedWithUserCreation}
+                              disabled={creatingUser}
                             >
-                              Oui, continuer
+                              {creatingUser ? 'Création...' : 'Oui, continuer'}
                             </Button>
                             <Button
                               type="button"
                               variant="secondary"
                               onClick={() => setShowConfirmDialog(false)}
+                              disabled={creatingUser}
                             >
                               Annuler
                             </Button>

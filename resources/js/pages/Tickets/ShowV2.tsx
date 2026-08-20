@@ -230,13 +230,20 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [detailEditor, setDetailEditor] = useState<'invoice' | 'assignee' | 'category' | null>(null);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
   const [formData, setFormData] = useState({
     title: ticket.title ?? '',
     message: ticket.message ?? '',
     status: ticket.status ?? 'open',
     priority: ticket.priority ?? 'low',
     category_id: ticket.category?.id ?? '',
+    category_ids: Array.isArray((ticket as any).categories)
+      ? (ticket as any).categories.map((category: any) => String(category.id))
+      : ticket.category
+        ? [String(ticket.category.id)]
+        : [],
     assignee_id: ticket.assignee?.id ?? '',
     device_id: ticket.device?.id ?? '',
     invoice_id: ticket.invoice_id ?? '',
@@ -246,6 +253,49 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     is_resolved: ticket.is_resolved ?? false,
     is_locked: ticket.is_locked ?? false,
   });
+
+  const selectedCategoryNames = useMemo(
+    () => categories
+      .filter((category: any) => formData.category_ids.includes(String(category.id)))
+      .map((category: any) => category.name),
+    [categories, formData.category_ids],
+  );
+
+  const filteredCategories = useMemo(
+    () => categories.filter((category: any) =>
+      typeof category?.name === 'string' && category.name.toLowerCase().includes(categorySearch.toLowerCase())
+    ),
+    [categories, categorySearch],
+  );
+
+  const toggleCategory = (categoryId: string) => {
+    setFormData((current) => {
+      const nextCategoryIds = current.category_ids.includes(categoryId)
+        ? current.category_ids.filter((value: string) => value !== categoryId)
+        : [...current.category_ids, categoryId];
+
+      return {
+        ...current,
+        category_ids: nextCategoryIds,
+        category_id: nextCategoryIds[0] ?? '',
+      };
+    });
+  };
+
+  const detailEditorMeta = {
+    invoice: {
+      title: 'Numéro de facture',
+      description: 'Modifiez le numéro de facture associé à ce ticket.',
+    },
+    assignee: {
+      title: 'Agent assigné',
+      description: 'Choisissez l’agent responsable de ce ticket.',
+    },
+    category: {
+      title: 'Catégories du ticket',
+      description: 'Recherchez et sélectionnez les catégories associées à ce ticket.',
+    },
+  } as const;
 
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [internalNote, setInternalNote] = useState(ticket.user?.internal_note ?? '');
@@ -318,7 +368,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   ];
 
   const manualEventOptions = useMemo(() => {
-    return Array.from(timelineTemplatesByType.entries()).map(([value, template]) => ({
+    return Array.from(timelineTemplatesByType.entries()).map(([value, template]: [string, { label: string; enabled: boolean; summary: string; details: string }]) => ({
       value,
       label: template.label || value,
       enabled: template.enabled,
@@ -328,7 +378,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const eventTypeLabels = useMemo(() => {
     const dynamicLabels: Record<string, string> = {};
 
-    manualEventOptions.forEach((option) => {
+    manualEventOptions.forEach((option: { value: string; label: string; enabled: boolean }) => {
       dynamicLabels[option.value] = option.label;
     });
 
@@ -348,10 +398,55 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
       return;
     }
 
+    const payload: any = {
+      ...formData,
+      category_id: formData.category_ids[0] ?? '',
+      category_ids: formData.category_ids,
+    };
+
     setIsSavingTicket(true);
-    router.put(`/tickets/${ticket.id}`, formData, {
+    router.put(`/tickets/${ticket.id}`, payload, {
       onSuccess: () => {
         setIsEditing(false);
+        setDetailEditor(null);
+      },
+      onFinish: () => {
+        setIsSavingTicket(false);
+      },
+    });
+  };
+
+  const handleQuickUpdate = (field: 'invoice_id' | 'assignee_id' | 'category_ids', value: string | string[]) => {
+    if (isSavingTicket) {
+      return;
+    }
+
+    const payload: any = {
+      ...formData,
+      title: formData.title || ticket.title || '',
+      message: formData.message || ticket.message || '',
+      category_ids: formData.category_ids,
+      category_id: formData.category_ids[0] ?? '',
+    };
+
+    if (field === 'invoice_id') {
+      payload.invoice_id = value;
+    }
+
+    if (field === 'assignee_id') {
+      payload.assignee_id = value === '0' ? '' : value;
+    }
+
+    if (field === 'category_ids') {
+      payload.category_ids = value as string[];
+      payload.category_id = (value as string[])[0] ?? '';
+    }
+
+    setIsSavingTicket(true);
+    router.put(`/tickets/${ticket.id}`, payload, {
+      onSuccess: () => {
+        setDetailEditor(null);
+        setIsCategoryDialogOpen(false);
       },
       onFinish: () => {
         setIsSavingTicket(false);
@@ -1573,11 +1668,6 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     <Ticket className="h-4 w-4" />
                     Détails du ticket
                   </CardTitle>
-                  {isAgent && !isEditing && (
-                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
-                      Modifier
-                    </Button>
-                  )}
                 </div>
               </CardHeader>
 
@@ -1605,17 +1695,66 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="category">Catégorie</Label>
-                      <Select value={formData.category_id.toString()} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories?.map((cat: any) => (
-                            <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label>Catégories</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCategoryDialogOpen(true)}
+                        className="w-full justify-between text-left font-normal"
+                      >
+                        <span className="truncate">
+                          {selectedCategoryNames.length > 0 ? selectedCategoryNames.join(', ') : 'Sélectionner une ou plusieurs catégories'}
+                        </span>
+                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+
+                      <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Catégories du ticket</DialogTitle>
+                            <DialogDescription>
+                              Recherchez et cochez les catégories associées à ce ticket.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          <div className="space-y-3">
+                            <Input
+                              value={categorySearch}
+                              onChange={(event) => setCategorySearch(event.target.value)}
+                              placeholder="Rechercher une catégorie..."
+                            />
+
+                            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                              {filteredCategories.length > 0 ? (
+                                filteredCategories.map((cat: any) => {
+                                  const isSelected = formData.category_ids.includes(String(cat.id));
+
+                                  return (
+                                    <label
+                                      key={cat.id}
+                                      className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted/50"
+                                    >
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => toggleCategory(String(cat.id))}
+                                      />
+                                      <span className="text-sm">{cat.name}</span>
+                                    </label>
+                                  );
+                                })
+                              ) : (
+                                <div className="text-sm text-muted-foreground">Aucune catégorie trouvée.</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
+                              Fermer
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
 
                     <div className="space-y-2">
@@ -1910,67 +2049,192 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     )}
 
                     {isAgent && (
-                      <div className="pt-4 border-t">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowMoreInfo(!showMoreInfo)}
-                          className="-ml-2 text-xs font-semibold sm:text-sm"
-                        >
-                          {showMoreInfo ? '− Masquer les informations' : '+ Montrer plus'}
-                        </Button>
+                      <div className="space-y-3 border-t pt-4">
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                            Ajouter facture
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                            Modifier assigné
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                            Modifier catégories
+                          </Button>
+                        </div>
 
-                        {showMoreInfo && (
-                          <div className="space-y-3 mt-3">
-                            {ticket.contact_email && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Contact:</span>
-                                <a href={`mailto:${ticket.contact_email}`} className="link-readable">
-                                  {ticket.contact_email}
-                                </a>
-                              </div>
-                            )}
-
-                            {ticket.contact_phone && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Téléphone:</span>
-                                <a href={`tel:${ticket.contact_phone}`} className="link-readable">
-                                  {ticket.contact_phone}
-                                </a>
-                              </div>
-                            )}
-
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Notification:</span>{' '}
-                              <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
+                        <div className="space-y-3">
+                          {ticket.contact_email && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-muted-foreground">Contact:</span>
+                              <a href={`mailto:${ticket.contact_email}`} className="link-readable">
+                                {ticket.contact_email}
+                              </a>
                             </div>
+                          )}
 
-                            <div className="flex gap-4 text-sm">
-                              <div className="flex items-center gap-2">
-                                {ticket.is_resolved ? (
-                                  <Badge variant="default" className="bg-primary">Résolu</Badge>
-                                ) : (
-                                  <Badge variant="secondary">Non résolu</Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {ticket.is_locked ? (
-                                  <Badge variant="destructive">Verrouillé</Badge>
-                                ) : (
-                                  <Badge variant="outline">Non verrouillé</Badge>
-                                )}
-                              </div>
+                          {ticket.contact_phone && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-muted-foreground">Téléphone:</span>
+                              <a href={`tel:${ticket.contact_phone}`} className="link-readable">
+                                {ticket.contact_phone}
+                              </a>
+                            </div>
+                          )}
+
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">Notification:</span>{' '}
+                            <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
+                          </div>
+
+                          <div className="flex gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              {ticket.is_resolved ? (
+                                <Badge variant="default" className="bg-primary">Résolu</Badge>
+                              ) : (
+                                <Badge variant="secondary">Non résolu</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {ticket.is_locked ? (
+                                <Badge variant="destructive">Verrouillé</Badge>
+                              ) : (
+                                <Badge variant="outline">Non verrouillé</Badge>
+                              )}
                             </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
                   </>
                 )}
               </CardContent>
             </Card>
+
+            {isAgent && detailEditor && (
+              <Dialog
+                open={Boolean(detailEditor)}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setDetailEditor(null);
+                    setIsCategoryDialogOpen(false);
+                  }
+                }}
+              >
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>{detailEditorMeta[detailEditor].title}</DialogTitle>
+                    <DialogDescription>{detailEditorMeta[detailEditor].description}</DialogDescription>
+                  </DialogHeader>
+
+                  {detailEditor === 'invoice' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="invoice_id_quick">Numéro de facture</Label>
+                        <Input
+                          id="invoice_id_quick"
+                          value={formData.invoice_id}
+                          onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
+                          placeholder="Optionnel"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {detailEditor === 'assignee' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="assignee_quick">Agent assigné</Label>
+                        <Select
+                          value={formData.assignee_id ? formData.assignee_id.toString() : '0'}
+                          onValueChange={(value) => setFormData({ ...formData, assignee_id: value === '0' ? '' : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un agent" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Aucun</SelectItem>
+                            {agents?.map((agent: any) => (
+                              <SelectItem key={agent.id} value={agent.id.toString()}>
+                                <span className="inline-flex flex-col items-start gap-0.5">
+                                  <span>{agent.name}</span>
+                                  {agent.specialities?.length ? (
+                                    <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
+                                  ) : null}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {detailEditor === 'category' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-3">
+                        <Input
+                          value={categorySearch}
+                          onChange={(event) => setCategorySearch(event.target.value)}
+                          placeholder="Rechercher une catégorie..."
+                        />
+
+                        <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                          {filteredCategories.length > 0 ? (
+                            filteredCategories.map((cat: any) => {
+                              const isSelected = formData.category_ids.includes(String(cat.id));
+
+                              return (
+                                <label
+                                  key={cat.id}
+                                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted/50"
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleCategory(String(cat.id))}
+                                  />
+                                  <span className="text-sm">{cat.name}</span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="text-sm text-muted-foreground">Aucune catégorie trouvée.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <DialogFooter className="pt-2">
+                    <Button type="button" variant="outline" onClick={() => { setDetailEditor(null); setIsEditing(false); setIsCategoryDialogOpen(false); }} disabled={isSavingTicket}>
+                      Annuler
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (detailEditor === 'invoice') {
+                          handleQuickUpdate('invoice_id', formData.invoice_id);
+                          return;
+                        }
+
+                        if (detailEditor === 'assignee') {
+                          handleQuickUpdate('assignee_id', formData.assignee_id ? formData.assignee_id.toString() : '0');
+                          return;
+                        }
+
+                        if (detailEditor === 'category') {
+                          handleQuickUpdate('category_ids', formData.category_ids);
+                        }
+                      }}
+                      disabled={isSavingTicket}
+                    >
+                      {isSavingTicket ? 'Enregistrement...' : 'Enregistrer'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
             {ticket.device && (
               <Card id="ticket-appareil" className={`order-2 w-full max-w-full scroll-mt-24 overflow-hidden ${isAgent && activeDashboardTab !== 'appareil' ? 'hidden' : ''}`}>

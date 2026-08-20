@@ -37,6 +37,7 @@ type Ticket = {
   title: string | null;
   ticket_kind?: 'standard' | 'bug' | 'improvement' | null;
   category?: { id: number; name: string } | null;
+  categories?: Array<{ id: number; name: string }>;
   suggested_specialities?: string[];
   status: string | null;
   created_at: string | null;
@@ -425,7 +426,16 @@ export default function Index({
                     </div>
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <p>Demandeur: {t.user?.name ?? '-'}</p>
-                      <p>Catégorie: <span className="font-medium text-foreground">{t.category?.name ?? '-'}</span></p>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span>Catégories:</span>
+                        {t.categories?.length ? (
+                          t.categories.map((category) => (
+                            <Badge key={category.id} variant="secondary" className="text-[10px]">{category.name}</Badge>
+                          ))
+                        ) : (
+                          <span className="font-medium text-foreground">{t.category?.name ?? '-'}</span>
+                        )}
+                      </div>
                       <p>Agent attitre: {t.assignee?.name ?? '-'}</p>
                       {t.assignee?.specialities?.length ? (
                         <div className="flex flex-wrap gap-1 pt-1">
@@ -509,9 +519,11 @@ export default function Index({
                         </div>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {t.category?.name ? (
+                        {t.categories?.length || t.category?.name ? (
                           <div className="flex flex-wrap gap-1">
-                            <Badge variant="secondary">{t.category.name}</Badge>
+                            {(t.categories?.length ? t.categories : (t.category ? [t.category] : [])).map((category) => (
+                              <Badge key={category.id} variant="secondary">{category.name}</Badge>
+                            ))}
                             {t.suggested_specialities?.length ? t.suggested_specialities.map((speciality) => (
                               <Badge key={speciality} variant="outline" className="text-[11px]">
                                 {speciality}

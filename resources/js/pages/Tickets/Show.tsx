@@ -208,13 +208,20 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [detailEditor, setDetailEditor] = useState<'invoice' | 'assignee' | 'category' | null>(null);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
   const [formData, setFormData] = useState({
     title: ticket.title ?? '',
     message: ticket.message ?? '',
     status: ticket.status ?? 'open',
     priority: ticket.priority ?? 'low',
     category_id: ticket.category?.id ?? '',
+    category_ids: Array.isArray((ticket as any).categories)
+      ? (ticket as any).categories.map((category: any) => String(category.id))
+      : ticket.category
+        ? [String(ticket.category.id)]
+        : [],
     assignee_id: ticket.assignee?.id ?? '',
     device_id: ticket.device?.id ?? '',
     invoice_id: ticket.invoice_id ?? '',
@@ -224,6 +231,49 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
     is_resolved: ticket.is_resolved ?? false,
     is_locked: ticket.is_locked ?? false,
   });
+
+  const selectedCategoryNames = useMemo(
+    () => categories
+      .filter((category: any) => formData.category_ids.includes(String(category.id)))
+      .map((category: any) => category.name),
+    [categories, formData.category_ids],
+  );
+
+  const filteredCategories = useMemo(
+    () => categories.filter((category: any, index: number, collection: any[]) =>
+      typeof category?.name === 'string' && category.name.toLowerCase().includes(categorySearch.toLowerCase())
+    ),
+    [categories, categorySearch],
+  );
+
+  const toggleCategory = (categoryId: string) => {
+    setFormData((current) => {
+      const nextCategoryIds = current.category_ids.includes(categoryId)
+        ? current.category_ids.filter((value: string) => value !== categoryId)
+        : [...current.category_ids, categoryId];
+
+      return {
+        ...current,
+        category_ids: nextCategoryIds,
+        category_id: nextCategoryIds[0] ?? '',
+      };
+    });
+  };
+
+  const detailEditorMeta = {
+    invoice: {
+      title: 'Numéro de facture',
+      description: 'Modifiez le numéro de facture associé à ce ticket.',
+    },
+    assignee: {
+      title: 'Agent assigné',
+      description: 'Choisissez l’agent responsable de ce ticket.',
+    },
+    category: {
+      title: 'Catégories du ticket',
+      description: 'Recherchez et sélectionnez les catégories associées à ce ticket.',
+    },
+  } as const;
 
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [internalNote, setInternalNote] = useState(ticket.user?.internal_note ?? '');
@@ -296,7 +346,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   ];
 
   const manualEventOptions = useMemo(() => {
-    return Array.from(timelineTemplatesByType.entries()).map(([value, template]) => ({
+    return Array.from(timelineTemplatesByType.entries()).map(([value, template]: [string, { label: string; enabled: boolean; summary: string; details: string }]) => ({
       value,
       label: template.label || value,
       enabled: template.enabled,
@@ -306,7 +356,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const eventTypeLabels = useMemo(() => {
     const dynamicLabels: Record<string, string> = {};
 
-    manualEventOptions.forEach((option) => {
+    manualEventOptions.forEach((option: { value: string; label: string; enabled: boolean }) => {
       dynamicLabels[option.value] = option.label;
     });
 
@@ -326,10 +376,55 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
       return;
     }
 
+    const payload: any = {
+      ...formData,
+      category_id: formData.category_ids[0] ?? '',
+      category_ids: formData.category_ids,
+    };
+
     setIsSavingTicket(true);
-    router.put(`/tickets/${ticket.id}`, formData, {
+    router.put(`/tickets/${ticket.id}`, payload, {
       onSuccess: () => {
         setIsEditing(false);
+        setDetailEditor(null);
+      },
+      onFinish: () => {
+        setIsSavingTicket(false);
+      },
+    });
+  };
+
+  const handleQuickUpdate = (field: 'invoice_id' | 'assignee_id' | 'category_ids', value: string | string[]) => {
+    if (isSavingTicket) {
+      return;
+    }
+
+    const payload: any = {
+      ...formData,
+      title: formData.title || ticket.title || '',
+      message: formData.message || ticket.message || '',
+      category_ids: formData.category_ids,
+      category_id: formData.category_ids[0] ?? '',
+    };
+
+    if (field === 'invoice_id') {
+      payload.invoice_id = value;
+    }
+
+    if (field === 'assignee_id') {
+      payload.assignee_id = value === '0' ? '' : value;
+    }
+
+    if (field === 'category_ids') {
+      payload.category_ids = value as string[];
+      payload.category_id = (value as string[])[0] ?? '';
+    }
+
+    setIsSavingTicket(true);
+    router.put(`/tickets/${ticket.id}`, payload, {
+      onSuccess: () => {
+        setDetailEditor(null);
+        setIsCategoryDialogOpen(false);
       },
       onFinish: () => {
         setIsSavingTicket(false);
@@ -1518,319 +1613,500 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                     <Ticket className="h-4 w-4" />
                     Détails du ticket
                   </CardTitle>
-                  {isAgent && !isEditing && (
-                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
-                      Modifier
-                    </Button>
-                  )}
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-2.5 px-3 pb-3 pt-0 sm:space-y-3 sm:px-6 sm:pb-6">
-                {isAgent && isEditing ? (
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Titre</Label>
-                      <Input
-                        id="title"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        required
-                      />
-                    </div>
+                {(() => {
+                  if (!(isAgent && isEditing)) {
+                    return (
+                      <>
+                        <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-2.5 sm:p-4">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
+                            Description du ticket
+                          </p>
+                          <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground sm:text-base">
+                            {ticket.message || 'Aucune description fournie.'}
+                          </p>
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="message">Message</Label>
-                      <Textarea
-                        id="message"
-                        value={formData.message}
-                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Catégorie</Label>
-                      <Select value={formData.category_id.toString()} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories?.map((cat: any) => (
-                            <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="assignee">Agent assigné</Label>
-                      <Select value={formData.assignee_id.toString()} onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Aucun</SelectItem>
-                          {agents?.map((agent: any) => (
-                            <SelectItem key={agent.id} value={agent.id.toString()}>
-                              <span className="inline-flex flex-col items-start gap-0.5">
-                                <span>{agent.name}</span>
-                                {agent.specialities?.length ? (
-                                  <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
-                                ) : null}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="device">Appareil lié</Label>
-                      <Select value={formData.device_id ? formData.device_id.toString() : '0'} onValueChange={(value) => setFormData({ ...formData, device_id: value === '0' ? '' : value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un appareil" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Aucun</SelectItem>
-                          {userDevices?.map((device: any) => (
-                            <SelectItem key={device.id} value={device.id.toString()}>{device.display_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="invoice_id">Numéro de facture</Label>
-                      <Input
-                        id="invoice_id"
-                        value={formData.invoice_id}
-                        onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="contact_email">Email de contact</Label>
-                        <Input
-                          id="contact_email"
-                          type="email"
-                          value={formData.contact_email}
-                          onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                          placeholder="Optionnel"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="contact_phone">Téléphone de contact</Label>
-                        <Input
-                          id="contact_phone"
-                          type="tel"
-                          value={formData.contact_phone}
-                          onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                          placeholder="Optionnel"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="notify_by">Méthode de notification</Label>
-                      <Select value={formData.notify_by} onValueChange={(value) => setFormData({ ...formData, notify_by: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="None">Aucune</SelectItem>
-                          <SelectItem value="Email">Email</SelectItem>
-                          <SelectItem value="SMS">SMS</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="is_resolved"
-                          checked={formData.is_resolved}
-                          onChange={(e) => setFormData({ ...formData, is_resolved: e.target.checked })}
-                          className="h-4 w-4 rounded border-input"
-                        />
-                        <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="is_locked"
-                          checked={formData.is_locked}
-                          onChange={(e) => setFormData({ ...formData, is_locked: e.target.checked })}
-                          className="h-4 w-4 rounded border-input"
-                        />
-                        <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button type="submit" disabled={isSavingTicket}>
-                        {isSavingTicket
-                          ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          : <Save className="mr-2 h-4 w-4" />}
-                        {isSavingTicket ? 'Enregistrement...' : 'Enregistrer'}
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)} disabled={isSavingTicket}>
-                        Annuler
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div className="rounded-md border border-[#2a3ff5]/30 bg-[#2a3ff5]/5 p-2.5 sm:p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2a3ff5]">
-                        Description du ticket
-                      </p>
-                      <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground sm:text-base">
-                        {ticket.message || 'Aucune description fournie.'}
-                      </p>
-                    </div>
-
-                    <div className="grid gap-1.5 text-[12px] sm:grid-cols-2 sm:gap-2 sm:text-sm">
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Référence:</span>{' '}
-                        <strong>#{ticket.id}</strong>
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Numéro de facture:</span>{' '}
-                        <strong>{ticket.invoice_id || '-'}</strong>
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Créé le:</span>{' '}
-                        <strong>{formatDateTime(ticket.created_at)}</strong>
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Demandeur:</span>{' '}
-                        {requesterHref ? (
-                          <Link href={requesterHref} className="break-all font-semibold link-readable">
-                            {ticket.user?.name}
-                          </Link>
-                        ) : (
-                          <strong>-</strong>
-                        )}
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Agent assigné:</span>{' '}
-                        {assigneeHref ? (
-                          <Link href={assigneeHref} className="break-all font-semibold link-readable">
-                            {ticket.assignee?.name}
-                          </Link>
-                        ) : (
-                          <strong>Non assigné</strong>
-                        )}
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">Appareil:</span>{' '}
-                        {deviceHref ? (
-                          <Link href={deviceHref} className="break-all font-semibold link-readable">
-                            {ticket.device?.display_name}
-                          </Link>
-                        ) : (
-                          <strong>Aucun appareil lié</strong>
-                        )}
-                      </div>
-                      <div className="min-w-0 break-words">
-                        <span className="text-muted-foreground">MDP appareil:</span>{' '}
-                        <strong>
-                          {ticket.no_device_password
-                            ? 'Aucun mot de passe fourni'
-                            : ticket.device_password
-                              ? (showTicketPassword ? ticket.device_password : '••••••••••')
-                              : '-'}
-                        </strong>
-                        {!ticket.no_device_password && ticket.device_password && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="ml-1 h-6 px-2"
-                            onClick={() => setShowTicketPassword((current) => !current)}
-                          >
-                            {showTicketPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {ticket.category && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Catégorie:</span>
-                        <strong>{ticket.category.name}</strong>
-                      </div>
-                    )}
-
-                    {isAgent && (
-                      <div className="pt-4 border-t">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowMoreInfo(!showMoreInfo)}
-                          className="-ml-2 text-xs font-semibold sm:text-sm"
-                        >
-                          {showMoreInfo ? '− Masquer les informations' : '+ Montrer plus'}
-                        </Button>
-
-                        {showMoreInfo && (
-                          <div className="space-y-3 mt-3">
-                            {ticket.contact_email && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Contact:</span>
-                                <a href={`mailto:${ticket.contact_email}`} className="link-readable">
-                                  {ticket.contact_email}
-                                </a>
-                              </div>
+                        <div className="grid gap-1.5 text-[12px] sm:grid-cols-2 sm:gap-2 sm:text-sm">
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Référence:</span>{' '}
+                            <strong>#{ticket.id}</strong>
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Numéro de facture:</span>{' '}
+                            <strong>{ticket.invoice_id || '-'}</strong>
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Créé le:</span>{' '}
+                            <strong>{formatDateTime(ticket.created_at)}</strong>
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Demandeur:</span>{' '}
+                            {requesterHref ? (
+                              <Link href={requesterHref} className="break-all font-semibold link-readable">
+                                {ticket.user?.name}
+                              </Link>
+                            ) : (
+                              <strong>-</strong>
                             )}
-
-                            {ticket.contact_phone && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Téléphone:</span>
-                                <a href={`tel:${ticket.contact_phone}`} className="link-readable">
-                                  {ticket.contact_phone}
-                                </a>
-                              </div>
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Agent assigné:</span>{' '}
+                            {assigneeHref ? (
+                              <Link href={assigneeHref} className="break-all font-semibold link-readable">
+                                {ticket.assignee?.name}
+                              </Link>
+                            ) : (
+                              <strong>Non assigné</strong>
                             )}
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">Appareil:</span>{' '}
+                            {deviceHref ? (
+                              <Link href={deviceHref} className="break-all font-semibold link-readable">
+                                {ticket.device?.display_name}
+                              </Link>
+                            ) : (
+                              <strong>Aucun appareil lié</strong>
+                            )}
+                          </div>
+                          <div className="min-w-0 break-words">
+                            <span className="text-muted-foreground">MDP appareil:</span>{' '}
+                            <strong>
+                              {ticket.no_device_password
+                                ? 'Aucun mot de passe fourni'
+                                : ticket.device_password
+                                  ? (showTicketPassword ? ticket.device_password : '••••••••••')
+                                  : '-'}
+                            </strong>
+                            {!ticket.no_device_password && ticket.device_password && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="ml-1 h-6 px-2"
+                                onClick={() => setShowTicketPassword((current) => !current)}
+                              >
+                                {showTicketPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
 
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Notification:</span>{' '}
-                              <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
+                        {(ticket.categories?.length || ticket.category) && (
+                          <div className="flex flex-col gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-muted-foreground">Catégories:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(ticket.categories?.length ? ticket.categories : (ticket.category ? [ticket.category] : [])).map((category: any) => (
+                                <Badge key={category.id} variant="secondary">{category.name}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {isAgent && (
+                          <div className="space-y-3 border-t pt-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => { setIsEditing(false); setDetailEditor('invoice'); }}>
+                                {ticket.invoice_id ? 'Modifier facture' : 'Ajouter facture'}
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => { setIsEditing(false); setDetailEditor('assignee'); }}>
+                                {ticket.assignee ? 'Modifier assigné' : 'Ajouter assigné'}
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => { setIsEditing(false); setDetailEditor('category'); }}>
+                                Modifier catégories
+                              </Button>
                             </div>
 
-                            <div className="flex gap-4 text-sm">
-                              <div className="flex items-center gap-2">
-                                {ticket.is_resolved ? (
-                                  <Badge variant="default" className="bg-primary">Résolu</Badge>
-                                ) : (
-                                  <Badge variant="secondary">Non résolu</Badge>
-                                )}
+                            <div className="space-y-3">
+                              {ticket.contact_email && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Mail className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-muted-foreground">Contact:</span>
+                                  <a href={`mailto:${ticket.contact_email}`} className="link-readable">
+                                    {ticket.contact_email}
+                                  </a>
+                                </div>
+                              )}
+
+                              {ticket.contact_phone && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Phone className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-muted-foreground">Téléphone:</span>
+                                  <a href={`tel:${ticket.contact_phone}`} className="link-readable">
+                                    {ticket.contact_phone}
+                                  </a>
+                                </div>
+                              )}
+
+                              <div className="text-sm">
+                                <span className="text-muted-foreground">Notification:</span>{' '}
+                                <Badge variant="outline">{ticket.notify_by || 'None'}</Badge>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {ticket.is_locked ? (
-                                  <Badge variant="destructive">Verrouillé</Badge>
-                                ) : (
-                                  <Badge variant="outline">Non verrouillé</Badge>
-                                )}
+
+                              <div className="flex gap-4 text-sm">
+                                <div className="flex items-center gap-2">
+                                  {ticket.is_resolved ? (
+                                    <Badge variant="default" className="bg-primary">Résolu</Badge>
+                                  ) : (
+                                    <Badge variant="secondary">Non résolu</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {ticket.is_locked ? (
+                                    <Badge variant="destructive">Verrouillé</Badge>
+                                  ) : (
+                                    <Badge variant="outline">Non verrouillé</Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
                         )}
+                      </>
+                    );
+                  }
+
+                  return (
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Titre</Label>
+                        <Input
+                          id="title"
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          required
+                        />
                       </div>
-                    )}
-                  </>
-                )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="message">Message</Label>
+                        <Textarea
+                          id="message"
+                          value={formData.message}
+                          onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                          rows={4}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Catégories</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsCategoryDialogOpen(true)}
+                          className="w-full justify-between text-left font-normal"
+                        >
+                          <span className="truncate">
+                            {selectedCategoryNames.length > 0 ? selectedCategoryNames.join(', ') : 'Sélectionner une ou plusieurs catégories'}
+                          </span>
+                          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+
+                        <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                          <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Catégories du ticket</DialogTitle>
+                              <DialogDescription>
+                                Recherchez et cochez les catégories associées à ce ticket.
+                              </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-3">
+                              <Input
+                                value={categorySearch}
+                                onChange={(event) => setCategorySearch(event.target.value)}
+                                placeholder="Rechercher une catégorie..."
+                              />
+
+                              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                                {filteredCategories.length > 0 ? (
+                                  filteredCategories.map((cat: any) => {
+                                    const isSelected = formData.category_ids.includes(String(cat.id));
+
+                                    return (
+                                      <label
+                                        key={cat.id}
+                                        className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted/50"
+                                      >
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={() => toggleCategory(String(cat.id))}
+                                        />
+                                        <span className="text-sm">{cat.name}</span>
+                                      </label>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="text-sm text-muted-foreground">Aucune catégorie trouvée.</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <DialogFooter>
+                              <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
+                                Fermer
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="assignee">Agent assigné</Label>
+                        <Select value={formData.assignee_id.toString()} onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un agent" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Aucun</SelectItem>
+                            {agents?.map((agent: any) => (
+                              <SelectItem key={agent.id} value={agent.id.toString()}>
+                                <span className="inline-flex flex-col items-start gap-0.5">
+                                  <span>{agent.name}</span>
+                                  {agent.specialities?.length ? (
+                                    <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
+                                  ) : null}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="device">Appareil lié</Label>
+                        <Select value={formData.device_id ? formData.device_id.toString() : '0'} onValueChange={(value) => setFormData({ ...formData, device_id: value === '0' ? '' : value })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un appareil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Aucun</SelectItem>
+                            {userDevices?.map((device: any) => (
+                              <SelectItem key={device.id} value={device.id.toString()}>{device.display_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="invoice_id">Numéro de facture</Label>
+                        <Input
+                          id="invoice_id"
+                          value={formData.invoice_id}
+                          onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
+                          placeholder="Optionnel"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="contact_email">Email de contact</Label>
+                          <Input
+                            id="contact_email"
+                            type="email"
+                            value={formData.contact_email}
+                            onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                            placeholder="Optionnel"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="contact_phone">Téléphone de contact</Label>
+                          <Input
+                            id="contact_phone"
+                            type="tel"
+                            value={formData.contact_phone}
+                            onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                            placeholder="Optionnel"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="notify_by">Méthode de notification</Label>
+                        <Select value={formData.notify_by} onValueChange={(value) => setFormData({ ...formData, notify_by: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="None">Aucune</SelectItem>
+                            <SelectItem value="Email">Email</SelectItem>
+                            <SelectItem value="SMS">SMS</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="is_resolved"
+                            checked={formData.is_resolved}
+                            onChange={(e) => setFormData({ ...formData, is_resolved: e.target.checked })}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <Label htmlFor="is_resolved" className="cursor-pointer">Ticket résolu</Label>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="is_locked"
+                            checked={formData.is_locked}
+                            onChange={(e) => setFormData({ ...formData, is_locked: e.target.checked })}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <Label htmlFor="is_locked" className="cursor-pointer">Ticket verrouillé</Label>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button type="submit" disabled={isSavingTicket}>
+                          {isSavingTicket
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <Save className="mr-2 h-4 w-4" />}
+                          {isSavingTicket ? 'Enregistrement...' : 'Enregistrer'}
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setIsEditing(false)} disabled={isSavingTicket}>
+                          Annuler
+                        </Button>
+                      </div>
+                    </form>
+                  );
+                })()}
               </CardContent>
             </Card>
+
+            {isAgent && detailEditor && (
+              <Dialog
+                open={Boolean(detailEditor)}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setDetailEditor(null);
+                    setIsCategoryDialogOpen(false);
+                  }
+                }}
+              >
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>{detailEditorMeta[detailEditor].title}</DialogTitle>
+                    <DialogDescription>{detailEditorMeta[detailEditor].description}</DialogDescription>
+                  </DialogHeader>
+
+                  {detailEditor === 'invoice' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="invoice_id_quick">Numéro de facture</Label>
+                        <Input
+                          id="invoice_id_quick"
+                          value={formData.invoice_id}
+                          onChange={(e) => setFormData({ ...formData, invoice_id: e.target.value })}
+                          placeholder="Optionnel"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {detailEditor === 'assignee' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="assignee_quick">Agent assigné</Label>
+                        <Select
+                          value={formData.assignee_id ? formData.assignee_id.toString() : '0'}
+                          onValueChange={(value) => setFormData({ ...formData, assignee_id: value === '0' ? '' : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un agent" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Aucun</SelectItem>
+                            {agents?.map((agent: any) => (
+                              <SelectItem key={agent.id} value={agent.id.toString()}>
+                                <span className="inline-flex flex-col items-start gap-0.5">
+                                  <span>{agent.name}</span>
+                                  {agent.specialities?.length ? (
+                                    <span className="text-xs text-muted-foreground">{agent.specialities.join(' · ')}</span>
+                                  ) : null}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {detailEditor === 'category' && (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-3">
+                        <Input
+                          value={categorySearch}
+                          onChange={(event) => setCategorySearch(event.target.value)}
+                          placeholder="Rechercher une catégorie..."
+                        />
+
+                        <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                          {filteredCategories.length > 0 ? (
+                            filteredCategories.map((cat: any) => {
+                              const isSelected = formData.category_ids.includes(String(cat.id));
+
+                              return (
+                                <label
+                                  key={cat.id}
+                                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted/50"
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleCategory(String(cat.id))}
+                                  />
+                                  <span className="text-sm">{cat.name}</span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="text-sm text-muted-foreground">Aucune catégorie trouvée.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <DialogFooter className="pt-2">
+                    <Button type="button" variant="outline" onClick={() => { setDetailEditor(null); setIsEditing(false); setIsCategoryDialogOpen(false); }} disabled={isSavingTicket}>
+                      Annuler
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (detailEditor === 'invoice') {
+                          handleQuickUpdate('invoice_id', formData.invoice_id);
+                          return;
+                        }
+
+                        if (detailEditor === 'assignee') {
+                          handleQuickUpdate('assignee_id', formData.assignee_id ? formData.assignee_id.toString() : '0');
+                          return;
+                        }
+
+                        if (detailEditor === 'category') {
+                          handleQuickUpdate('category_ids', formData.category_ids);
+                        }
+                      }}
+                      disabled={isSavingTicket}
+                    >
+                      {isSavingTicket ? 'Enregistrement...' : 'Enregistrer'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
             {ticket.device && (
               <Card id="ticket-appareil" className="order-3 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">

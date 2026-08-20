@@ -24,6 +24,8 @@ Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->na
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
 Route::middleware('auth')->group(function () {
+    Route::post('tickets/quick-user', [TicketController::class, 'quickCreateUser'])->name('tickets.quickUser');
+
     Route::middleware('agent')->group(function () {
         Route::get('tickets/inbound-mails', [InboundMailReviewController::class, 'index'])->name('tickets.inbound-mails.index');
         Route::post('tickets/inbound-mails/{inboundEmail}/attach', [InboundMailReviewController::class, 'attachToTicket'])->name('tickets.inbound-mails.attach');

@@ -1,4 +1,4 @@
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login } from '@/routes';
 import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 
@@ -26,12 +26,6 @@ export default function Welcome() {
                                 >
                                     Connexion
                                 </Link>
-                                <Link
-                                    href={register()}
-                                    className="inline-flex items-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90"
-                                >
-                                    Creer un compte
-                                </Link>
                             </>
                         )}
                     </nav>
@@ -56,14 +50,6 @@ export default function Welcome() {
                             >
                                 {auth.user ? 'Acceder au dashboard' : 'Se connecter'}
                             </Link>
-                            {!auth.user && (
-                                <Link
-                                    href={register()}
-                                    className="inline-flex items-center rounded-md border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted"
-                                >
-                                    Demarrer maintenant
-                                </Link>
-                            )}
                         </div>
                     </section>
 
