@@ -31,6 +31,7 @@ class Ticket extends Model
         'invoice_id',
         'title',
         'message',
+        'brought_items',
         'device_password',
         'no_device_password',
         'ticket_kind',
@@ -53,6 +54,7 @@ class Ticket extends Model
     ];
 
     protected $casts = [
+        'brought_items' => 'array',
         'device_password' => 'encrypted',
         'no_device_password' => 'boolean',
         'is_resolved' => 'boolean',

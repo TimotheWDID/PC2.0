@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -18,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { X } from 'lucide-react'
 type Category = {
   id: number
   name: string
@@ -46,6 +48,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 const sectionClassName = 'rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/20 p-5 shadow-sm md:p-6'
 const sectionHeaderClassName = 'mb-4 flex items-start gap-3'
 const stepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted/40 text-sm font-semibold text-foreground'
+const broughtItemOptions = [
+  { value: 'computer', label: 'Ordinateur' },
+  { value: 'charger', label: 'Chargeur' },
+  { value: 'bag', label: 'Sacoche' },
+  { value: 'phone', label: 'Telephone' },
+  { value: 'case', label: 'Coque' },
+  { value: 'mouse', label: 'Souris' },
+]
 
 export default function CreateTicket({
   categories,
@@ -74,6 +84,7 @@ export default function CreateTicket({
   const [pendingPrintAfterPasswordConfirm, setPendingPrintAfterPasswordConfirm] = useState(false)
   const [showQuickDeviceDialog, setShowQuickDeviceDialog] = useState(false)
   const [showQuickCommandeDialog, setShowQuickCommandeDialog] = useState(false)
+  const [broughtOtherItemInput, setBroughtOtherItemInput] = useState('')
   const isSubmittingRef = useRef(false)
   const [creatingUser, setCreatingUser] = useState(false)
   const [createUserError, setCreateUserError] = useState<string | null>(null)
@@ -90,6 +101,8 @@ export default function CreateTicket({
   const { data, setData, post, processing, errors, transform } = useForm({
     title: defaultTitle,
     message: defaultMessage,
+    brought_items: [] as string[],
+    brought_other_items: [] as string[],
     device_password: '',
     no_device_password: false,
     password_empty_confirmed: false,
@@ -130,6 +143,20 @@ export default function CreateTicket({
   const pageDescription = specialOnly
     ? 'Signalez un bug ou proposez une amélioration produit.'
     : 'Remplissez le formulaire pour créer un nouveau ticket'
+
+  const toggleBroughtItem = (item: string) => {
+    setData('brought_items', data.brought_items.includes(item)
+      ? data.brought_items.filter((value) => value !== item)
+      : [...data.brought_items, item])
+  }
+
+  const addBroughtOtherItem = () => {
+    const item = broughtOtherItemInput.trim()
+    if (!item || data.brought_other_items.includes(item)) return
+
+    setData('brought_other_items', [...data.brought_other_items, item])
+    setBroughtOtherItemInput('')
+  }
 
   // Filtrer les utilisateurs en fonction de la recherche
   const filteredUsers = useMemo(() => {
@@ -716,6 +743,37 @@ export default function CreateTicket({
                   <p className="mt-1 text-xs text-muted-foreground">Plus votre description est précise, plus le diagnostic est rapide.</p>
                   {errors.message && <div className="text-sm text-destructive">{errors.message}</div>}
                 </div>
+
+                {!specialOnly && (
+                  <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                    <div>
+                      <Label>Objets apportes</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">Cochez tout ce que le client laisse avec l&apos;appareil.</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {broughtItemOptions.map((item) => (
+                        <label key={item.value} className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                          <input type="checkbox" checked={data.brought_items.includes(item.value)} onChange={() => toggleBroughtItem(item.value)} />
+                          {item.label}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="brought_other_item">Autre objet</Label>
+                      <div className="flex gap-2">
+                        <Input id="brought_other_item" value={broughtOtherItemInput} onChange={(e) => setBroughtOtherItemInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBroughtOtherItem() } }} placeholder="Ex: Adaptateur USB-C" maxLength={160} />
+                        <Button type="button" variant="outline" onClick={addBroughtOtherItem}>Ajouter</Button>
+                      </div>
+                      {data.brought_other_items.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {data.brought_other_items.map((item) => (
+                            <Badge key={item} variant="secondary" className="gap-1 pr-1">{item}<Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setData('brought_other_items', data.brought_other_items.filter((value) => value !== item))}><X className="h-3 w-3" /></Button></Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className={sectionClassName}>

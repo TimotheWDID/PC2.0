@@ -32,6 +32,16 @@ class TicketController extends Controller
         'improvement' => 'Amelioration',
     ];
 
+    private const BROUGHT_ITEM_TYPES = [
+        'computer',
+        'charger',
+        'bag',
+        'phone',
+        'case',
+        'mouse',
+        'other',
+    ];
+
     private const CATEGORY_SPECIALITY_LINKS = [
         'Réparation ordinateur' => ['Montage PC', 'Réparation PC', 'Réinstallation système', 'Logiciel / configuration', 'Réseau / Wi-Fi'],
         'Réparation téléphone' => ['Réparation téléphone', 'SAV / diagnostic', 'Divers'],
@@ -48,6 +58,7 @@ class TicketController extends Controller
     private const TRACKED_TICKET_FIELDS = [
         'title',
         'message',
+        'brought_items',
         'status',
         'priority',
         'assignee_id',
@@ -63,6 +74,7 @@ class TicketController extends Controller
     private const TRACKED_FIELD_LABELS = [
         'title' => 'Titre',
         'message' => 'Description',
+        'brought_items' => 'Objets apportes',
         'status' => 'Statut',
         'priority' => 'Priorite',
         'assignee_id' => 'Agent assigne',
@@ -87,6 +99,34 @@ class TicketController extends Controller
         $supports = Schema::hasColumn($tableName, 'ticket_kind');
 
         return $supports;
+    }
+
+    private function normalizeBroughtItems(array $items, array $otherItems = [], ?string $legacyOtherItem = null): array
+    {
+        $selectedItems = collect($items)
+            ->map(fn ($item) => (string) $item)
+            ->filter(fn ($item) => in_array($item, self::BROUGHT_ITEM_TYPES, true))
+            ->reject(fn ($item) => $item === 'other')
+            ->unique()
+            ->values()
+            ->all();
+
+        $customItems = collect([...$otherItems, $legacyOtherItem])
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->unique()
+            ->take(10)
+            ->values()
+            ->all();
+
+        if ($customItems !== []) {
+            $selectedItems[] = 'other';
+        }
+
+        return [
+            'items' => $selectedItems,
+            'other' => $customItems,
+        ];
     }
 
     private function getSpecialCategoryIds(): array
@@ -467,6 +507,24 @@ class TicketController extends Controller
     {
         if ($field === 'is_resolved' || $field === 'is_locked') {
             return (bool) $value;
+        }
+
+        if ($field === 'brought_items') {
+            $labels = [
+                'computer' => 'Ordinateur',
+                'charger' => 'Chargeur',
+                'bag' => 'Sacoche',
+                'phone' => 'Telephone',
+                'case' => 'Coque',
+                'mouse' => 'Souris',
+                'other' => 'Divers',
+            ];
+            $items = is_array($value) && is_array($value['items'] ?? null) ? $value['items'] : [];
+            $otherItem = is_array($value) ? trim((string) ($value['other'] ?? '')) : '';
+
+            return collect($items)
+                ->map(fn ($item) => $item === 'other' && $otherItem !== '' ? "Divers: {$otherItem}" : ($labels[$item] ?? $item))
+                ->implode(', ') ?: null;
         }
 
         if ($field === 'assignee_id') {
@@ -995,6 +1053,11 @@ class TicketController extends Controller
         $rules = [
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
+            'brought_items' => 'nullable|array',
+            'brought_items.*' => ['string', Rule::in(self::BROUGHT_ITEM_TYPES)],
+            'brought_other_items' => 'nullable|array|max:10',
+            'brought_other_items.*' => 'string|max:160',
+            'brought_other_item' => 'nullable|string|max:160',
             'device_password' => 'nullable|string|max:500',
             'notify_by' => 'nullable|in:SMS,Email,None',
             'no_device_password' => 'nullable|boolean',
@@ -1143,6 +1206,7 @@ class TicketController extends Controller
 
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
+        $ticket->brought_items = $this->normalizeBroughtItems($data['brought_items'] ?? [], $data['brought_other_items'] ?? [], $data['brought_other_item'] ?? null);
         $ticket->device_password = $normalizedDevicePassword;
         $ticket->no_device_password = $normalizedDevicePassword ? false : $noDevicePassword;
         $ticket->notify_by = $resolvedNotificationPreference;
@@ -1279,6 +1343,11 @@ class TicketController extends Controller
             'email' => 'nullable|email|max:255',
             'title' => 'required|string|max:255',
             'message' => 'required|string|max:3000',
+            'brought_items' => 'nullable|array',
+            'brought_items.*' => ['string', Rule::in(self::BROUGHT_ITEM_TYPES)],
+            'brought_other_items' => 'nullable|array|max:10',
+            'brought_other_items.*' => 'string|max:160',
+            'brought_other_item' => 'nullable|string|max:160',
             'device_password' => 'nullable|string|max:500',
             'no_device_password' => 'nullable|boolean',
             'password_empty_confirmed' => 'nullable|boolean',
@@ -1343,6 +1412,7 @@ class TicketController extends Controller
         $ticket->user_id = $user->id;
         $ticket->title = $data['title'];
         $ticket->message = $data['message'];
+        $ticket->brought_items = $this->normalizeBroughtItems($data['brought_items'] ?? [], $data['brought_other_items'] ?? [], $data['brought_other_item'] ?? null);
         $ticket->device_password = $normalizedDevicePassword;
         $ticket->no_device_password = $normalizedDevicePassword ? false : $noDevicePassword;
         $ticket->ticket_kind = 'standard';
@@ -1524,6 +1594,7 @@ class TicketController extends Controller
                 'title' => $ticket->title,
                 'ticket_kind' => $this->supportsTicketKind() ? ($ticket->ticket_kind ?? 'standard') : 'standard',
                 'message' => $ticket->message,
+                'brought_items' => $ticket->brought_items,
                 'device_password' => $ticket->device_password,
                 'no_device_password' => (bool) $ticket->no_device_password,
                 'status' => $ticket->status,
@@ -1671,6 +1742,11 @@ class TicketController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'message' => 'nullable|string',
+            'brought_items' => 'nullable|array',
+            'brought_items.*' => ['string', Rule::in(self::BROUGHT_ITEM_TYPES)],
+            'brought_other_items' => 'nullable|array|max:10',
+            'brought_other_items.*' => 'string|max:160',
+            'brought_other_item' => 'nullable|string|max:160',
             'category_id' => 'nullable|integer',
             'category_ids' => 'nullable|array',
             'category_ids.*' => 'integer|exists:categories,id',
@@ -1726,6 +1802,7 @@ class TicketController extends Controller
 
         $ticket->title = $data['title'];
         $ticket->message = $data['message'] ?? null;
+        $ticket->brought_items = $this->normalizeBroughtItems($data['brought_items'] ?? [], $data['brought_other_items'] ?? [], $data['brought_other_item'] ?? null);
         $ticket->priority = $request->input('priority', $ticket->priority);
         $ticket->status = $request->input('status', $ticket->status);
         $ticket->assignee_id = $assigneeId;

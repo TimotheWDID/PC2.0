@@ -169,6 +169,24 @@ const priorityLabels: Record<string, string> = {
   'high': 'Haute',
 };
 
+const broughtItemLabels: Record<string, string> = {
+  computer: 'Ordinateur',
+  charger: 'Chargeur',
+  bag: 'Sacoche',
+  phone: 'Telephone',
+  case: 'Coque',
+  mouse: 'Souris',
+  other: 'Divers',
+};
+
+const getBroughtOtherItems = (broughtItems: unknown): string[] => {
+  if (!broughtItems || typeof broughtItems !== 'object') return [];
+
+  const other = (broughtItems as { other?: unknown }).other;
+  if (Array.isArray(other)) return other.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+  return typeof other === 'string' && other.trim() !== '' ? [other] : [];
+};
+
 const priorityUI: Record<string, { badge: string; btn: string; btnActive: string }> = {
   low: {
     badge: 'bg-[#b3b6bf] text-[#141d3a]',
@@ -208,12 +226,15 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [broughtOtherItemInput, setBroughtOtherItemInput] = useState('');
   const [detailEditor, setDetailEditor] = useState<'invoice' | 'assignee' | 'category' | null>(null);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [formData, setFormData] = useState({
     title: ticket.title ?? '',
     message: ticket.message ?? '',
+    brought_items: Array.isArray(ticket.brought_items?.items) ? ticket.brought_items.items : [],
+    brought_other_items: getBroughtOtherItems(ticket.brought_items),
     status: ticket.status ?? 'open',
     priority: ticket.priority ?? 'low',
     category_id: ticket.category?.id ?? '',
@@ -369,6 +390,26 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const requesterHref = ticket.user ? `/users/${ticket.user.id}/edit#tickets-client` : null;
   const assigneeHref = ticket.assignee ? `/users/${ticket.assignee.id}/edit` : null;
   const deviceHref = ticket.device ? `/devices/${ticket.device.id}` : null;
+  const selectedBroughtItems = Array.isArray(ticket.brought_items?.items) ? ticket.brought_items.items : [];
+  const broughtOtherItems = getBroughtOtherItems(ticket.brought_items);
+  const isMatchingBroughtDevice = (item: string) => item === ticket.device?.device_type;
+
+  const toggleBroughtItem = (item: string) => {
+    setFormData((current) => ({
+      ...current,
+      brought_items: current.brought_items.includes(item)
+        ? current.brought_items.filter((value: string) => value !== item)
+        : [...current.brought_items, item],
+    }));
+  };
+
+  const addBroughtOtherItem = () => {
+    const item = broughtOtherItemInput.trim();
+    if (!item || formData.brought_other_items.includes(item)) return;
+
+    setFormData((current) => ({ ...current, brought_other_items: [...current.brought_other_items, item] }));
+    setBroughtOtherItemInput('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1696,6 +1737,25 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                           </div>
                         </div>
 
+                        {selectedBroughtItems.length > 0 && (
+                          <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+                            <span className="text-muted-foreground">Objets apportes:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedBroughtItems.map((item: string) => (
+                                isMatchingBroughtDevice(item) && deviceHref ? (
+                                  <Link key={item} href={deviceHref} className="rounded-md border border-primary/30 bg-background px-2 py-1 text-xs font-medium text-primary hover:bg-muted">
+                                    {broughtItemLabels[item]}: {ticket.device?.display_name}
+                                  </Link>
+                                ) : (
+                                  <Badge key={item} variant="secondary">
+                                    {item === 'other' && broughtOtherItems.length > 0 ? `Divers: ${broughtOtherItems.join(', ')}` : (broughtItemLabels[item] ?? item)}
+                                  </Badge>
+                                )
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {(ticket.categories?.length || ticket.category) && (
                           <div className="flex flex-col gap-2 text-sm">
                             <div className="flex items-center gap-2">
@@ -1893,6 +1953,32 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-3">
+                        <Label>Objets apportes</Label>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {Object.entries(broughtItemLabels).map(([value, label]) => (
+                            <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                              <Checkbox checked={formData.brought_items.includes(value)} onCheckedChange={() => toggleBroughtItem(value)} />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="brought_other_item">Autre objet</Label>
+                          <div className="flex gap-2">
+                            <Input id="brought_other_item" value={broughtOtherItemInput} onChange={(e) => setBroughtOtherItemInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBroughtOtherItem() } }} placeholder="Ex: Adaptateur USB-C" maxLength={160} />
+                            <Button type="button" variant="outline" onClick={addBroughtOtherItem}>Ajouter</Button>
+                          </div>
+                          {formData.brought_other_items.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {formData.brought_other_items.map((item: string) => (
+                                <Badge key={item} variant="secondary" className="gap-1 pr-1">{item}<Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setFormData((current) => ({ ...current, brought_other_items: current.brought_other_items.filter((value: string) => value !== item) }))}><X className="h-3 w-3" /></Button></Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2">

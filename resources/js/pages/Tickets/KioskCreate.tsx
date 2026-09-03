@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { X } from 'lucide-react'
 
 type Props = {
   success?: boolean
@@ -20,10 +21,19 @@ type Props = {
 
 const kioskSectionClassName = 'rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/15 p-5 shadow-sm md:p-6'
 const kioskStepPillClassName = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted/40 text-sm font-semibold text-foreground'
+const broughtItemOptions = [
+  { value: 'computer', label: 'Ordinateur' },
+  { value: 'charger', label: 'Chargeur' },
+  { value: 'bag', label: 'Sacoche' },
+  { value: 'phone', label: 'Telephone' },
+  { value: 'case', label: 'Coque' },
+  { value: 'mouse', label: 'Souris' },
+]
 
 export default function KioskCreate({ success = false, ticketId = null }: Props) {
   const [isDark, setIsDark] = useState(false)
   const [showNoPasswordConfirm, setShowNoPasswordConfirm] = useState(false)
+  const [broughtOtherItemInput, setBroughtOtherItemInput] = useState('')
   const isSubmittingRef = useRef(false)
 
   const applyTheme = (darkMode: boolean) => {
@@ -64,6 +74,8 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
     email: '',
     title: '',
     message: '',
+    brought_items: [] as string[],
+    brought_other_items: [] as string[],
     device_password: '',
     no_device_password: false,
     password_empty_confirmed: false,
@@ -109,6 +121,20 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
       // Ignore localStorage errors
     }
   }, [data])
+
+  const toggleBroughtItem = (item: string) => {
+    setData('brought_items', data.brought_items.includes(item)
+      ? data.brought_items.filter((value) => value !== item)
+      : [...data.brought_items, item])
+  }
+
+  const addBroughtOtherItem = () => {
+    const item = broughtOtherItemInput.trim()
+    if (!item || data.brought_other_items.includes(item)) return
+
+    setData('brought_other_items', [...data.brought_other_items, item])
+    setBroughtOtherItemInput('')
+  }
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -349,6 +375,33 @@ export default function KioskCreate({ success = false, ticketId = null }: Props)
                   placeholder="Exemple: Ecran noir, bruit au demarrage, message d'erreur..."
                 />
                 {errors.message && <p className="mt-2 text-sm text-destructive">{errors.message}</p>}
+              </div>
+
+              <div className="rounded-3xl border border-border/70 bg-muted/10 p-4">
+                <Label>Objets apportes</Label>
+                <p className="mt-1 text-sm text-muted-foreground">Cochez les objets que vous laissez avec votre demande.</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {broughtItemOptions.map((item) => (
+                    <label key={item.value} className="flex items-center gap-2 text-sm text-foreground">
+                      <input type="checkbox" checked={data.brought_items.includes(item.value)} onChange={() => toggleBroughtItem(item.value)} />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="brought_other_item" className="block">Autre objet</Label>
+                  <div className="flex gap-2">
+                    <Input id="brought_other_item" value={broughtOtherItemInput} onChange={(e) => setBroughtOtherItemInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBroughtOtherItem() } }} placeholder="Ex: Adaptateur USB-C" maxLength={160} />
+                    <Button type="button" variant="outline" onClick={addBroughtOtherItem}>Ajouter</Button>
+                  </div>
+                  {data.brought_other_items.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {data.brought_other_items.map((item) => (
+                        <span key={item} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">{item}<Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setData('brought_other_items', data.brought_other_items.filter((value) => value !== item))}><X className="h-3 w-3" /></Button></span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-3xl border border-border/70 bg-muted/10 p-4">
