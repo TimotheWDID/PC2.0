@@ -6,6 +6,7 @@ use App\Models\Commande;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
 use App\Models\User;
+use App\Support\CommandePricingSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -158,6 +159,7 @@ class CommandeController extends Controller
             'tickets' => $tickets,
             'ticketId' => $ticketId,
             'ticketUserId' => $ticketUserId,
+            'defaultMarginCoefficient' => CommandePricingSettings::load()['coefficient_marge'],
         ]);
     }
 
@@ -181,9 +183,13 @@ class CommandeController extends Controller
                 'max:255'
             ],
             'invoice_id' => 'nullable|string|max:255',
+            'prix_ht' => 'required|numeric|min:0',
+            'coefficient_marge' => 'nullable|numeric|gt:0',
             'statut' => 'required|in:new,panier,commandé,réceptionner,traité',
         ]);
 
+        $validated['coefficient_marge'] = $validated['coefficient_marge'] ?? CommandePricingSettings::load()['coefficient_marge'];
+        $validated['prix_vente_ttc'] = ceil($validated['prix_ht'] * $validated['coefficient_marge'] * 1.20);
         $commande = Commande::create($validated);
 
         if (!empty($commande->ticket_id)) {
@@ -391,6 +397,7 @@ class CommandeController extends Controller
         return Inertia::render('Commandes/CreateBulk', [
             'users' => $users,
             'tickets' => $tickets,
+            'defaultMarginCoefficient' => CommandePricingSettings::load()['coefficient_marge'],
         ]);
     }
 
@@ -407,11 +414,16 @@ class CommandeController extends Controller
             'items.*.user_id' => 'required|exists:users,id',
             'items.*.ticket_id' => 'nullable|exists:tickets,id',
             'items.*.invoice_id' => 'nullable|string|max:255',
+            'items.*.prix_ht' => 'required|numeric|min:0',
+            'items.*.coefficient_marge' => 'nullable|numeric|gt:0',
         ]);
 
         $createdCount = 0;
+        $defaultMarginCoefficient = CommandePricingSettings::load()['coefficient_marge'];
 
         foreach ($validated['items'] as $item) {
+            $marginCoefficient = $item['coefficient_marge'] ?? $defaultMarginCoefficient;
+
             Commande::create([
                 'user_id' => $item['user_id'],
                 'ticket_id' => $item['ticket_id'] ?? null,
@@ -419,6 +431,9 @@ class CommandeController extends Controller
                 'fournisseur' => $validated['fournisseur'],
                 'command_number' => $validated['command_number'],
                 'invoice_id' => $item['invoice_id'] ?? null,
+                'prix_ht' => $item['prix_ht'],
+                'coefficient_marge' => $marginCoefficient,
+                'prix_vente_ttc' => ceil($item['prix_ht'] * $marginCoefficient * 1.20),
                 'statut' => 'commandé',
             ]);
             $createdCount++;

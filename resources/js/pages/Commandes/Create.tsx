@@ -40,11 +40,13 @@ export default function Create({
   tickets,
   ticketId,
   ticketUserId,
+  defaultMarginCoefficient,
 }: {
   users: User[];
   tickets: Ticket[];
   ticketId?: string;
   ticketUserId?: number | null;
+  defaultMarginCoefficient: number;
 }) {
   const { data, setData, post, processing, errors } = useForm({
     user_id: '',
@@ -53,6 +55,8 @@ export default function Create({
     fournisseur: '',
     command_number: '',
     invoice_id: '',
+    prix_ht: '',
+    coefficient_marge: String(defaultMarginCoefficient ?? 1),
     statut: 'new',
   });
 
@@ -361,6 +365,52 @@ export default function Create({
                   onChange={(e) => setData('invoice_id', e.target.value)}
                 />
                 {errors.invoice_id && <div className="text-destructive text-sm mt-1">{errors.invoice_id}</div>}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="prix_ht">Prix HT *</Label>
+                  <Input
+                    id="prix_ht"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={data.prix_ht}
+                    onChange={(e) => setData('prix_ht', e.target.value)}
+                    placeholder="0,00"
+                    required
+                  />
+                  {errors.prix_ht && <div className="text-destructive text-sm mt-1">{errors.prix_ht}</div>}
+                </div>
+
+                <div>
+                  <Label htmlFor="coefficient_marge">Coefficient de marge *</Label>
+                  <Input
+                    id="coefficient_marge"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={data.coefficient_marge}
+                    onChange={(e) => setData('coefficient_marge', e.target.value)}
+                    required
+                  />
+                  {errors.coefficient_marge && <div className="text-destructive text-sm mt-1">{errors.coefficient_marge}</div>}
+                </div>
+
+                <div>
+                  <Label htmlFor="prix_vente_ttc">Prix de vente TTC (TVA 20 %)</Label>
+                  <Input
+                    id="prix_vente_ttc"
+                    value={data.prix_ht === '' ? '' : Math.ceil(Number(data.prix_ht) * Number(data.coefficient_marge || 0) * 1.2).toFixed(2)}
+                    readOnly
+                    placeholder="0,00"
+                  />
+                  {data.prix_ht !== '' && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Montant non arrondi : {(Number(data.prix_ht) * Number(data.coefficient_marge || 0) * 1.2).toFixed(2)} EUR
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div>

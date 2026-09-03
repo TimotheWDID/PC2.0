@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Speciality;
+use App\Support\CommandePricingSettings;
 use App\Support\MailFooterSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -37,11 +38,13 @@ class AppSettingsController extends Controller
             ->values();
 
         $mailFooter = MailFooterSettings::load();
+        $commandePricing = CommandePricingSettings::load();
 
         return Inertia::render('AppSettings/Index', [
             'categories' => $categories,
             'specialities' => $specialities,
             'mailFooter' => $mailFooter,
+            'commandePricing' => $commandePricing,
             'modules' => [
                 [
                     'title' => 'Etiquettes tickets',
@@ -94,6 +97,19 @@ class AppSettingsController extends Controller
         ]);
 
         return back()->with('success', 'Footer des mails enregistre.');
+    }
+
+    public function updateCommandePricing(Request $request)
+    {
+        $validated = $request->validate([
+            'coefficient_marge' => ['required', 'numeric', 'gt:0'],
+        ]);
+
+        CommandePricingSettings::save([
+            'coefficient_marge' => (float) $validated['coefficient_marge'],
+        ]);
+
+        return back()->with('success', 'Coefficient de marge par defaut enregistre.');
     }
 
     public function storeCategory(Request $request)

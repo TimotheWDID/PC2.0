@@ -40,6 +40,9 @@ type Commande = {
   fournisseur: string;
   command_number: string;
   invoice_id: string | null;
+  prix_ht: string | null;
+  coefficient_marge: string | null;
+  prix_vente_ttc: string | null;
   statut: 'new' | 'panier' | 'commandé' | 'réceptionner' | 'traité';
   created_at: string;
   updated_at: string;
@@ -177,6 +180,21 @@ export default function Show({ commande }: { commande: Commande }) {
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Numéro de facture</div>
                 <div className="text-lg">{commande.invoice_id || '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Prix HT</div>
+                <div className="text-lg">{commande.prix_ht ? `${Number(commande.prix_ht).toFixed(2)} EUR` : '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Coefficient de marge</div>
+                <div className="text-lg">{commande.coefficient_marge || '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Prix de vente TTC (TVA 20 %)</div>
+                <div className="text-lg font-semibold">{commande.prix_vente_ttc ? `${Number(commande.prix_vente_ttc).toFixed(2)} EUR` : '-'}</div>
               </div>
 
               <div>

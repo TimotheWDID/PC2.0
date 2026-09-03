@@ -28,6 +28,8 @@ type CommandeItem = {
   user_search: string;
   ticket_id: string;
   invoice_id: string;
+  prix_ht: string;
+  coefficient_marge: string;
 };
 
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -37,7 +39,7 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Créer des commandes groupées', href: '/commandes/create-bulk' },
 ];
 
-export default function CreateBulk({ users, tickets }: { users: User[]; tickets: Ticket[] }) {
+export default function CreateBulk({ users, tickets, defaultMarginCoefficient }: { users: User[]; tickets: Ticket[]; defaultMarginCoefficient: number }) {
   const [fournisseur, setFournisseur] = useState('');
   const [commandNumber, setCommandNumber] = useState('');
   const [items, setItems] = useState<CommandeItem[]>([]);
@@ -57,6 +59,8 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
       user_search: '',
       ticket_id: '',
       invoice_id: '',
+      prix_ht: '',
+      coefficient_marge: String(defaultMarginCoefficient ?? 1),
     };
     setItems([...items, newItem]);
   };
@@ -133,6 +137,12 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
       if (!item.user_id || item.user_id.trim() === '') {
         validationErrors[`items.${index}.user_id`] = 'Vous devez sélectionner un client.';
       }
+      if (item.prix_ht === '' || Number.isNaN(Number(item.prix_ht)) || Number(item.prix_ht) < 0) {
+        validationErrors[`items.${index}.prix_ht`] = 'Le prix HT doit être un montant positif ou nul.';
+      }
+      if (item.coefficient_marge === '' || Number.isNaN(Number(item.coefficient_marge)) || Number(item.coefficient_marge) <= 0) {
+        validationErrors[`items.${index}.coefficient_marge`] = 'Le coefficient de marge doit être supérieur à 0.';
+      }
     });
 
     if (Object.keys(validationErrors).length > 0) {
@@ -147,6 +157,8 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
       user_id: parseInt(item.user_id),
       ticket_id: item.ticket_id ? parseInt(item.ticket_id) : null,
       invoice_id: item.invoice_id || null,
+      prix_ht: Number(item.prix_ht),
+      coefficient_marge: Number(item.coefficient_marge),
     }));
 
     console.log('Données à envoyer:', {
@@ -371,6 +383,60 @@ export default function CreateBulk({ users, tickets }: { users: User[]; tickets:
                             <div className="text-destructive text-sm mt-1">
                               {errors[`items.${index}.invoice_id` as keyof typeof errors]}
                             </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor={`prix-ht-${item.id}`}>Prix HT *</Label>
+                          <Input
+                            id={`prix-ht-${item.id}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.prix_ht}
+                            onChange={(e) => updateItem(item.id, 'prix_ht', e.target.value)}
+                            placeholder="0,00"
+                            required
+                          />
+                          {errors[`items.${index}.prix_ht` as keyof typeof errors] && (
+                            <div className="text-destructive text-sm mt-1">
+                              {errors[`items.${index}.prix_ht` as keyof typeof errors]}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`coefficient-${item.id}`}>Coefficient de marge *</Label>
+                          <Input
+                            id={`coefficient-${item.id}`}
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={item.coefficient_marge}
+                            onChange={(e) => updateItem(item.id, 'coefficient_marge', e.target.value)}
+                            required
+                          />
+                          {errors[`items.${index}.coefficient_marge` as keyof typeof errors] && (
+                            <div className="text-destructive text-sm mt-1">
+                              {errors[`items.${index}.coefficient_marge` as keyof typeof errors]}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`prix-vente-${item.id}`}>Prix de vente TTC (TVA 20 %)</Label>
+                          <Input
+                            id={`prix-vente-${item.id}`}
+                            value={item.prix_ht === '' ? '' : Math.ceil(Number(item.prix_ht) * Number(item.coefficient_marge || 0) * 1.2).toFixed(2)}
+                            readOnly
+                            placeholder="0,00"
+                          />
+                          {item.prix_ht !== '' && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Montant non arrondi : {(Number(item.prix_ht) * Number(item.coefficient_marge || 0) * 1.2).toFixed(2)} EUR
+                            </p>
                           )}
                         </div>
                       </div>

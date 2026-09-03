@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Send, Loader2, Trash2, MessageSquare } from 'lucide-react';
+import { Send, Loader2, Trash2, MessageSquare, ArrowDown } from 'lucide-react';
 import axios from 'axios';
 import { formatDateTimeFr } from '@/lib/datetime';
 
@@ -92,7 +92,10 @@ export default function TicketChat({
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
   const [publicNotificationChannel, setPublicNotificationChannel] = useState<'SMS' | 'Email' | 'None'>('None');
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('none');
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesCountRef = useRef<number | null>(null);
 
   const withMagicToken = (path: string): string => {
     if (!magicToken) {
@@ -181,14 +184,23 @@ export default function TicketChat({
       .trim();
   };
 
-  const scrollToBottom = (force = false) => {
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     const el = messagesContainerRef.current;
     if (!el) return;
 
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const isNearBottom = distanceFromBottom < 80;
-    if (force || isNearBottom) {
-      el.scrollTop = el.scrollHeight;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    setHasNewMessages(false);
+    setIsAtBottom(true);
+  };
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setIsAtBottom(nearBottom);
+    if (nearBottom) {
+      setHasNewMessages(false);
     }
   };
 
@@ -196,8 +208,12 @@ export default function TicketChat({
     setIsLoading(true);
     try {
       const response = await axios.get(withMagicToken(`/tickets/${ticketId}/messages`));
-      setMessages(response.data.messages);
-      setTimeout(() => scrollToBottom(true), 100);
+      const nextMessages: Message[] = response.data.messages;
+      if (messagesCountRef.current !== null && nextMessages.length > messagesCountRef.current) {
+        setHasNewMessages(true);
+      }
+      messagesCountRef.current = nextMessages.length;
+      setMessages(nextMessages);
     } catch (error) {
       console.error('Erreur lors de la récupération des messages:', error);
     } finally {
@@ -206,6 +222,8 @@ export default function TicketChat({
   };
 
   useEffect(() => {
+    messagesCountRef.current = null;
+    setHasNewMessages(false);
     fetchMessages();
 
     // Poll for new messages every 5 seconds
@@ -339,9 +357,11 @@ export default function TicketChat({
       const mentionWarnings: string[] = response.data?.meta?.mention_warnings ?? [];
       setMentionFeedback(internal ? mentionWarnings : []);
 
-      setMessages([...messages, response.data.message]);
+      const updatedMessages = [...messages, response.data.message];
+      messagesCountRef.current = updatedMessages.length;
+      setMessages(updatedMessages);
       setNewMessage('');
-      setTimeout(() => scrollToBottom(true), 50);
+      setTimeout(() => scrollToBottom('auto'), 50);
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
       const message = axios.isAxiosError(error)
@@ -382,7 +402,9 @@ export default function TicketChat({
 
     try {
       await axios.delete(withMagicToken(`/tickets/${ticketId}/messages/${messageId}`));
-      setMessages(messages.filter((msg) => msg.id !== messageId));
+      const remaining = messages.filter((msg) => msg.id !== messageId);
+      messagesCountRef.current = remaining.length;
+      setMessages(remaining);
     } catch (error) {
       console.error('Erreur lors de la suppression du message:', error);
       alert('Erreur lors de la suppression du message');
@@ -491,9 +513,11 @@ export default function TicketChat({
       <CardContent className="pt-0">
         <div className="space-y-3">
           {/* Messages Area */}
+          <div className="relative">
           <div
             className="h-[34vh] max-h-[22rem] min-h-44 overflow-y-auto rounded-lg border bg-muted/10 p-3 sm:h-96 sm:max-h-[26rem] sm:min-h-52 sm:p-4"
             ref={messagesContainerRef}
+            onScroll={handleMessagesScroll}
           >
             {isLoading && visibleMessages.length === 0 ? (
               <div className="flex items-center justify-center h-full">
@@ -587,6 +611,19 @@ export default function TicketChat({
                 })}
               </div>
             )}
+          </div>
+          {!isAtBottom && visibleMessages.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => scrollToBottom()}
+              className="absolute bottom-3 left-1/2 z-10 h-8 -translate-x-1/2 gap-1 rounded-full border shadow-md"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+              {hasNewMessages ? 'Nouveaux messages' : 'Dernier message'}
+            </Button>
+          )}
           </div>
 
           {/* Message Input */}

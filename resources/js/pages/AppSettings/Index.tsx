@@ -40,6 +40,10 @@ type MailFooterSettings = {
   image_alt: string;
 };
 
+type CommandePricingSettings = {
+  coefficient_marge: number;
+};
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Parametres application', href: '/settings/application' },
 ];
@@ -48,10 +52,12 @@ export default function AppSettingsIndex({
   categories,
   specialities,
   mailFooter,
+  commandePricing,
 }: {
   categories: CategoryItem[];
   specialities: SpecialityItem[];
   mailFooter: MailFooterSettings;
+  commandePricing: CommandePricingSettings;
 }) {
   const [query, setQuery] = useState('');
   const [categoryName, setCategoryName] = useState('');
@@ -60,6 +66,7 @@ export default function AppSettingsIndex({
   const [footerContent, setFooterContent] = useState(mailFooter?.content ?? 'Cordialement,\nSupportPC');
   const [footerImageUrl, setFooterImageUrl] = useState(mailFooter?.image_url ?? '');
   const [footerImageAlt, setFooterImageAlt] = useState(mailFooter?.image_alt ?? 'Logo SupportPC');
+  const [marginCoefficient, setMarginCoefficient] = useState(String(commandePricing?.coefficient_marge ?? 1));
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -148,6 +155,13 @@ export default function AppSettingsIndex({
         href: '#mail-footer',
         status: 'Communication',
         keywords: ['footer', 'signature', 'mail'],
+      },
+      {
+        title: 'Tarification des commandes',
+        description: 'Coefficient de marge applique par defaut aux nouvelles commandes.',
+        href: '#commande-pricing',
+        status: 'Organisation',
+        keywords: ['commande', 'prix', 'marge', 'coefficient', 'tva'],
       },
       {
         title: 'Donnees metier',
@@ -275,6 +289,16 @@ export default function AppSettingsIndex({
       content: footerContent,
       image_url: footerImageUrl,
       image_alt: footerImageAlt,
+    }, {
+      preserveScroll: true,
+    });
+  };
+
+  const saveCommandePricing = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    router.post('/settings/application/commande-pricing', {
+      coefficient_marge: Number(marginCoefficient),
     }, {
       preserveScroll: true,
     });
@@ -508,6 +532,32 @@ export default function AppSettingsIndex({
               </CardContent>
             </Card>
           </div>
+
+          <Card id="commande-pricing">
+            <CardHeader>
+              <CardTitle>Tarification des commandes</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Definit le coefficient de marge renseigne automatiquement lors de la creation d'une commande.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={saveCommandePricing} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <div className="w-full sm:max-w-xs">
+                  <Label htmlFor="coefficient_marge">Coefficient de marge par defaut</Label>
+                  <Input
+                    id="coefficient_marge"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={marginCoefficient}
+                    onChange={(e) => setMarginCoefficient(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit">Enregistrer</Button>
+              </form>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
             <Card id="mail-footer">

@@ -127,6 +127,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('admin')
         ->name('application-settings.mail-footer.update');
 
+    Route::post('settings/application/commande-pricing', [AppSettingsController::class, 'updateCommandePricing'])
+        ->middleware('admin')
+        ->name('application-settings.commande-pricing.update');
+
     Route::post('settings/application/categories', [AppSettingsController::class, 'storeCategory'])
         ->middleware('admin')
         ->name('application-settings.categories.store');

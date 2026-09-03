@@ -17,12 +17,18 @@ class Commande extends Model
         'fournisseur',
         'command_number',
         'invoice_id',
+        'prix_ht',
+        'coefficient_marge',
+        'prix_vente_ttc',
         'statut',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'prix_ht' => 'decimal:2',
+        'coefficient_marge' => 'decimal:2',
+        'prix_vente_ttc' => 'decimal:2',
     ];
 
     /**
