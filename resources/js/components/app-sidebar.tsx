@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Bell, BookOpen, Computer, FilePlus, Folder, HardHat, LayoutGrid, Mail, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
+import { Bell, BookOpen, Computer, FilePlus, FileText, Folder, HardHat, LayoutGrid, Mail, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -51,6 +51,13 @@ const mainNavItems: NavItem[] = [
         icon: ShoppingCart,
         quickHref: '/commandes/create',
         quickLabel: 'Nouvelle commande',
+    },
+    {
+        title: 'Devis',
+        href: '/devis',
+        icon: FileText,
+        quickHref: '/devis/create',
+        quickLabel: 'Nouveau devis',
     },
     {
         title: 'Clients',

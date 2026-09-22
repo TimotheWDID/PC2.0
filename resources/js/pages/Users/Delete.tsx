@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import Heading from '@/components/heading';
@@ -26,11 +26,18 @@ export default function Delete({ user }: any) {
           </CardHeader>
           <CardContent>
             <p>Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.</p>
-            <form action={`/users/${user?.id}`} method="POST" className="mt-4" onSubmit={(e) => { if(!confirm('Confirmer la suppression ?')) e.preventDefault(); }}>
-              <input type="hidden" name="_method" value="DELETE" />
-              <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-              <Button type="submit" variant="destructive">Supprimer</Button>
-            </form>
+            <Button
+              type="button"
+              variant="destructive"
+              className="mt-4"
+              onClick={() => {
+                if (confirm('Confirmer la suppression ?')) {
+                  router.delete(`/users/${user?.id}`);
+                }
+              }}
+            >
+              Supprimer
+            </Button>
           </CardContent>
         </Card>
       </div>

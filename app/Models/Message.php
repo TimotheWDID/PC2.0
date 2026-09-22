@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Message extends Model
 {
@@ -33,5 +34,15 @@ class Message extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    /**
+     * Uploaded file attachments. Distinct from the legacy `attachments` JSON
+     * column above, which is unused (inherited from the original ticket
+     * package and never populated in this app).
+     */
+    public function fileAttachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class);
     }
 }

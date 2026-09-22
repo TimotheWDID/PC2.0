@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
 use App\Models\User;
@@ -16,11 +17,16 @@ use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
 class MessageController extends Controller
 {
+    private const ATTACHMENT_MIMES = 'jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,csv,txt,zip';
+    private const ATTACHMENT_MAX_KB = 6144;
+    private const ATTACHMENT_MAX_COUNT = 5;
+
     private function hasMagicTokenAccess(Request $request, Ticket $ticket): bool
     {
         $token = trim((string) $request->query('token', ''));
@@ -444,6 +450,39 @@ class MessageController extends Controller
     }
 
     /**
+     * @param array{exists: bool, validated: bool, unread_count: int} $mentionNotification
+     */
+    private function serializeMessage(Ticket $ticket, Message $message, array $mentionNotification): array
+    {
+        return [
+            'id' => $message->id,
+            'content' => $message->content,
+            'is_internal' => $message->is_internal,
+            'attachments' => $message->attachments ?? [],
+            'file_attachments' => $message->fileAttachments->map(fn (MessageAttachment $attachment) => [
+                'id' => $attachment->id,
+                'name' => $attachment->original_name,
+                'mime_type' => $attachment->mime_type,
+                'size' => $attachment->size,
+                'download_path' => "/tickets/{$ticket->id}/messages/{$message->id}/attachments/{$attachment->id}",
+            ])->all(),
+            'created_at' => $message->created_at->toISOString(),
+            'delivery' => [
+                'channel' => $message->notification_channel,
+                'status' => $message->notification_status,
+                'error' => $message->notification_error,
+                'sent_at' => $message->notified_at?->toISOString(),
+            ],
+            'author' => [
+                'id' => $message->author->id,
+                'name' => $message->author->first_name . ' ' . $message->author->last_name,
+                'email' => $message->author->email,
+            ],
+            'mention_notification' => $mentionNotification,
+        ];
+    }
+
+    /**
      * Get all messages for a specific ticket
      */
     public function index($ticketId)
@@ -457,7 +496,9 @@ class MessageController extends Controller
         $this->authorizeTicketAccess(request(), $ticket);
 
         $messageModels = $ticket->messages()
-            ->with('author:id,first_name,last_name,email')
+            ->with(['author:id,first_name,last_name,email', 'fileAttachments'])
+            // Internal notes are for agents only: hide them from customers, including via magic link.
+            ->when(! $this->isAgentContext(), fn ($query) => $query->where('is_internal', false))
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -469,33 +510,15 @@ class MessageController extends Controller
                 ->all()
         );
 
-        $messages = $messageModels->map(function ($message) use ($mentionStateByMessageId) {
-                $mentionNotification = $mentionStateByMessageId[(int) $message->id] ?? [
-                    'exists' => false,
-                    'validated' => false,
-                    'unread_count' => 0,
-                ];
+        $messages = $messageModels->map(function ($message) use ($ticket, $mentionStateByMessageId) {
+            $mentionNotification = $mentionStateByMessageId[(int) $message->id] ?? [
+                'exists' => false,
+                'validated' => false,
+                'unread_count' => 0,
+            ];
 
-                return [
-                    'id' => $message->id,
-                    'content' => $message->content,
-                    'is_internal' => $message->is_internal,
-                    'attachments' => $message->attachments ?? [],
-                    'created_at' => $message->created_at->toISOString(),
-                    'delivery' => [
-                        'channel' => $message->notification_channel,
-                        'status' => $message->notification_status,
-                        'error' => $message->notification_error,
-                        'sent_at' => $message->notified_at?->toISOString(),
-                    ],
-                    'author' => [
-                        'id' => $message->author->id,
-                        'name' => $message->author->first_name . ' ' . $message->author->last_name,
-                        'email' => $message->author->email,
-                    ],
-                    'mention_notification' => $mentionNotification,
-                ];
-            });
+            return $this->serializeMessage($ticket, $message, $mentionNotification);
+        });
 
         return response()->json([
             'messages' => $messages,
@@ -518,10 +541,21 @@ class MessageController extends Controller
 
         $isAuthenticated = Auth::check();
 
+        // When sent alongside file uploads, the frontend switches to multipart/form-data
+        // and JSON-encodes this field as a string instead of a nested object.
+        if (is_string($request->input('sms_template'))) {
+            $decodedTemplate = json_decode((string) $request->input('sms_template'), true);
+
+            if (is_array($decodedTemplate)) {
+                $request->merge(['sms_template' => $decodedTemplate]);
+            }
+        }
+
         $validated = $request->validate([
             'content' => 'required|string|max:5000',
             'is_internal' => 'nullable|boolean',
-            'attachments' => 'nullable|array',
+            'attachments' => ['nullable', 'array', 'max:' . self::ATTACHMENT_MAX_COUNT],
+            'attachments.*' => ['file', 'mimes:' . self::ATTACHMENT_MIMES, 'max:' . self::ATTACHMENT_MAX_KB],
             'notification_channel' => 'nullable|in:SMS,Email,None',
             'sms_template' => 'nullable|array',
         ]);
@@ -581,10 +615,24 @@ class MessageController extends Controller
             'author_id' => $authorId,
             'content' => $validated['content'],
             'is_internal' => $isInternal,
-            'attachments' => $validated['attachments'] ?? [],
+            // The legacy JSON column above is unused; real uploads go through
+            // MessageAttachment (fileAttachments relation) stored just below.
+            'attachments' => [],
         ]);
 
-        $message->load('author:id,first_name,last_name,email');
+        foreach ($request->file('attachments', []) as $file) {
+            $path = $file->store("tickets/{$ticket->id}/attachments", 'local');
+
+            MessageAttachment::create([
+                'message_id' => $message->id,
+                'path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        $message->load(['author:id,first_name,last_name,email', 'fileAttachments']);
 
         $this->logTechnicianMessageEvent($ticket, $message);
         $mentionWarnings = $this->notifyMentionedAgents($ticket, $message);
@@ -634,25 +682,7 @@ class MessageController extends Controller
         }
 
         return response()->json([
-            'message' => [
-                'id' => $message->id,
-                'content' => $message->content,
-                'is_internal' => $message->is_internal,
-                'attachments' => $message->attachments ?? [],
-                'created_at' => $message->created_at->toISOString(),
-                'delivery' => [
-                    'channel' => $message->notification_channel,
-                    'status' => $message->notification_status,
-                    'error' => $message->notification_error,
-                    'sent_at' => $message->notified_at?->toISOString(),
-                ],
-                'author' => [
-                    'id' => $message->author->id,
-                    'name' => $message->author->first_name . ' ' . $message->author->last_name,
-                    'email' => $message->author->email,
-                ],
-                'mention_notification' => $mentionNotification,
-            ],
+            'message' => $this->serializeMessage($ticket, $message, $mentionNotification),
             'meta' => [
                 'mention_warnings' => $mentionWarnings,
                 'notification_channel' => $notificationChannel,
@@ -675,6 +705,10 @@ class MessageController extends Controller
         // Only allow the author or an admin to delete
         if ($message->author_id !== Auth::id()) {
             abort(403, 'Unauthorized action.');
+        }
+
+        foreach ($message->fileAttachments as $attachment) {
+            Storage::disk('local')->delete($attachment->path);
         }
 
         $message->delete();
@@ -722,5 +756,32 @@ class MessageController extends Controller
             'message_id' => (int) $message->id,
             'validated' => true,
         ]);
+    }
+
+    /**
+     * Download a file attached to a message.
+     */
+    public function downloadAttachment(Request $request, $ticketId, $messageId, $attachmentId)
+    {
+        $ticket = Ticket::findOrFail($ticketId);
+        $this->authorizeTicketAccess($request, $ticket);
+
+        $message = Message::where('ticket_id', $ticketId)
+            ->where('id', $messageId)
+            ->firstOrFail();
+
+        // Internal notes (and their attachments) are for agents only, even via a valid magic link.
+        if ($message->is_internal && ! $this->isAgentContext()) {
+            abort(403, 'Acces non autorise.');
+        }
+
+        $attachment = MessageAttachment::where('message_id', $messageId)->findOrFail($attachmentId);
+
+        abort_unless(Storage::disk('local')->exists($attachment->path), 404);
+
+        return response()->download(
+            Storage::disk('local')->path($attachment->path),
+            $attachment->original_name
+        );
     }
 }

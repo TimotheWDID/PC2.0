@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Bell, Home, ListFilter, Plus, Settings, Wrench } from 'lucide-react';
+import { Bell, FileText, Home, ListFilter, Plus, Settings, Wrench } from 'lucide-react';
 
 type MobileNativeNavProps = {
   fabHref?: string;
@@ -44,9 +44,9 @@ export default function MobileNativeNav({
             <ListFilter className="h-4 w-4" />
             Tickets
           </Link>
-          <Link href={isAgent ? '/commandes' : '/tickets/create'} className={navItemClass(isActive(isAgent ? '/commandes' : '/tickets/create'))}>
-            {isAgent ? <Wrench className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {isAgent ? 'Commandes' : 'Créer'}
+          <Link href={isAgent ? '/devis' : '/tickets/create'} className={navItemClass(isActive(isAgent ? '/devis' : '/tickets/create'))}>
+            {isAgent ? <FileText className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {isAgent ? 'Devis' : 'Créer'}
           </Link>
           <Link href="/dashboard?severity=notification" className={navItemClass(currentUrl.includes('severity=notification'))}>
             <span className="relative inline-flex">

@@ -29,6 +29,7 @@ class Ticket extends Model
         'user_id',
         'device_id',
         'invoice_id',
+        'hiboutik_quote_number',
         'title',
         'message',
         'brought_items',
@@ -234,6 +235,11 @@ class Ticket extends Model
     public function timelineEvents(): HasMany
     {
         return $this->hasMany(TicketTimelineEvent::class);
+    }
+
+    public function devis(): HasMany
+    {
+        return $this->hasMany(Devis::class);
     }
 
     public function labels(): BelongsToMany

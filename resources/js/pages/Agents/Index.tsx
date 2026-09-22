@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import Heading from '@/components/heading';
@@ -46,6 +46,11 @@ export default function Index({ agents }: { agents: Agent[] }) {
   const activeAgents = sortedFiltered.filter((a) => a.is_active !== false);
   const disabledAgents = sortedFiltered.filter((a) => a.is_active === false);
 
+  const handleDelete = (id: number) => {
+    if (!confirm('Supprimer cet agent ?')) return;
+    router.delete(`/agents/${id}`);
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Agents" />
@@ -87,11 +92,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                           <Link href={`/agents/${a.id}/edit`}>
                             <Button variant="outline" size="sm">Modifier</Button>
                           </Link>
-                          <form action={`/agents/${a.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet agent ?')) e.preventDefault(); }}>
-                            <input type="hidden" name="_method" value="DELETE" />
-                            <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                            <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
-                          </form>
+                          <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>Supprimer</Button>
                         </>
                       )}
                     </div>
@@ -118,11 +119,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                                 <Link href={`/agents/${a.id}/edit`}>
                                   <Button variant="outline" size="sm">Modifier</Button>
                                 </Link>
-                                <form action={`/agents/${a.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet agent ?')) e.preventDefault(); }}>
-                                  <input type="hidden" name="_method" value="DELETE" />
-                                  <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                                  <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
-                                </form>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>Supprimer</Button>
                               </>
                             )}
                           </div>
@@ -167,11 +164,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                             {isAdmin && (
                               <>
                                 <Link href={`/agents/${a.id}/edit`}><Button variant="outline" size="sm">Modifier</Button></Link>
-                                <form action={`/agents/${a.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet agent ?')) e.preventDefault(); }}>
-                                  <input type="hidden" name="_method" value="DELETE" />
-                                  <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                                  <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
-                                </form>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>Supprimer</Button>
                               </>
                             )}
                           </div>
@@ -197,11 +190,7 @@ export default function Index({ agents }: { agents: Agent[] }) {
                             {isAdmin && (
                               <>
                                 <Link href={`/agents/${a.id}/edit`}><Button variant="outline" size="sm">Modifier</Button></Link>
-                                <form action={`/agents/${a.id}`} method="POST" style={{ display: 'inline-block' }} onSubmit={(e) => { if(!confirm('Supprimer cet agent ?')) e.preventDefault(); }}>
-                                  <input type="hidden" name="_method" value="DELETE" />
-                                  <input type="hidden" name="_token" value={(document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content} />
-                                  <Button type="submit" variant="destructive" size="sm">Supprimer</Button>
-                                </form>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>Supprimer</Button>
                               </>
                             )}
                           </div>

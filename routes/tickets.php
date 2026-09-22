@@ -19,6 +19,9 @@ Route::get('tickets/{ticket}/messages', [MessageController::class, 'index'])
 Route::post('tickets/{ticket}/messages', [MessageController::class, 'store'])
     ->middleware('throttle:ticket-messages')
     ->name('tickets.messages.store');
+Route::get('tickets/{ticket}/messages/{message}/attachments/{attachment}', [MessageController::class, 'downloadAttachment'])
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.messages.attachments.download');
 
 Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');

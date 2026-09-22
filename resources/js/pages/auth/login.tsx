@@ -16,11 +16,6 @@ interface LoginProps {
 }
 
 export default function Login({ status, canResetPassword }: LoginProps) {
-    const csrfToken =
-        typeof document !== 'undefined'
-            ? (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? ''
-            : '';
-
     return (
         <AuthLayout
             title="Connectez-vous à votre compte"
@@ -40,8 +35,6 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             >
                 {({ processing, errors }) => (
                     <>
-                        <input type="hidden" name="_token" value={csrfToken} />
-
                         <div className="grid gap-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Adresse email</Label>

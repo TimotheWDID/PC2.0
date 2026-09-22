@@ -5,9 +5,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Send, Loader2, Trash2, MessageSquare, ArrowDown } from 'lucide-react';
+import { Send, Loader2, Trash2, MessageSquare, ArrowDown, Paperclip, X, FileText, Image as ImageIcon, Download } from 'lucide-react';
 import axios from 'axios';
 import { formatDateTimeFr } from '@/lib/datetime';
+
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE = 6 * 1024 * 1024; // 6 Mo, doit rester aligné avec MessageController::ATTACHMENT_MAX_KB
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+};
 
 interface Author {
   id: number;
@@ -15,11 +24,20 @@ interface Author {
   email: string;
 }
 
+interface FileAttachment {
+  id: number;
+  name: string;
+  mime_type: string | null;
+  size: number;
+  download_path: string;
+}
+
 interface Message {
   id: number;
   content: string;
   is_internal: boolean;
   attachments: string[];
+  file_attachments: FileAttachment[];
   created_at: string;
   delivery?: {
     channel: 'SMS' | 'Email' | 'None' | null;
@@ -94,8 +112,39 @@ export default function TicketChat({
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('none');
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesCountRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+
+    setAttachmentError(null);
+
+    const tooLarge = files.find((file) => file.size > MAX_ATTACHMENT_SIZE);
+    if (tooLarge) {
+      setAttachmentError(`« ${tooLarge.name} » dépasse la taille maximale de 6 Mo.`);
+      return;
+    }
+
+    setPendingAttachments((current) => {
+      const combined = [...current, ...files];
+      if (combined.length > MAX_ATTACHMENTS) {
+        setAttachmentError(`Maximum ${MAX_ATTACHMENTS} fichiers par message.`);
+        return current;
+      }
+      return combined;
+    });
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachmentError(null);
+    setPendingAttachments((current) => current.filter((_, i) => i !== index));
+  };
 
   const withMagicToken = (path: string): string => {
     if (!magicToken) {
@@ -325,7 +374,7 @@ export default function TicketChat({
     setSendingMode(internal ? 'internal' : 'public');
     setIsSending(true);
     try {
-      const payload: Record<string, unknown> = {
+      const fields: Record<string, unknown> = {
         content: newMessage,
         is_internal: internal,
       };
@@ -341,7 +390,7 @@ export default function TicketChat({
             smsContent = smsContent.slice(0, effectiveSmsMax - 3) + '...';
           }
 
-          payload.sms_template = {
+          fields.sms_template = {
             ...selectedTemplate,
             content: smsContent,
           };
@@ -349,10 +398,20 @@ export default function TicketChat({
       }
 
       if (!internal && isAgent) {
-        payload.notification_channel = channelOverride ?? publicNotificationChannel;
+        fields.notification_channel = channelOverride ?? publicNotificationChannel;
       }
 
-      const response = await axios.post(withMagicToken(`/tickets/${ticketId}/messages`), payload);
+      let response;
+      if (pendingAttachments.length > 0) {
+        const formData = new FormData();
+        Object.entries(fields).forEach(([key, value]) => {
+          formData.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+        });
+        pendingAttachments.forEach((file) => formData.append('attachments[]', file));
+        response = await axios.post(withMagicToken(`/tickets/${ticketId}/messages`), formData);
+      } else {
+        response = await axios.post(withMagicToken(`/tickets/${ticketId}/messages`), fields);
+      }
 
       const mentionWarnings: string[] = response.data?.meta?.mention_warnings ?? [];
       setMentionFeedback(internal ? mentionWarnings : []);
@@ -361,6 +420,7 @@ export default function TicketChat({
       messagesCountRef.current = updatedMessages.length;
       setMessages(updatedMessages);
       setNewMessage('');
+      setPendingAttachments([]);
       setTimeout(() => scrollToBottom('auto'), 50);
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
@@ -557,6 +617,28 @@ export default function TicketChat({
                         <div className="whitespace-pre-wrap break-words text-sm">
                           {renderMessageContent(message.content)}
                         </div>
+                        {message.file_attachments?.length > 0 && (
+                          <div className="space-y-1">
+                            {message.file_attachments.map((attachment) => (
+                              <a
+                                key={attachment.id}
+                                href={withMagicToken(attachment.download_path)}
+                                className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:underline ${
+                                  isCurrentUser ? 'border-primary-foreground/30' : 'border-border'
+                                }`}
+                              >
+                                {attachment.mime_type?.startsWith('image/') ? (
+                                  <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                                ) : (
+                                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                                )}
+                                <span className="truncate">{attachment.name}</span>
+                                <span className="shrink-0 opacity-70">({formatFileSize(attachment.size)})</span>
+                                <Download className="ml-auto h-3 w-3 shrink-0 opacity-70" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         <div className={`text-xs ${isCurrentUser ? 'opacity-80' : 'text-muted-foreground'}`}>
                           {formatDate(message.created_at)}
                         </div>
@@ -636,6 +718,41 @@ export default function TicketChat({
               rows={2}
               disabled={isSending || !canSend}
             />
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleAttachmentSelect}
+              disabled={isSending || !canSend}
+            />
+            {(pendingAttachments.length > 0 || attachmentError) && (
+              <div className="space-y-1.5">
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingAttachments.map((file, index) => (
+                      <span
+                        key={`${file.name}-${index}`}
+                        className="flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs"
+                      >
+                        <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className="max-w-40 truncate">{file.name}</span>
+                        <span className="shrink-0 text-muted-foreground">({formatFileSize(file.size)})</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(index)}
+                          className="shrink-0 text-muted-foreground hover:text-foreground"
+                          title="Retirer ce fichier"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {attachmentError && <p className="text-xs text-destructive">{attachmentError}</p>}
+              </div>
+            )}
             {isAgent && smsTemplates.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <div className="flex items-center gap-2">
@@ -695,7 +812,19 @@ export default function TicketChat({
                 )}
               </div>
             )}
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isSending || !canSend || pendingAttachments.length >= MAX_ATTACHMENTS}
+                onClick={() => fileInputRef.current?.click()}
+                title="Joindre un fichier"
+              >
+                <Paperclip className="mr-2 h-4 w-4" />
+                Joindre
+              </Button>
+              <div className="flex flex-wrap justify-end gap-2">
               {isAgent && (
                 <Button
                   type="button"
@@ -729,6 +858,7 @@ export default function TicketChat({
                   </>
                 )}
               </Button>
+              </div>
             </div>
             {!canSend && (
               <p className="text-xs text-muted-foreground">Ce lien est en lecture seule.</p>

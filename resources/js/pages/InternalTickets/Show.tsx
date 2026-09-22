@@ -30,7 +30,6 @@ type Ticket = {
 
 export default function ShowInternalTicket({ ticket, canProcess }: { ticket: Ticket; canProcess: boolean }) {
   const [processing, setProcessing] = useState(false)
-  const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? ''
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Tickets internes', href: '/internal-tickets' },
@@ -42,7 +41,6 @@ export default function ShowInternalTicket({ ticket, canProcess }: { ticket: Tic
     setProcessing(true)
     router.post(`/internal-tickets/${ticket.id}/process`, {
       _method: 'patch',
-      ...(csrfToken ? { _token: csrfToken } : {}),
     }, {
       onFinish: () => setProcessing(false),
     })

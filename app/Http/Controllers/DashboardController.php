@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Commande;
 use App\Notifications\AgentMentionNotification;
 use App\Notifications\AgentTicketReplyNotification;
+use App\Notifications\DevisMentionNotification;
 use App\Notifications\InboundMailNeedsReviewNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -243,6 +244,7 @@ class DashboardController extends Controller
                 ->whereIn('type', [
                     AgentMentionNotification::class,
                     AgentTicketReplyNotification::class,
+                    DevisMentionNotification::class,
                     InboundMailNeedsReviewNotification::class,
                 ])
                 ->latest()
@@ -279,6 +281,24 @@ class DashboardController extends Controller
         return $notifications->map(function ($notification) use ($ticketsById) {
             $data = is_array($notification->data) ? $notification->data : [];
             $notificationType = (string) ($data['type'] ?? '');
+
+            if ($notificationType === 'devis_mention') {
+                $excerpt = trim((string) ($data['excerpt'] ?? ''));
+                $reason = trim((string) ($data['reason'] ?? 'Nouveau message sur un devis.'));
+
+                return $this->makeInsight([
+                    'kind' => 'devis',
+                    'severity' => 'notification',
+                    'title' => 'Mention sur un devis',
+                    'reason' => $excerpt !== '' ? $reason . ' « ' . $excerpt . ' »' : $reason,
+                    'action_label' => 'Ouvrir le devis',
+                    'href' => is_string($data['href'] ?? null) ? $data['href'] : '/devis/' . (int) ($data['devis_id'] ?? 0),
+                    'entity_id' => 'devis-mention-' . $notification->id,
+                    'age_label' => $this->formatSinceLabel($notification->created_at),
+                    'tags' => ['Notification', 'Devis', 'Mention @'],
+                    'ticket' => null,
+                ]);
+            }
 
             if ($notificationType === 'inbound_mail_needs_review') {
                 $sender = trim((string) ($data['sender_email'] ?? ''));
