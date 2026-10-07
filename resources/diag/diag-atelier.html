@@ -1015,17 +1015,33 @@ function buildReport(aida, hw){
 function cpuInfo(name){
   const n = name || '';
   let m;
+  const genLabel = g => `Intel Core ${g===1 ? '1re' : g+'e'} génération`;
   if (/Core\s*\(?TM\)?\s*Ultra|Core Ultra/i.test(n)) return {vendor:'intel', gen:15, label:'Intel Core Ultra'};
-  if ((m = n.match(/Core\s*(?:\(TM\)\s*)?i[3579]-(\d{4,5})/i))){
+  if ((m = n.match(/Core\s*(?:\(TM\)\s*)?i[3579]-(\d{3,5})/i))){
     const digits = m[1];
-    const gen = digits.length===5 ? parseInt(digits.slice(0,2)) : parseInt(digits[0]);
-    return {vendor:'intel', gen, label:`Intel Core ${gen}e génération`};
+    // 5 digits (10700, 12400…) and 4-digit mobile models from 10th gen on
+    // (1035G1, 1135G7, 1235U, 1334U, 1360P…) carry the generation in the first two digits.
+    // 3 digits (520M, 920…) are 1st gen; other 4 digits (2520M, 8250U…) use the first digit.
+    const gen = digits.length===5 || /^1[0-4]/.test(digits) && digits.length===4 ? parseInt(digits.slice(0,2))
+              : digits.length===3 ? 1 : parseInt(digits[0]);
+    return {vendor:'intel', gen, label:genLabel(gen)};
   }
+  // 1st gen as reported by Windows: "Core(TM) i5 CPU M 520", "Core(TM) i7 CPU 920"
+  if (/Core\s*(?:\(TM\)\s*)?i[357]\s+CPU\s+(?:[A-Z]\s+)?\d{3}\b/i.test(n)) return {vendor:'intel', gen:1, label:genLabel(1)};
+  // Core i3-N300/N305 and "Intel Processor N100/N200": Alder Lake-N, 12th gen platform
+  if (/Core\s*(?:\(TM\)\s*)?i3-N\d{3}|Intel\(R\)\s*(?:Processor\s*)?N\d{2,3}\b/i.test(n)) return {vendor:'intel', gen:12, label:'Intel série N (12e génération)'};
+  // Core 3/5/7 series 1-2 without the "i" (Core 5 120U, Core 7 150U, Core 5 210H): Raptor Lake, 13th gen
+  if ((m = n.match(/Core\s*(?:\(TM\)\s*)?([357])\s+(\d)\d{2}[A-Z]/i))) return {vendor:'intel', gen:13, label:`Intel Core ${m[1]} série ${m[2]} (13e génération)`};
   if (/Core\s*(?:\(TM\))?\s*2|Pentium\(R\) Dual|Atom/i.test(n)) return {vendor:'intel', gen:1, label:'Intel ancienne génération'};
   if ((m = n.match(/Ryzen\s*(?:\d|Threadripper)\s*(?:PRO\s*)?(\d)\d{3}/i))){
     const series = parseInt(m[1]);
     return {vendor:'amd-ryzen', gen:series, label:`AMD Ryzen série ${series}000`};
   }
+  // Newer Ryzen naming (Ryzen AI 9 HX 370, Ryzen AI Max+, Ryzen Z1…): all post-Zen 2
+  if (/Ryzen/i.test(n)) return {vendor:'amd-ryzen', gen:9, label:/Ryzen\s*AI/i.test(n) ? 'AMD Ryzen AI' : 'AMD Ryzen'};
+  // Zen-based Athlon (Athlon Gold/Silver, 200GE, 3000G, 300U, 3050U, 7120U) and EPYC
+  if (/Athlon\s*(?:\(tm\)\s*)?(?:Gold|Silver)|Athlon.*\b(?:[23]\d{2}(?:GE|G|U)|3\d{3}(?:GE|G|U|C|e)|7\d{3}U)\b/i.test(n)) return {vendor:'amd-ryzen', gen:2, label:'AMD Athlon (architecture Zen)'};
+  if (/EPYC/i.test(n)) return {vendor:'amd-ryzen', gen:2, label:'AMD EPYC'};
   if (/AMD/i.test(n)) return {vendor:'amd-old', gen:0, label:'AMD pré-Ryzen'};
   return {vendor:'unknown', gen:null, label:null};
 }
