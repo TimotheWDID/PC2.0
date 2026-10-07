@@ -102,6 +102,11 @@ class User extends Authenticatable
         return $this->hasMany(Devis::class);
     }
 
+    public function remoteSubscriptions(): HasMany
+    {
+        return $this->hasMany(RemoteSubscription::class);
+    }
+
     public function internalTickets(): HasMany
     {
         return $this->hasMany(InternalTicket::class);

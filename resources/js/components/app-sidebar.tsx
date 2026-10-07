@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Bell, BookOpen, Computer, FilePlus, FileText, Folder, HardHat, LayoutGrid, Mail, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
+import { Bell, BookOpen, Computer, FilePlus, FileText, Folder, HardHat, LayoutGrid, Mail, MonitorSmartphone, ShieldCheck, ShoppingCart, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -68,6 +68,11 @@ const mainNavItems: NavItem[] = [
         title: 'Appareils',
         href: '/devices',
         icon: Computer,
+    },
+    {
+        title: 'Abonnements NinjaOne',
+        href: '/remote-subscriptions',
+        icon: MonitorSmartphone,
     },
     {
         title: 'Agents',
