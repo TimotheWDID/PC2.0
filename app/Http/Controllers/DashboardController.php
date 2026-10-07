@@ -7,6 +7,7 @@ use App\Notifications\AgentMentionNotification;
 use App\Notifications\AgentTicketReplyNotification;
 use App\Notifications\DevisMentionNotification;
 use App\Notifications\InboundMailNeedsReviewNotification;
+use App\Notifications\RemoteSubscriptionExpiringNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -246,6 +247,7 @@ class DashboardController extends Controller
                     AgentTicketReplyNotification::class,
                     DevisMentionNotification::class,
                     InboundMailNeedsReviewNotification::class,
+                    RemoteSubscriptionExpiringNotification::class,
                 ])
                 ->latest()
                 ->limit(12)
@@ -323,6 +325,21 @@ class DashboardController extends Controller
                     'entity_id' => 'inbound-' . $notification->id,
                     'age_label' => $this->formatSinceLabel($notification->created_at),
                     'tags' => ['Notification', 'Mail entrant'],
+                    'ticket' => null,
+                ]);
+            }
+
+            if ($notificationType === 'remote_subscription_expiring') {
+                return $this->makeInsight([
+                    'kind' => 'subscription',
+                    'severity' => 'notification',
+                    'title' => 'Abonnement NinjaOne bientot termine',
+                    'reason' => trim((string) ($data['reason'] ?? 'Un abonnement NinjaOne arrive a son terme.')),
+                    'action_label' => "Voir l'abonnement",
+                    'href' => is_string($data['href'] ?? null) ? $data['href'] : '/remote-subscriptions',
+                    'entity_id' => 'subscription-expiring-' . $notification->id,
+                    'age_label' => $this->formatSinceLabel($notification->created_at),
+                    'tags' => ['Notification', 'NinjaOne'],
                     'ticket' => null,
                 ]);
             }

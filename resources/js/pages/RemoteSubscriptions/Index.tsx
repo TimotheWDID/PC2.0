@@ -2,8 +2,10 @@ import Heading from '@/components/heading';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import {
     emptySubscriptionForm,
+    ExpiryBadge,
     formatMinutes,
     formToPayload,
+    isExpiringSoon,
     RemainingTimeBar,
     RemoteSubscriptionFields,
     subscriptionStatusLabels,
@@ -73,10 +75,12 @@ function StatusBadge({
 
 export default function RemoteSubscriptionsIndex({
     subscriptions,
+    plans,
     users,
     filters,
 }: {
     subscriptions: RemoteSubscriptionRow[];
+    plans: string[];
     users: ClientOption[];
     filters: { q?: string; status?: string };
 }) {
@@ -121,6 +125,7 @@ export default function RemoteSubscriptionsIndex({
             overrun: active.filter(
                 (subscription) => subscription.remaining_minutes < 0,
             ).length,
+            expiring: subscriptions.filter(isExpiringSoon).length,
         };
     }, [subscriptions]);
 
@@ -173,7 +178,7 @@ export default function RemoteSubscriptionsIndex({
                     </Button>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm">
@@ -207,6 +212,20 @@ export default function RemoteSubscriptionsIndex({
                         <CardContent>
                             <p className="text-2xl font-semibold">
                                 {totals.overrun}
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm">
+                                À renouveler (30 jours)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p
+                                className={`text-2xl font-semibold ${totals.expiring > 0 ? 'text-amber-600' : ''}`}
+                            >
+                                {totals.expiring}
                             </p>
                         </CardContent>
                     </Card>
@@ -300,8 +319,11 @@ export default function RemoteSubscriptionsIndex({
                                                     : ''}
                                             </p>
                                         </div>
-                                        <div>
+                                        <div className="flex flex-wrap gap-1">
                                             <StatusBadge
+                                                subscription={subscription}
+                                            />
+                                            <ExpiryBadge
                                                 subscription={subscription}
                                             />
                                         </div>
@@ -434,6 +456,7 @@ export default function RemoteSubscriptionsIndex({
                                 }))
                             }
                             errors={errors}
+                            plans={plans}
                         />
 
                         <div className="flex justify-end gap-2">

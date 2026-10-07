@@ -6,6 +6,7 @@ use App\Models\RemoteIntervention;
 use App\Models\RemoteSubscription;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\RemoteSubscriptionExpiringNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -48,6 +49,7 @@ class RemoteSubscriptionController extends Controller
 
         return Inertia::render('RemoteSubscriptions/Index', [
             'subscriptions' => $subscriptions,
+            'plans' => RemoteSubscription::PLANS,
             'users' => User::query()
                 ->select('id', 'first_name', 'last_name', 'email')
                 ->orderBy('last_name')
@@ -69,8 +71,14 @@ class RemoteSubscriptionController extends Controller
             ->with('success', 'Abonnement créé.');
     }
 
-    public function show(RemoteSubscription $remoteSubscription)
+    public function show(Request $request, RemoteSubscription $remoteSubscription)
     {
+        // Opening the subscription settles its expiry alert for this agent
+        $request->user()->unreadNotifications()
+            ->where('type', RemoteSubscriptionExpiringNotification::class)
+            ->where('data->remote_subscription_id', $remoteSubscription->id)
+            ->update(['read_at' => now()]);
+
         $remoteSubscription
             ->load('user:id,first_name,last_name,email,phone')
             ->loadSum('interventions', 'duration_minutes')
@@ -107,6 +115,7 @@ class RemoteSubscriptionController extends Controller
             'subscription' => $this->present($remoteSubscription),
             'interventions' => $interventions,
             'tickets' => $tickets,
+            'plans' => RemoteSubscription::PLANS,
         ]);
     }
 
@@ -191,6 +200,7 @@ class RemoteSubscriptionController extends Controller
             'started_on' => $subscription->started_on?->toDateString(),
             'ends_on' => $subscription->ends_on?->toDateString(),
             'is_expired' => $subscription->isExpired(),
+            'days_left' => $subscription->daysLeft(),
             'included_minutes' => $subscription->included_minutes,
             'used_minutes' => $used,
             'remaining_minutes' => $subscription->included_minutes - $used,

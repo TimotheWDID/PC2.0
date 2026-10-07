@@ -5,6 +5,8 @@ use App\Models\RemoteIntervention;
 use App\Models\RemoteSubscription;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\RemoteSubscriptionExpiringNotification;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function remoteAgent(): User
@@ -179,4 +181,60 @@ it('updates a subscription and deletes interventions', function () {
         ->assertRedirect();
 
     expect(RemoteIntervention::count())->toBe(0);
+});
+
+it('offers the NinjaOne plans on the subscriptions pages', function () {
+    $this->actingAs(remoteAgent())
+        ->get(route('remote-subscriptions.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('RemoteSubscriptions/Index', false)
+            ->where('plans', RemoteSubscription::PLANS));
+});
+
+it('notifies active agents once when a subscription ends within 30 days', function () {
+    Notification::fake();
+    $agent = remoteAgent();
+    $client = User::factory()->create();
+
+    $soon = remoteSubscription(['user_id' => $client->id, 'ends_on' => now()->addDays(20)->toDateString()]);
+    remoteSubscription(['ends_on' => now()->addDays(60)->toDateString()]);
+    remoteSubscription(['ends_on' => now()->addDays(10)->toDateString(), 'status' => 'ended']);
+    remoteSubscription(['ends_on' => now()->subDay()->toDateString()]);
+
+    $this->artisan('supportpc:remote-subscriptions-expiring')->assertSuccessful();
+
+    Notification::assertSentToTimes($agent, RemoteSubscriptionExpiringNotification::class, 1);
+    Notification::assertSentTo($agent, RemoteSubscriptionExpiringNotification::class,
+        fn ($notification) => $notification->subscription->is($soon));
+    Notification::assertNotSentTo($client, RemoteSubscriptionExpiringNotification::class);
+    expect($soon->fresh()->expiry_notified_at)->not->toBeNull();
+
+    $this->artisan('supportpc:remote-subscriptions-expiring')->assertSuccessful();
+    Notification::assertSentToTimes($agent, RemoteSubscriptionExpiringNotification::class, 1);
+
+    // Renewing the subscription re-arms the alert
+    $soon->fresh()->update(['ends_on' => now()->addYear()->toDateString()]);
+    expect($soon->fresh()->expiry_notified_at)->toBeNull();
+});
+
+it('shows the expiry alert on the dashboard until the subscription is opened', function () {
+    $agent = remoteAgent();
+    $subscription = remoteSubscription(['ends_on' => now()->addDays(5)->toDateString()]);
+
+    $this->artisan('supportpc:remote-subscriptions-expiring')->assertSuccessful();
+
+    $data = $agent->unreadNotifications()->firstOrFail()->data;
+    expect($data['type'])->toBe('remote_subscription_expiring')
+        ->and($data['days_left'])->toBe(5)
+        ->and($data['href'])->toBe('/remote-subscriptions/'.$subscription->id);
+
+    $this->actingAs($agent)->get(route('dashboard'))->assertOk();
+
+    $this->actingAs($agent)
+        ->get(route('remote-subscriptions.show', $subscription))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('subscription.days_left', 5));
+
+    expect($agent->unreadNotifications()->count())->toBe(0);
 });
