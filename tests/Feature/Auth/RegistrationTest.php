@@ -1,12 +1,14 @@
 <?php
 
-test('registration screen can be rendered', function () {
+use App\Models\User;
+
+test('registration screen is disabled', function () {
     $response = $this->get(route('register'));
 
-    $response->assertStatus(200);
+    $response->assertForbidden();
 });
 
-test('new users can register', function () {
+test('new users cannot register', function () {
     $response = $this->post(route('register.store'), [
         'first_name' => 'Test',
         'last_name' => 'User',
@@ -15,6 +17,7 @@ test('new users can register', function () {
         'password_confirmation' => 'Password123!',
     ]);
 
-    $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertForbidden();
+    $this->assertGuest();
+    expect(User::where('email', 'test@example.com')->exists())->toBeFalse();
 });
