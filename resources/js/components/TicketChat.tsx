@@ -771,7 +771,7 @@ export default function TicketChat({
                         const over = len - effectiveSmsMax;
                         return (
                           <span className={`text-xs ${over > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
-                            SMS : {len}/{effectiveSmsMax} car.
+                            SMS : {len}/{effectiveSmsMax} car.
                             {currentTemplate?.hasMagicLink && magicLinkLength > 0 && (
                               <span className="opacity-60"> (+{magicLinkLength} lien)</span>
                             )}

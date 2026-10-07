@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\Commande;
 use App\Models\Device;
 use App\Models\DeviceEvent;
+use App\Models\Diagnostic;
 use App\Models\TicketTimelineEvent;
 use App\Notifications\TicketCreatedCustomerNotification;
 use App\Support\Sms\SmsSettings;
@@ -1586,6 +1587,29 @@ class TicketController extends Controller
                 ]);
         }
 
+        $diagnostics = [];
+        if ($agentContext) {
+            $diagnostics = $ticket->diagnostics()
+                ->with(['technician:id,first_name,last_name'])
+                ->latest()
+                ->limit(20)
+                ->get()
+                ->map(fn(Diagnostic $diagnostic) => [
+                    'id' => $diagnostic->id,
+                    'machine_name' => $diagnostic->machine_name,
+                    'overall' => $diagnostic->overall,
+                    'overall_label' => $diagnostic->overall_label,
+                    'viability_score' => $diagnostic->viability_score,
+                    'viability_level' => $diagnostic->viability_level,
+                    'viability_label' => $diagnostic->viability_label,
+                    'created_at' => $diagnostic->created_at?->toIso8601String(),
+                    'report_url' => route('tickets.diagnostics.show', [$ticket, $diagnostic], false),
+                    'technician' => $diagnostic->technician
+                        ? trim(($diagnostic->technician->first_name ?? '') . ' ' . ($diagnostic->technician->last_name ?? ''))
+                        : null,
+                ]);
+        }
+
         $smsSettings = SmsSettings::load();
 
         return Inertia::render('Tickets/Show', [
@@ -1667,6 +1691,7 @@ class TicketController extends Controller
             'userDevices' => $ticket->user ? $ticket->user->devices->map(fn(Device $device) => $this->serializeDevice($device))->values() : [],
             'timelineEvents' => $timelineEvents,
             'deviceEvents' => $deviceEvents,
+            'diagnostics' => $diagnostics,
             'timelineTemplateSettings' => $agentContext ? TicketTimelineTemplateSettings::load() : ['templates' => []],
             'actionListSettings' => $agentContext ? TicketActionListSettings::load() : ['lists' => []],
         ]);
