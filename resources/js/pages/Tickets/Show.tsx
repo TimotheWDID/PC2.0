@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2 } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2, Stethoscope, ExternalLink } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -109,8 +109,15 @@ const builtInEventTypeLabels: Record<string, string> = {
   commande_updated_direct: 'Commande modifiee',
   commande_status_changed_direct: 'Statut commande',
   device_event_added: 'Intervention appareil',
+  diagnostic_added: 'Diagnostic',
   task_completed: 'Action realisee',
   task_reopened: 'Action reouverte',
+};
+
+const diagnosticBadgeClass: Record<string, string> = {
+  good: 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  warn: 'border-amber-600/40 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+  crit: 'border-red-600/40 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
 };
 
 const getTimelineAccent = (eventType: string) => {
@@ -211,7 +218,7 @@ type PredefinedTaskList = {
   tasks: string[];
 };
 
-export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], timelineTemplateSettings = { templates: [] }, actionListSettings = { lists: [] } }: any) {
+export default function Show({ ticket, categories, agents, commandes, userDevices = [], timelineEvents = [], deviceEvents = [], diagnostics = [], timelineTemplateSettings = { templates: [] }, actionListSettings = { lists: [] } }: any) {
   const { auth } = usePage().props as any;
   const isAgent = !!auth.user?.agent;
   const [pendingTimelineActions, setPendingTimelineActions] = useState<string[]>([]);
@@ -224,6 +231,15 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
   const [isSavingInternalNote, setIsSavingInternalNote] = useState(false);
   const [isAddingTimelineEvent, setIsAddingTimelineEvent] = useState(false);
   const [isAddingDeviceEvent, setIsAddingDeviceEvent] = useState(false);
+  const diagHref = `/tickets/${ticket.id}/diag`;
+
+  const handleDeleteDiagnostic = (diagnosticId: number) => {
+    if (!window.confirm('Supprimer ce diagnostic et ses fichiers ?')) {
+      return;
+    }
+
+    router.delete(`/tickets/${ticket.id}/diagnostics/${diagnosticId}`, { preserveScroll: true });
+  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [broughtOtherItemInput, setBroughtOtherItemInput] = useState('');
@@ -1128,6 +1144,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
               ← Retour
             </Button>
           </Link>
+          {isAgent && (
+            <Button asChild variant="outline" size="sm">
+              <a href={diagHref}>
+                <Stethoscope className="mr-1 h-4 w-4" />
+                Lancer le diag
+              </a>
+            </Button>
+          )}
         </div>
         <div className="mb-3 space-y-2">
           <h1 className="break-words text-xl font-bold tracking-tight sm:text-4xl">{ticket.title ?? 'Ticket'}</h1>
@@ -2192,6 +2216,65 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+            )}
+
+            {isAgent && (
+              <Card id="ticket-diagnostic" className="order-3 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Stethoscope className="h-4 w-4" />
+                      Diagnostic
+                    </CardTitle>
+                    <Button asChild size="sm">
+                      <a href={diagHref}>{diagnostics.length > 0 ? 'Nouveau diag' : 'Lancer le diag'}</a>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2 pt-0">
+                  {diagnostics.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Aucun diagnostic pour ce ticket. Lancez le Diag, déposez les exports HWiNFO du poste puis cliquez sur « Envoyer au ticket » : le rapport est enregistré ici et la fiche appareil est remplie.
+                    </p>
+                  ) : (
+                    diagnostics.map((diagnostic: any) => (
+                      <div key={diagnostic.id} className="rounded-md border p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge variant="outline" className={diagnosticBadgeClass[diagnostic.overall] ?? ''}>
+                              {diagnostic.overall_label ?? 'Diagnostic partiel'}
+                            </Badge>
+                            {diagnostic.viability_score !== null && diagnostic.viability_score !== undefined && (
+                              <Badge variant="outline" className={diagnosticBadgeClass[diagnostic.viability_level] ?? ''}>
+                                Viabilité {diagnostic.viability_score}/100
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{formatDateTime(diagnostic.created_at)}</span>
+                        </div>
+                        <p className="mt-2 text-sm">
+                          {diagnostic.machine_name ?? 'Poste sans nom'}
+                          {diagnostic.viability_label ? ` · ${diagnostic.viability_label}` : ''}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[11px] text-muted-foreground">{diagnostic.technician ?? ''}</span>
+                          <div className="flex items-center gap-1">
+                            <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+                              <a href={diagnostic.report_url}>
+                                <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                                Ouvrir le rapport
+                              </a>
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => handleDeleteDiagnostic(diagnostic.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {ticket.device && (

@@ -237,6 +237,11 @@ class Ticket extends Model
         return $this->hasMany(TicketTimelineEvent::class);
     }
 
+    public function diagnostics(): HasMany
+    {
+        return $this->hasMany(Diagnostic::class);
+    }
+
     public function devis(): HasMany
     {
         return $this->hasMany(Devis::class);

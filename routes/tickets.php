@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DiagnosticController;
 use App\Http\Controllers\InternalTicketController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketMagicLinkController;
@@ -33,6 +34,14 @@ Route::middleware('auth')->group(function () {
         Route::get('tickets/inbound-mails', [InboundMailReviewController::class, 'index'])->name('tickets.inbound-mails.index');
         Route::post('tickets/inbound-mails/{inboundEmail}/attach', [InboundMailReviewController::class, 'attachToTicket'])->name('tickets.inbound-mails.attach');
         Route::post('tickets/inbound-mails/{inboundEmail}/dismiss', [InboundMailReviewController::class, 'dismiss'])->name('tickets.inbound-mails.dismiss');
+
+        // Diag Atelier: run a diagnostic from a ticket and keep its report there
+        Route::get('tickets/{ticket}/diag', [DiagnosticController::class, 'tool'])->whereNumber('ticket')->name('tickets.diag');
+        Route::post('tickets/{ticket}/diagnostics', [DiagnosticController::class, 'store'])->whereNumber('ticket')->name('tickets.diagnostics.store');
+        Route::get('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'show'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.show');
+        Route::get('tickets/{ticket}/diagnostics/{diagnostic}/files/{source}', [DiagnosticController::class, 'file'])->whereNumber(['ticket', 'diagnostic'])->whereIn('source', ['aida', 'hwinfo', 'battery'])->name('tickets.diagnostics.file');
+        Route::post('tickets/{ticket}/diagnostics/{diagnostic}/inventory', [DiagnosticController::class, 'applyInventory'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.inventory');
+        Route::delete('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'destroy'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.destroy');
     });
 
     Route::middleware('admin')->group(function () {
