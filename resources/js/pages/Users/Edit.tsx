@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import LogModal from '@/components/LogModal';
 import MobileNativeNav from '@/components/mobile-native-nav';
+import ClientIdentityFields, { type ClientIdentityData, type ClientType, type CompanyOption } from '@/components/client-identity-fields';
 import { Mail, MessageSquare, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
 
@@ -49,7 +50,18 @@ type Device = {
   display_name: string;
 };
 
+type CompanyMember = {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
+
 type UserEditForm = {
+  client_type: ClientType;
+  company_name: string;
+  siret: string;
+  company_id: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -95,7 +107,19 @@ const getStatusBadgeVariant = (status: string | null): 'default' | 'secondary' |
   return 'outline';
 };
 
-export default function Edit({ user, tickets = [], devices = [] }: { user: any; tickets: UserTicket[]; devices: Device[] }) {
+export default function Edit({
+  user,
+  tickets = [],
+  devices = [],
+  companies = [],
+  members = [],
+}: {
+  user: any;
+  tickets: UserTicket[];
+  devices: Device[];
+  companies?: CompanyOption[];
+  members?: CompanyMember[];
+}) {
   const { auth } = usePage().props as any;
   const isAdmin = auth?.user?.agent?.is_admin;
 
@@ -106,6 +130,10 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
 
   const { data, setData, put, processing, errors } = useForm<UserEditForm>({
+    client_type: (user?.client_type ?? 'person') as ClientType,
+    company_name: user?.company_name ?? '',
+    siret: user?.siret ?? '',
+    company_id: user?.company_id ? String(user.company_id) : '',
     first_name: user?.first_name ?? '',
     last_name: user?.last_name ?? '',
     email: user?.email ?? '',
@@ -220,9 +248,9 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Éditer un utilisateur" />
+      <Head title="Modifier un client" />
       <div className="w-full space-y-4 py-4 pb-24 lg:pb-0">
-        <Heading title="Modifier utilisateur" description={`Modifier l'utilisateur #${user?.id}`} />
+        <Heading title="Modifier le client" description={`${user?.name ?? 'Client'} (#${user?.id})`} />
 
         <Card className="border-border/70 shadow-sm lg:shadow-md/10">
           <CardHeader className="p-3 sm:p-6 lg:border-b lg:bg-muted/20">
@@ -252,29 +280,18 @@ export default function Edit({ user, tickets = [], devices = [] }: { user: any; 
               }}
             >
               <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="first_name">Prénom *</Label>
-                  <Input
-                    id="first_name"
-                    placeholder="Prénom"
-                    name="first_name"
-                    value={data.first_name}
-                    onChange={(e) => setData('first_name', e.target.value)}
-                  />
-                  {errors.first_name && <p className="text-sm text-destructive">{errors.first_name}</p>}
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="last_name">Nom *</Label>
-                  <Input
-                    id="last_name"
-                    placeholder="Nom"
-                    name="last_name"
-                    value={data.last_name}
-                    onChange={(e) => setData('last_name', e.target.value)}
-                  />
-                  {errors.last_name && <p className="text-sm text-destructive">{errors.last_name}</p>}
-                </div>
+                <ClientIdentityFields
+                  data={data as ClientIdentityData}
+                  onChange={(key, value) => setData((current) => ({ ...current, [key]: value }))}
+                  errors={errors}
+                  companies={companies}
+                  lockType={data.client_type === 'company' && members.length > 0}
+                />
+                {data.client_type === 'company' && members.length > 0 && (
+                  <p className="-mt-2 text-xs text-muted-foreground">
+                    {members.length} personne{members.length > 1 ? 's' : ''} rattachée{members.length > 1 ? 's' : ''} à cette entreprise.
+                  </p>
+                )}
 
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>

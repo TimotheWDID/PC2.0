@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateFr, formatDateTimeFr } from '@/lib/datetime';
+import { ClientTypeBadge } from '@/components/client-identity-fields';
 
 type UserTicket = {
   id: number;
@@ -36,8 +37,19 @@ type Device = {
   display_name: string;
 };
 
+type CompanyMember = {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
+
 type UserShow = {
   id: number;
+  client_type?: 'person' | 'company' | null;
+  company_name?: string | null;
+  siret?: string | null;
+  company?: { id: number; name: string } | null;
   first_name: string | null;
   last_name: string | null;
   name: string | null;
@@ -86,14 +98,25 @@ const badgeVariantForTicketStatus = (status: string | null): 'default' | 'second
   return 'outline';
 };
 
-export default function Show({ user, tickets = [], devices = [] }: { user: UserShow; tickets: UserTicket[]; devices: Device[] }) {
+export default function Show({
+  user,
+  tickets = [],
+  devices = [],
+  members = [],
+}: {
+  user: UserShow;
+  tickets: UserTicket[];
+  devices: Device[];
+  members?: CompanyMember[];
+}) {
   const page = usePage();
   const auth = page.props as any;
   const isAdmin = !!(auth?.auth?.user?.is_admin || auth?.auth?.user?.agent?.is_admin);
-  const displayName = user.name || [user.first_name, user.last_name].filter(Boolean).join(' ') || `Utilisateur #${user.id}`;
+  const isCompany = user.client_type === 'company';
+  const displayName = user.name || [user.first_name, user.last_name].filter(Boolean).join(' ') || `Client #${user.id}`;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Utilisateurs', href: '/users' },
+    { title: isCompany ? 'Entreprises' : 'Personnes', href: `/users?type=${isCompany ? 'company' : 'person'}` },
     { title: displayName, href: `/users/${user.id}/show` },
   ];
 
@@ -101,7 +124,7 @@ export default function Show({ user, tickets = [], devices = [] }: { user: UserS
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={displayName} />
       <div className="space-y-4 py-2 pb-24 sm:py-4 lg:pb-0">
-        <Heading title={displayName} description={`Fiche utilisateur #${user.id}`} />
+        <Heading title={displayName} description={`Fiche ${isCompany ? 'entreprise' : 'client'} #${user.id}`} />
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
@@ -138,12 +161,30 @@ export default function Show({ user, tickets = [], devices = [] }: { user: UserS
             <CardContent className="space-y-3 text-sm">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">#{user.id}</Badge>
+                <ClientTypeBadge type={user.client_type} />
                 <Badge variant="outline">{notificationLabels[user.default_notification_preference ?? ''] ?? 'Préférence non définie'}</Badge>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Nom</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{isCompany ? 'Raison sociale' : 'Nom'}</p>
                 <p className="font-medium">{displayName}</p>
               </div>
+              {isCompany ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">SIRET</p>
+                  <p>{user.siret || '-'}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Entreprise</p>
+                  {user.company ? (
+                    <Link href={`/users/${user.company.id}/show`} className="font-medium text-primary hover:underline">
+                      {user.company.name}
+                    </Link>
+                  ) : (
+                    <p>-</p>
+                  )}
+                </div>
+              )}
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Email</p>
                 <p>{user.email || '-'}</p>
@@ -194,6 +235,34 @@ export default function Show({ user, tickets = [], devices = [] }: { user: UserS
               </CardHeader>
             </Card>
 
+            {isCompany && (
+              <Card>
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle>Personnes rattachées</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{members.length}</Badge>
+                    {isAdmin && (
+                      <Link href={`/users/create?type=person&company_id=${user.id}`}>
+                        <Button variant="outline" size="sm">Ajouter une personne</Button>
+                      </Link>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {members.length ? (
+                    members.map((member) => (
+                      <Link key={member.id} href={`/users/${member.id}/show`} className="flex flex-col gap-1 rounded-md border p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="font-medium">{member.name}</p>
+                        <p className="text-sm text-muted-foreground">{[member.email, member.phone].filter(Boolean).join(' · ') || '-'}</p>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Aucune personne rattachée à cette entreprise.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>Appareils liés</CardTitle>
@@ -218,7 +287,7 @@ export default function Show({ user, tickets = [], devices = [] }: { user: UserS
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">Aucun appareil lié à cet utilisateur.</p>
+                  <p className="text-sm text-muted-foreground">Aucun appareil lié à ce client.</p>
                 )}
               </CardContent>
             </Card>
@@ -251,7 +320,7 @@ export default function Show({ user, tickets = [], devices = [] }: { user: UserS
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">Aucun ticket lié à cet utilisateur.</p>
+                  <p className="text-sm text-muted-foreground">Aucun ticket lié à ce client.</p>
                 )}
               </CardContent>
             </Card>
