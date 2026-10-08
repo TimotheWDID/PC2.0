@@ -138,6 +138,7 @@ class RemoteSubscriptionController extends Controller
             'device_type' => $device->device_type,
             'asset_tag' => $device->asset_tag,
             'status' => $device->status,
+            'ninjaone_url' => $device->ninjaone_url,
         ];
 
         $linkedDevices = $remoteSubscription->devices()->orderBy('brand')->orderBy('model')->get();

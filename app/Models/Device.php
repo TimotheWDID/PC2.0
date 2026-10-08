@@ -16,6 +16,7 @@ class Device extends Model
         'model',
         'serial_number',
         'asset_tag',
+        'ninjaone_device_id',
         'purchase_date',
         'warranty_start_date',
         'warranty_end_date',
@@ -54,6 +55,33 @@ class Device extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * Accepts a NinjaOne device id or a pasted device URL
+     * (".../#/deviceDashboard/123/overview") and keeps the id only.
+     */
+    public static function normalizeNinjaOneId(mixed $value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('~deviceDashboard/(\d+)~i', $value, $matches)) {
+            return $matches[1];
+        }
+
+        return $value;
+    }
+
+    public function getNinjaoneUrlAttribute(): ?string
+    {
+        if (! $this->ninjaone_device_id) {
+            return null;
+        }
+
+        return rtrim((string) config('services.ninjaone.url'), '/').'/#/deviceDashboard/'.$this->ninjaone_device_id.'/overview';
     }
 
     public function remoteSubscriptions(): BelongsToMany

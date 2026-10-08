@@ -51,4 +51,9 @@ return [
         'verify_ssl' => env('SMSFACTORY_VERIFY_SSL', true),
     ],
 
+    // NinjaOne console used to build "open in NinjaOne" device links
+    'ninjaone' => [
+        'url' => env('NINJAONE_URL', 'https://eu.ninjarmm.com'),
+    ],
+
 ];

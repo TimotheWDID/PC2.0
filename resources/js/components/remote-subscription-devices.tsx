@@ -9,7 +9,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Link, router } from '@inertiajs/react';
-import { X } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 import React from 'react';
 
 export type SubscriptionDevice = {
@@ -18,6 +18,7 @@ export type SubscriptionDevice = {
     device_type: string;
     asset_tag: string | null;
     status: string;
+    ninjaone_url: string | null;
 };
 
 export function RemoteSubscriptionDevices({
@@ -86,6 +87,23 @@ export function RemoteSubscriptionDevices({
                                 >
                                     {device.display_name}
                                 </Link>
+                                {device.ninjaone_url && (
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7"
+                                    >
+                                        <a
+                                            href={device.ninjaone_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                            NinjaOne
+                                        </a>
+                                    </Button>
+                                )}
                                 {device.asset_tag && (
                                     <Badge variant="outline">
                                         {device.asset_tag}

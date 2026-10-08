@@ -189,6 +189,8 @@ class DeviceController extends Controller
                 'display_name' => $device->display_name,
                 'serial_number' => $device->serial_number,
                 'asset_tag' => $device->asset_tag,
+                'ninjaone_device_id' => $device->ninjaone_device_id,
+                'ninjaone_url' => $device->ninjaone_url,
                 'status' => $device->status,
                 'purchase_date' => $device->purchase_date?->toDateString(),
                 'warranty_start_date' => $device->warranty_start_date?->toDateString(),
@@ -264,12 +266,15 @@ class DeviceController extends Controller
 
     public function store(Request $request, User $user)
     {
+        $this->normalizeNinjaOneInput($request);
+
         $validated = $request->validate([
             'device_type' => 'required|in:computer,phone,tablet,other',
             'brand' => 'nullable|string|max:120',
             'model' => 'required|string|max:120',
             'serial_number' => 'nullable|string|max:120|unique:devices,serial_number',
             'asset_tag' => 'nullable|string|max:120|unique:devices,asset_tag',
+            'ninjaone_device_id' => ['nullable', 'regex:/^[0-9]{1,32}$/'],
             'purchase_date' => 'nullable|date',
             'warranty_start_date' => 'nullable|date',
             'warranty_end_date' => 'nullable|date|after_or_equal:purchase_date',
@@ -298,12 +303,15 @@ class DeviceController extends Controller
             abort(404);
         }
 
+        $this->normalizeNinjaOneInput($request);
+
         $validated = $request->validate([
             'device_type' => 'required|in:computer,phone,tablet,other',
             'brand' => 'nullable|string|max:120',
             'model' => 'required|string|max:120',
             'serial_number' => 'nullable|string|max:120|unique:devices,serial_number,' . $device->id,
             'asset_tag' => 'nullable|string|max:120|unique:devices,asset_tag,' . $device->id,
+            'ninjaone_device_id' => ['nullable', 'regex:/^[0-9]{1,32}$/'],
             'purchase_date' => 'nullable|date',
             'warranty_start_date' => 'nullable|date',
             'warranty_end_date' => 'nullable|date|after_or_equal:purchase_date',
@@ -322,6 +330,15 @@ class DeviceController extends Controller
         $device->update($validated);
 
         return back()->with('success', 'Appareil mis a jour.');
+    }
+
+    private function normalizeNinjaOneInput(Request $request): void
+    {
+        if ($request->has('ninjaone_device_id')) {
+            $request->merge([
+                'ninjaone_device_id' => Device::normalizeNinjaOneId($request->input('ninjaone_device_id')),
+            ]);
+        }
     }
 
     public function destroy(User $user, Device $device)

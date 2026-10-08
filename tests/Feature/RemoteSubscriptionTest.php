@@ -323,3 +323,33 @@ it('links the client devices to a subscription', function () {
     expect($subscription->devices()->count())->toBe(0)
         ->and(\App\Models\Device::find($pc->id))->not->toBeNull();
 });
+
+it('stores the NinjaOne device id from an id or a pasted link', function () {
+    config(['services.ninjaone.url' => 'https://eu.ninjarmm.com']);
+    $agent = remoteAgent();
+    $client = User::factory()->create();
+    $device = \App\Models\Device::create(['user_id' => $client->id, 'device_type' => 'computer', 'model' => 'Latitude', 'status' => 'active']);
+
+    $payload = ['device_type' => 'computer', 'model' => 'Latitude', 'status' => 'active'];
+
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), [...$payload, 'ninjaone_device_id' => 'https://eu.ninjarmm.com/#/deviceDashboard/4521/overview'])
+        ->assertSessionHasNoErrors();
+
+    expect($device->fresh()->ninjaone_device_id)->toBe('4521')
+        ->and($device->fresh()->ninjaone_url)->toBe('https://eu.ninjarmm.com/#/deviceDashboard/4521/overview');
+
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), [...$payload, 'ninjaone_device_id' => 'pas un id'])
+        ->assertSessionHasErrors('ninjaone_device_id');
+
+    // Forms that do not send the field keep the stored id
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), $payload)
+        ->assertSessionHasNoErrors();
+    expect($device->fresh()->ninjaone_device_id)->toBe('4521');
+
+    $this->actingAs($agent)
+        ->get(route('devices.show', $device))
+        ->assertInertia(fn (Assert $page) => $page->where('device.ninjaone_url', 'https://eu.ninjarmm.com/#/deviceDashboard/4521/overview'));
+});

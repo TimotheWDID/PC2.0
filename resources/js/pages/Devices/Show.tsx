@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Eye, EyeOff, Wrench, Ticket, Plus } from 'lucide-react'
+import { Eye, EyeOff, ExternalLink, Wrench, Ticket, Plus } from 'lucide-react'
 import { formatDateTimeFr } from '@/lib/datetime'
 
 type DeviceShowProps = {
@@ -22,6 +22,8 @@ type DeviceShowProps = {
     display_name: string
     serial_number: string | null
     asset_tag: string | null
+    ninjaone_device_id: string | null
+    ninjaone_url: string | null
     status: string
     purchase_date: string | null
     warranty_start_date: string | null
@@ -99,12 +101,14 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent, re
   const isCurrentUserOwner = auth?.user?.id === device.user?.id
   const [showPassword, setShowPassword] = useState(false)
   const [editingDevice, setEditingDevice] = useState(false)
+  const [deviceErrors, setDeviceErrors] = useState<Record<string, string>>({})
   const [deviceForm, setDeviceForm] = useState({
     device_type: device.device_type || 'computer',
     brand: device.brand || '',
     model: device.model || '',
     serial_number: device.serial_number || '',
     asset_tag: device.asset_tag || '',
+    ninjaone_device_id: device.ninjaone_device_id || '',
     purchase_date: device.purchase_date || '',
     warranty_start_date: device.warranty_start_date || '',
     warranty_end_date: device.warranty_end_date || '',
@@ -163,7 +167,11 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent, re
       storage_gb: deviceForm.storage_gb ? Number(deviceForm.storage_gb) : null,
     }, {
       preserveScroll: true,
-      onSuccess: () => setEditingDevice(false),
+      onError: (errors) => setDeviceErrors(errors),
+      onSuccess: () => {
+        setDeviceErrors({})
+        setEditingDevice(false)
+      },
     })
   }
 
@@ -213,6 +221,19 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent, re
               <p><strong>Marque/Modele:</strong> {(device.brand || '-') + ' ' + (device.model || '')}</p>
               <p><strong>Serie:</strong> {device.serial_number || '-'}</p>
               <p><strong>Suivi:</strong> {device.asset_tag || '-'}</p>
+              {isAgent && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong>NinjaOne:</strong> {device.ninjaone_device_id || '-'}
+                  {device.ninjaone_url && (
+                    <Button asChild size="sm" variant="outline" className="h-7">
+                      <a href={device.ninjaone_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Ouvrir dans NinjaOne
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              )}
               <p><strong>IMEI:</strong> {device.imei || '-'}</p>
               <p><strong>OS:</strong> {device.os_name || '-'}</p>
               <p><strong>RAM/Stockage:</strong> {device.ram_gb || '-'} Go / {device.storage_gb || '-'} Go</p>
@@ -304,6 +325,18 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent, re
                       <Label>Numéro de suivi</Label>
                       <Input value={deviceForm.asset_tag} onChange={(e) => setDeviceForm({ ...deviceForm, asset_tag: e.target.value })} />
                     </div>
+                  </div>
+
+                  <div>
+                    <Label>ID NinjaOne (ou lien de l'appareil dans NinjaOne)</Label>
+                    <Input
+                      value={deviceForm.ninjaone_device_id}
+                      onChange={(e) => setDeviceForm({ ...deviceForm, ninjaone_device_id: e.target.value })}
+                      placeholder="Ex. 1234 ou https://eu.ninjarmm.com/#/deviceDashboard/1234/overview"
+                    />
+                    {deviceErrors.ninjaone_device_id && (
+                      <p className="mt-1 text-sm text-destructive">ID NinjaOne invalide : collez l'ID ou le lien de l'appareil.</p>
+                    )}
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
