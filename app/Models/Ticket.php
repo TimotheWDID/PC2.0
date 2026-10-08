@@ -242,6 +242,11 @@ class Ticket extends Model
         return $this->hasMany(Diagnostic::class);
     }
 
+    public function files(): HasMany
+    {
+        return $this->hasMany(TicketFile::class);
+    }
+
     public function devis(): HasMany
     {
         return $this->hasMany(Devis::class);

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2, Stethoscope, ExternalLink, Building2 } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
+import TicketFiles from '@/components/TicketFiles';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
 
@@ -110,6 +111,9 @@ const builtInEventTypeLabels: Record<string, string> = {
   commande_status_changed_direct: 'Statut commande',
   device_event_added: 'Intervention appareil',
   diagnostic_added: 'Diagnostic',
+  files_added: 'Fichiers',
+  file_removed: 'Fichier supprime',
+  files_sent: 'Fichiers envoyes',
   task_completed: 'Action realisee',
   task_reopened: 'Action reouverte',
 };
@@ -2217,6 +2221,8 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                 </DialogContent>
               </Dialog>
             )}
+
+            <TicketFiles ticketId={ticket.id} isAgent={isAgent} className="order-3 xl:order-2" />
 
             {isAgent && (
               <Card id="ticket-diagnostic" className="order-3 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">
