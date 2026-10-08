@@ -238,3 +238,118 @@ it('shows the expiry alert on the dashboard until the subscription is opened', f
 
     expect($agent->unreadNotifications()->count())->toBe(0);
 });
+
+it('adds purchased hours to the remaining time', function () {
+    $agent = remoteAgent();
+    $subscription = remoteSubscription(['included_minutes' => 60]);
+    $subscription->interventions()->create([
+        'performed_at' => now(),
+        'duration_minutes' => 90,
+        'description' => 'Dépannage',
+    ]);
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.time-purchases.store', $subscription), [
+            'purchased_on' => '2026-10-08',
+            'minutes' => 120,
+            'price' => '90',
+            'note' => 'Facture 42',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $purchase = $subscription->timePurchases()->firstOrFail();
+    expect($purchase->recorded_by)->toBe($agent->id);
+
+    $this->actingAs($agent)
+        ->get(route('remote-subscriptions.show', $subscription))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('subscription.purchased_minutes', 120)
+            ->where('subscription.total_minutes', 180)
+            ->where('subscription.remaining_minutes', 90)
+            ->has('timePurchases', 1)
+            ->where('timePurchases.0.note', 'Facture 42'));
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.time-purchases.store', $subscription), ['purchased_on' => '2026-10-08', 'minutes' => 0])
+        ->assertSessionHasErrors('minutes');
+
+    $other = remoteSubscription();
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.time-purchases.destroy', [$other, $purchase]))
+        ->assertNotFound();
+
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.time-purchases.destroy', [$subscription, $purchase]))
+        ->assertRedirect();
+
+    expect($subscription->timePurchases()->count())->toBe(0);
+});
+
+it('links the client devices to a subscription', function () {
+    $agent = remoteAgent();
+    $subscription = remoteSubscription(['devices_count' => 2]);
+    $pc = \App\Models\Device::create(['user_id' => $subscription->user_id, 'device_type' => 'computer', 'brand' => 'Dell', 'model' => 'Latitude', 'status' => 'active']);
+    $other = \App\Models\Device::create(['user_id' => $subscription->user_id, 'device_type' => 'computer', 'brand' => 'HP', 'status' => 'active']);
+    $foreign = \App\Models\Device::create(['user_id' => User::factory()->create()->id, 'device_type' => 'computer', 'status' => 'active']);
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.devices.attach', $subscription), ['device_id' => $pc->id])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.devices.attach', $subscription), ['device_id' => $foreign->id])
+        ->assertSessionHasErrors('device_id');
+
+    $this->actingAs($agent)
+        ->get(route('remote-subscriptions.show', $subscription))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('subscription.linked_devices_count', 1)
+            ->where('subscription.devices_count', 2)
+            ->has('devices', 1)
+            ->where('devices.0.id', $pc->id)
+            ->has('availableDevices', 1)
+            ->where('availableDevices.0.id', $other->id));
+
+    $this->actingAs($agent)
+        ->get(route('devices.show', $pc))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('remoteSubscriptions', 1)
+            ->where('remoteSubscriptions.0.id', $subscription->id));
+
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.devices.detach', [$subscription, $pc]))
+        ->assertRedirect();
+
+    expect($subscription->devices()->count())->toBe(0)
+        ->and(\App\Models\Device::find($pc->id))->not->toBeNull();
+});
+
+it('stores the NinjaOne device id from an id or a pasted link', function () {
+    config(['services.ninjaone.url' => 'https://eu.ninjarmm.com']);
+    $agent = remoteAgent();
+    $client = User::factory()->create();
+    $device = \App\Models\Device::create(['user_id' => $client->id, 'device_type' => 'computer', 'model' => 'Latitude', 'status' => 'active']);
+
+    $payload = ['device_type' => 'computer', 'model' => 'Latitude', 'status' => 'active'];
+
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), [...$payload, 'ninjaone_device_id' => 'https://eu.ninjarmm.com/#/deviceDashboard/4521/overview'])
+        ->assertSessionHasNoErrors();
+
+    expect($device->fresh()->ninjaone_device_id)->toBe('4521')
+        ->and($device->fresh()->ninjaone_url)->toBe('https://eu.ninjarmm.com/#/deviceDashboard/4521/overview');
+
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), [...$payload, 'ninjaone_device_id' => 'pas un id'])
+        ->assertSessionHasErrors('ninjaone_device_id');
+
+    // Forms that do not send the field keep the stored id
+    $this->actingAs($agent)
+        ->patch(route('users.devices.update', [$client, $device]), $payload)
+        ->assertSessionHasNoErrors();
+    expect($device->fresh()->ninjaone_device_id)->toBe('4521');
+
+    $this->actingAs($agent)
+        ->get(route('devices.show', $device))
+        ->assertInertia(fn (Assert $page) => $page->where('device.ninjaone_url', 'https://eu.ninjarmm.com/#/deviceDashboard/4521/overview'));
+});

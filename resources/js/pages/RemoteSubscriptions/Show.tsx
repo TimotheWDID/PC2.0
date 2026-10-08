@@ -1,6 +1,10 @@
 import Heading from '@/components/heading';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import {
+    RemoteSubscriptionDevices,
+    type SubscriptionDevice,
+} from '@/components/remote-subscription-devices';
+import {
     ExpiryBadge,
     formatMinutes,
     formToPayload,
@@ -11,6 +15,10 @@ import {
     type RemoteSubscriptionRow,
     type SubscriptionFormData,
 } from '@/components/remote-subscription-form';
+import {
+    RemoteTimePurchases,
+    type TimePurchaseRow,
+} from '@/components/remote-time-purchases';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,11 +72,17 @@ export default function RemoteSubscriptionShow({
     interventions,
     tickets,
     plans,
+    timePurchases,
+    devices,
+    availableDevices,
 }: {
     subscription: RemoteSubscriptionRow;
     interventions: InterventionRow[];
     tickets: TicketOption[];
     plans: string[];
+    timePurchases: TimePurchaseRow[];
+    devices: SubscriptionDevice[];
+    availableDevices: SubscriptionDevice[];
 }) {
     const clientLabel =
         subscription.user?.name || subscription.user?.email || 'Client';
@@ -88,6 +102,8 @@ export default function RemoteSubscriptionShow({
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>(
         {},
     );
+    const [updating, setUpdating] = React.useState(false);
+    const [saved, setSaved] = React.useState(false);
 
     const [intervention, setIntervention] = React.useState(emptyIntervention);
     const [interventionErrors, setInterventionErrors] = React.useState<
@@ -99,6 +115,8 @@ export default function RemoteSubscriptionShow({
 
     const submitUpdate = (e: React.FormEvent) => {
         e.preventDefault();
+        setSaved(false);
+        setUpdating(true);
         router.patch(
             `/remote-subscriptions/${subscription.id}`,
             formToPayload(form),
@@ -108,7 +126,9 @@ export default function RemoteSubscriptionShow({
                 onSuccess: () => {
                     setFormErrors({});
                     setEditing(false);
+                    setSaved(true);
                 },
+                onFinish: () => setUpdating(false),
             },
         );
     };
@@ -220,7 +240,7 @@ export default function RemoteSubscriptionShow({
                                     : formatMinutes(remaining)}
                             </p>
                             <RemainingTimeBar
-                                included={subscription.included_minutes}
+                                included={subscription.total_minutes}
                                 used={subscription.used_minutes}
                             />
                         </CardContent>
@@ -236,9 +256,10 @@ export default function RemoteSubscriptionShow({
                                 {formatMinutes(subscription.used_minutes)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                sur{' '}
-                                {formatMinutes(subscription.included_minutes)}{' '}
-                                inclus
+                                sur {formatMinutes(subscription.total_minutes)}
+                                {subscription.purchased_minutes > 0
+                                    ? ` (${formatMinutes(subscription.included_minutes)} inclus + ${formatMinutes(subscription.purchased_minutes)} achetées)`
+                                    : ' inclus'}
                             </p>
                         </CardContent>
                     </Card>
@@ -281,6 +302,12 @@ export default function RemoteSubscriptionShow({
                     </Card>
                 </div>
 
+                {saved && !editing && (
+                    <div className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                        Abonnement enregistré.
+                    </div>
+                )}
+
                 {editing && (
                     <Card>
                         <CardHeader>
@@ -288,6 +315,12 @@ export default function RemoteSubscriptionShow({
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={submitUpdate} className="space-y-4">
+                                {Object.keys(formErrors).length > 0 && (
+                                    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                        L'abonnement n'a pas été enregistré :{' '}
+                                        {Object.values(formErrors).join(' ')}
+                                    </div>
+                                )}
                                 <RemoteSubscriptionFields
                                     data={form}
                                     setData={(key, value) =>
@@ -307,7 +340,11 @@ export default function RemoteSubscriptionShow({
                                     >
                                         Supprimer l'abonnement
                                     </Button>
-                                    <Button type="submit">Enregistrer</Button>
+                                    <Button type="submit" disabled={updating}>
+                                        {updating
+                                            ? 'Enregistrement...'
+                                            : 'Enregistrer'}
+                                    </Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -525,6 +562,19 @@ export default function RemoteSubscriptionShow({
                         </CardContent>
                     </Card>
                 </div>
+
+                <RemoteSubscriptionDevices
+                    subscriptionId={subscription.id}
+                    clientId={subscription.user?.id ?? null}
+                    coveredCount={subscription.devices_count}
+                    devices={devices}
+                    availableDevices={availableDevices}
+                />
+
+                <RemoteTimePurchases
+                    subscriptionId={subscription.id}
+                    purchases={timePurchases}
+                />
 
                 {(subscription.ninjaone_reference ||
                     subscription.devices_count !== null ||
