@@ -70,6 +70,12 @@ type DeviceShowProps = {
     first_ticket_at: string | null
   }
   isAgent: boolean
+  remoteSubscriptions: Array<{
+    id: number
+    plan: string
+    status: string
+    ends_on: string | null
+  }>
 }
 
 const statusLabels: Record<string, string> = {
@@ -88,7 +94,7 @@ const eventTypeLabels: Record<string, string> = {
   note: 'Note',
 }
 
-export default function DeviceShow({ device, tickets, events, stats, isAgent }: DeviceShowProps) {
+export default function DeviceShow({ device, tickets, events, stats, isAgent, remoteSubscriptions = [] }: DeviceShowProps) {
   const { auth } = usePage().props as any
   const isCurrentUserOwner = auth?.user?.id === device.user?.id
   const [showPassword, setShowPassword] = useState(false)
@@ -195,6 +201,13 @@ export default function DeviceShow({ device, tickets, events, stats, isAgent }: 
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">#{device.id}</Badge>
                 <Badge variant="outline">{statusLabels[device.status] || device.status}</Badge>
+                {remoteSubscriptions.map((subscription) => (
+                  <Link key={subscription.id} href={`/remote-subscriptions/${subscription.id}`}>
+                    <Badge className={subscription.status === 'active' ? 'bg-emerald-600 text-white hover:bg-emerald-600' : ''} variant={subscription.status === 'active' ? 'default' : 'outline'}>
+                      {subscription.plan}{subscription.status !== 'active' ? ' (inactif)' : ''}
+                    </Badge>
+                  </Link>
+                ))}
               </div>
               <p><strong>Type:</strong> {device.device_type}</p>
               <p><strong>Marque/Modele:</strong> {(device.brand || '-') + ' ' + (device.model || '')}</p>

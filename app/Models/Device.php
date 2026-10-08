@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Device extends Model
@@ -53,6 +54,11 @@ class Device extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function remoteSubscriptions(): BelongsToMany
+    {
+        return $this->belongsToMany(RemoteSubscription::class)->withTimestamps();
     }
 
     public function getDisplayNameAttribute(): string

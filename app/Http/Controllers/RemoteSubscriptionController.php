@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Device;
 use App\Models\RemoteIntervention;
 use App\Models\RemoteSubscription;
 use App\Models\RemoteTimePurchase;
@@ -21,6 +22,7 @@ class RemoteSubscriptionController extends Controller
             ->with('user:id,first_name,last_name,email')
             ->withSum('interventions', 'duration_minutes')
             ->withSum('timePurchases', 'minutes')
+            ->withCount('devices as linked_devices_count')
             ->withCount('interventions')
             ->withMax('interventions', 'performed_at');
 
@@ -85,6 +87,7 @@ class RemoteSubscriptionController extends Controller
             ->load('user:id,first_name,last_name,email,phone')
             ->loadSum('interventions', 'duration_minutes')
             ->loadSum('timePurchases', 'minutes')
+            ->loadCount('devices as linked_devices_count')
             ->loadCount('interventions')
             ->loadMax('interventions', 'performed_at');
 
@@ -129,7 +132,26 @@ class RemoteSubscriptionController extends Controller
             ])
             ->values();
 
+        $presentDevice = fn (Device $device) => [
+            'id' => $device->id,
+            'display_name' => $device->display_name,
+            'device_type' => $device->device_type,
+            'asset_tag' => $device->asset_tag,
+            'status' => $device->status,
+        ];
+
+        $linkedDevices = $remoteSubscription->devices()->orderBy('brand')->orderBy('model')->get();
+
+        $availableDevices = Device::query()
+            ->where('user_id', $remoteSubscription->user_id)
+            ->whereNotIn('id', $linkedDevices->pluck('id'))
+            ->orderBy('brand')
+            ->orderBy('model')
+            ->get();
+
         return Inertia::render('RemoteSubscriptions/Show', [
+            'devices' => $linkedDevices->map($presentDevice)->values(),
+            'availableDevices' => $availableDevices->map($presentDevice)->values(),
             'timePurchases' => $timePurchases,
             'subscription' => $this->present($remoteSubscription),
             'interventions' => $interventions,
@@ -184,6 +206,28 @@ class RemoteSubscriptionController extends Controller
         $intervention->delete();
 
         return back()->with('success', 'Intervention supprimée.');
+    }
+
+    public function attachDevice(Request $request, RemoteSubscription $remoteSubscription)
+    {
+        $validated = $request->validate([
+            'device_id' => [
+                'required',
+                'integer',
+                Rule::exists('devices', 'id')->where('user_id', $remoteSubscription->user_id),
+            ],
+        ]);
+
+        $remoteSubscription->devices()->syncWithoutDetaching([$validated['device_id']]);
+
+        return back()->with('success', 'Appareil lié à l\'abonnement.');
+    }
+
+    public function detachDevice(RemoteSubscription $remoteSubscription, Device $device)
+    {
+        $remoteSubscription->devices()->detach($device->id);
+
+        return back()->with('success', 'Appareil retiré de l\'abonnement.');
     }
 
     public function storeTimePurchase(Request $request, RemoteSubscription $remoteSubscription)
@@ -255,6 +299,7 @@ class RemoteSubscriptionController extends Controller
             'remaining_minutes' => $total - $used,
             'price' => $subscription->price,
             'devices_count' => $subscription->devices_count,
+            'linked_devices_count' => (int) ($subscription->linked_devices_count ?? 0),
             'ninjaone_reference' => $subscription->ninjaone_reference,
             'notes' => $subscription->notes,
             'interventions_count' => (int) ($subscription->interventions_count ?? 0),

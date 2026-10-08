@@ -25,6 +25,7 @@ export type RemoteSubscriptionRow = {
     remaining_minutes: number;
     price: string | null;
     devices_count: number | null;
+    linked_devices_count: number;
     ninjaone_reference: string | null;
     notes: string | null;
     interventions_count: number;

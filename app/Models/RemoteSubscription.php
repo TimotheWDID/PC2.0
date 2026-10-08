@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RemoteSubscription extends Model
@@ -60,6 +61,11 @@ class RemoteSubscription extends Model
     public function interventions(): HasMany
     {
         return $this->hasMany(RemoteIntervention::class);
+    }
+
+    public function devices(): BelongsToMany
+    {
+        return $this->belongsToMany(Device::class)->withTimestamps();
     }
 
     public function timePurchases(): HasMany

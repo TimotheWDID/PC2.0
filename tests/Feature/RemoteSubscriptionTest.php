@@ -284,3 +284,42 @@ it('adds purchased hours to the remaining time', function () {
 
     expect($subscription->timePurchases()->count())->toBe(0);
 });
+
+it('links the client devices to a subscription', function () {
+    $agent = remoteAgent();
+    $subscription = remoteSubscription(['devices_count' => 2]);
+    $pc = \App\Models\Device::create(['user_id' => $subscription->user_id, 'device_type' => 'computer', 'brand' => 'Dell', 'model' => 'Latitude', 'status' => 'active']);
+    $other = \App\Models\Device::create(['user_id' => $subscription->user_id, 'device_type' => 'computer', 'brand' => 'HP', 'status' => 'active']);
+    $foreign = \App\Models\Device::create(['user_id' => User::factory()->create()->id, 'device_type' => 'computer', 'status' => 'active']);
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.devices.attach', $subscription), ['device_id' => $pc->id])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.devices.attach', $subscription), ['device_id' => $foreign->id])
+        ->assertSessionHasErrors('device_id');
+
+    $this->actingAs($agent)
+        ->get(route('remote-subscriptions.show', $subscription))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('subscription.linked_devices_count', 1)
+            ->where('subscription.devices_count', 2)
+            ->has('devices', 1)
+            ->where('devices.0.id', $pc->id)
+            ->has('availableDevices', 1)
+            ->where('availableDevices.0.id', $other->id));
+
+    $this->actingAs($agent)
+        ->get(route('devices.show', $pc))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('remoteSubscriptions', 1)
+            ->where('remoteSubscriptions.0.id', $subscription->id));
+
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.devices.detach', [$subscription, $pc]))
+        ->assertRedirect();
+
+    expect($subscription->devices()->count())->toBe(0)
+        ->and(\App\Models\Device::find($pc->id))->not->toBeNull();
+});

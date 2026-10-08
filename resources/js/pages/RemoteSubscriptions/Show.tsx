@@ -1,6 +1,10 @@
 import Heading from '@/components/heading';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import {
+    RemoteSubscriptionDevices,
+    type SubscriptionDevice,
+} from '@/components/remote-subscription-devices';
+import {
     ExpiryBadge,
     formatMinutes,
     formToPayload,
@@ -69,12 +73,16 @@ export default function RemoteSubscriptionShow({
     tickets,
     plans,
     timePurchases,
+    devices,
+    availableDevices,
 }: {
     subscription: RemoteSubscriptionRow;
     interventions: InterventionRow[];
     tickets: TicketOption[];
     plans: string[];
     timePurchases: TimePurchaseRow[];
+    devices: SubscriptionDevice[];
+    availableDevices: SubscriptionDevice[];
 }) {
     const clientLabel =
         subscription.user?.name || subscription.user?.email || 'Client';
@@ -532,6 +540,14 @@ export default function RemoteSubscriptionShow({
                         </CardContent>
                     </Card>
                 </div>
+
+                <RemoteSubscriptionDevices
+                    subscriptionId={subscription.id}
+                    clientId={subscription.user?.id ?? null}
+                    coveredCount={subscription.devices_count}
+                    devices={devices}
+                    availableDevices={availableDevices}
+                />
 
                 <RemoteTimePurchases
                     subscriptionId={subscription.id}

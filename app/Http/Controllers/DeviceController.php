@@ -214,6 +214,18 @@ class DeviceController extends Controller
             'tickets' => $tickets,
             'events' => $events,
             'stats' => $stats,
+            'remoteSubscriptions' => $viewer->agent
+                ? $device->remoteSubscriptions()
+                    ->orderByDesc('started_on')
+                    ->get()
+                    ->map(fn ($subscription) => [
+                        'id' => $subscription->id,
+                        'plan' => $subscription->plan,
+                        'status' => $subscription->status,
+                        'ends_on' => $subscription->ends_on?->toDateString(),
+                    ])
+                    ->values()
+                : [],
             'isAgent' => (bool) $viewer->agent,
         ]);
     }

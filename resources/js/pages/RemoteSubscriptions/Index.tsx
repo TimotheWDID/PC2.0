@@ -317,6 +317,10 @@ export default function RemoteSubscriptionsIndex({
                                                 {subscription.ninjaone_reference
                                                     ? ` · ${subscription.ninjaone_reference}`
                                                     : ''}
+                                                {subscription.linked_devices_count >
+                                                0
+                                                    ? ` · ${subscription.linked_devices_count} PC lié${subscription.linked_devices_count > 1 ? 's' : ''}`
+                                                    : ''}
                                             </p>
                                         </div>
                                         <div className="flex flex-wrap gap-1">

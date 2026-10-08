@@ -15,4 +15,8 @@ Route::middleware(['auth', 'agent'])->group(function () {
         ->name('remote-subscriptions.time-purchases.store');
     Route::delete('remote-subscriptions/{remoteSubscription}/time-purchases/{timePurchase}', [RemoteSubscriptionController::class, 'destroyTimePurchase'])
         ->name('remote-subscriptions.time-purchases.destroy');
+    Route::post('remote-subscriptions/{remoteSubscription}/devices', [RemoteSubscriptionController::class, 'attachDevice'])
+        ->name('remote-subscriptions.devices.attach');
+    Route::delete('remote-subscriptions/{remoteSubscription}/devices/{device}', [RemoteSubscriptionController::class, 'detachDevice'])
+        ->name('remote-subscriptions.devices.detach');
 });
