@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DiagnosticController;
 use App\Http\Controllers\InternalTicketController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TicketFileController;
 use App\Http\Controllers\TicketMagicLinkController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Settings\InboundMailReviewController;
@@ -24,6 +25,16 @@ Route::get('tickets/{ticket}/messages/{message}/attachments/{attachment}', [Mess
     ->middleware('throttle:ticket-messages')
     ->name('tickets.messages.attachments.download');
 
+// Ticket files: customers (magic link or owner) only see the files shared with them.
+Route::get('tickets/{ticket}/files', [TicketFileController::class, 'index'])
+    ->whereNumber('ticket')
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.files.index');
+Route::get('tickets/{ticket}/files/{file}/download', [TicketFileController::class, 'download'])
+    ->whereNumber(['ticket', 'file'])
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.files.download');
+
 Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
@@ -34,6 +45,11 @@ Route::middleware('auth')->group(function () {
         Route::get('tickets/inbound-mails', [InboundMailReviewController::class, 'index'])->name('tickets.inbound-mails.index');
         Route::post('tickets/inbound-mails/{inboundEmail}/attach', [InboundMailReviewController::class, 'attachToTicket'])->name('tickets.inbound-mails.attach');
         Route::post('tickets/inbound-mails/{inboundEmail}/dismiss', [InboundMailReviewController::class, 'dismiss'])->name('tickets.inbound-mails.dismiss');
+
+        Route::post('tickets/{ticket}/files', [TicketFileController::class, 'store'])->whereNumber('ticket')->name('tickets.files.store');
+        Route::post('tickets/{ticket}/files/send', [TicketFileController::class, 'send'])->whereNumber('ticket')->name('tickets.files.send');
+        Route::patch('tickets/{ticket}/files/{file}', [TicketFileController::class, 'update'])->whereNumber(['ticket', 'file'])->name('tickets.files.update');
+        Route::delete('tickets/{ticket}/files/{file}', [TicketFileController::class, 'destroy'])->whereNumber(['ticket', 'file'])->name('tickets.files.destroy');
 
         // Diag Atelier: run a diagnostic from a ticket and keep its report there
         Route::get('tickets/{ticket}/diag', [DiagnosticController::class, 'tool'])->whereNumber('ticket')->name('tickets.diag');

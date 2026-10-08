@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import AppLogoIcon from '@/components/app-logo-icon';
 import TicketChat from '@/components/TicketChat';
+import TicketFiles from '@/components/TicketFiles';
 import { formatDateTimeFr } from '@/lib/datetime';
 import { Moon, Sun } from 'lucide-react';
 
@@ -166,6 +167,10 @@ export default function PublicShow({ ticket, magicAccess }: PublicShowProps) {
               magicToken={magicAccess.token}
               canSend={!magicAccess.read_only}
             />
+          </section>
+
+          <section className="mt-2.5">
+            <TicketFiles ticketId={ticket.id} isAgent={false} magicToken={magicAccess.token} />
           </section>
         </div>
       </main>

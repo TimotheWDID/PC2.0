@@ -173,3 +173,4 @@ Investigation prealable : aucun systeme de piece jointe fonctionnel n'existait (
 | 2026-09-22 | GitHub Copilot | Reference Hiboutik dans les tickets | numero modifiable, synchronisation et titre de ticket adapte |
 | 2026-09-22 | Claude Code | Pieces jointes sur les messages de ticket + fix fuite notes internes | voir section dediee ci-dessous |
 | 2026-09-22 | Claude Code | Revue du module Devis : bug critique de route-model-binding corrige (show/update casses), 2 incoherences de nav corrigees | tests OK, donnees de test residuelles a nettoyer manuellement (voir section ci-dessus) |
+| 2026-10-08 | Claude Code | Fichiers de ticket internes/externes + envoi au client par email (table `ticket_files`, `TicketFileController`, composant `TicketFiles.tsx`) | 7 tests Pest dedies, suite complete OK, tsc/eslint/build OK |
