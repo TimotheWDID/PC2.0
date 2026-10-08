@@ -19,6 +19,8 @@ export type RemoteSubscriptionRow = {
     is_expired: boolean;
     days_left: number | null;
     included_minutes: number;
+    purchased_minutes: number;
+    total_minutes: number;
     used_minutes: number;
     remaining_minutes: number;
     price: string | null;

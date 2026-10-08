@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\RemoteIntervention;
 use App\Models\RemoteSubscription;
+use App\Models\RemoteTimePurchase;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\RemoteSubscriptionExpiringNotification;
@@ -19,6 +20,7 @@ class RemoteSubscriptionController extends Controller
         $query = RemoteSubscription::query()
             ->with('user:id,first_name,last_name,email')
             ->withSum('interventions', 'duration_minutes')
+            ->withSum('timePurchases', 'minutes')
             ->withCount('interventions')
             ->withMax('interventions', 'performed_at');
 
@@ -82,6 +84,7 @@ class RemoteSubscriptionController extends Controller
         $remoteSubscription
             ->load('user:id,first_name,last_name,email,phone')
             ->loadSum('interventions', 'duration_minutes')
+            ->loadSum('timePurchases', 'minutes')
             ->loadCount('interventions')
             ->loadMax('interventions', 'performed_at');
 
@@ -111,7 +114,23 @@ class RemoteSubscriptionController extends Controller
             ->limit(100)
             ->get();
 
+        $timePurchases = $remoteSubscription->timePurchases()
+            ->with('recorder:id,first_name,last_name')
+            ->orderByDesc('purchased_on')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (RemoteTimePurchase $purchase) => [
+                'id' => $purchase->id,
+                'purchased_on' => $purchase->purchased_on?->toDateString(),
+                'minutes' => $purchase->minutes,
+                'price' => $purchase->price,
+                'note' => $purchase->note,
+                'recorded_by' => $purchase->recorder?->name,
+            ])
+            ->values();
+
         return Inertia::render('RemoteSubscriptions/Show', [
+            'timePurchases' => $timePurchases,
             'subscription' => $this->present($remoteSubscription),
             'interventions' => $interventions,
             'tickets' => $tickets,
@@ -167,6 +186,32 @@ class RemoteSubscriptionController extends Controller
         return back()->with('success', 'Intervention supprimée.');
     }
 
+    public function storeTimePurchase(Request $request, RemoteSubscription $remoteSubscription)
+    {
+        $validated = $request->validate([
+            'purchased_on' => ['required', 'date'],
+            'minutes' => ['required', 'integer', 'min:1', 'max:100000'],
+            'price' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $remoteSubscription->timePurchases()->create([
+            ...$validated,
+            'recorded_by' => $request->user()->id,
+        ]);
+
+        return back()->with('success', 'Heures ajoutées.');
+    }
+
+    public function destroyTimePurchase(RemoteSubscription $remoteSubscription, RemoteTimePurchase $timePurchase)
+    {
+        abort_unless((int) $timePurchase->remote_subscription_id === (int) $remoteSubscription->id, 404);
+
+        $timePurchase->delete();
+
+        return back()->with('success', 'Achat d\'heures supprimé.');
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -192,6 +237,8 @@ class RemoteSubscriptionController extends Controller
     private function present(RemoteSubscription $subscription): array
     {
         $used = (int) ($subscription->interventions_sum_duration_minutes ?? 0);
+        $purchased = (int) ($subscription->time_purchases_sum_minutes ?? 0);
+        $total = $subscription->included_minutes + $purchased;
 
         return [
             'id' => $subscription->id,
@@ -202,8 +249,10 @@ class RemoteSubscriptionController extends Controller
             'is_expired' => $subscription->isExpired(),
             'days_left' => $subscription->daysLeft(),
             'included_minutes' => $subscription->included_minutes,
+            'purchased_minutes' => $purchased,
+            'total_minutes' => $total,
             'used_minutes' => $used,
-            'remaining_minutes' => $subscription->included_minutes - $used,
+            'remaining_minutes' => $total - $used,
             'price' => $subscription->price,
             'devices_count' => $subscription->devices_count,
             'ninjaone_reference' => $subscription->ninjaone_reference,

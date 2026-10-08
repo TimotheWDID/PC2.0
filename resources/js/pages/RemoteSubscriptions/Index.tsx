@@ -348,13 +348,13 @@ export default function RemoteSubscriptionsIndex({
                                                     )}{' '}
                                                     /{' '}
                                                     {formatMinutes(
-                                                        subscription.included_minutes,
+                                                        subscription.total_minutes,
                                                     )}
                                                 </span>
                                             </div>
                                             <RemainingTimeBar
                                                 included={
-                                                    subscription.included_minutes
+                                                    subscription.total_minutes
                                                 }
                                                 used={subscription.used_minutes}
                                             />

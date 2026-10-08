@@ -238,3 +238,49 @@ it('shows the expiry alert on the dashboard until the subscription is opened', f
 
     expect($agent->unreadNotifications()->count())->toBe(0);
 });
+
+it('adds purchased hours to the remaining time', function () {
+    $agent = remoteAgent();
+    $subscription = remoteSubscription(['included_minutes' => 60]);
+    $subscription->interventions()->create([
+        'performed_at' => now(),
+        'duration_minutes' => 90,
+        'description' => 'Dépannage',
+    ]);
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.time-purchases.store', $subscription), [
+            'purchased_on' => '2026-10-08',
+            'minutes' => 120,
+            'price' => '90',
+            'note' => 'Facture 42',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $purchase = $subscription->timePurchases()->firstOrFail();
+    expect($purchase->recorded_by)->toBe($agent->id);
+
+    $this->actingAs($agent)
+        ->get(route('remote-subscriptions.show', $subscription))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('subscription.purchased_minutes', 120)
+            ->where('subscription.total_minutes', 180)
+            ->where('subscription.remaining_minutes', 90)
+            ->has('timePurchases', 1)
+            ->where('timePurchases.0.note', 'Facture 42'));
+
+    $this->actingAs($agent)
+        ->post(route('remote-subscriptions.time-purchases.store', $subscription), ['purchased_on' => '2026-10-08', 'minutes' => 0])
+        ->assertSessionHasErrors('minutes');
+
+    $other = remoteSubscription();
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.time-purchases.destroy', [$other, $purchase]))
+        ->assertNotFound();
+
+    $this->actingAs($agent)
+        ->delete(route('remote-subscriptions.time-purchases.destroy', [$subscription, $purchase]))
+        ->assertRedirect();
+
+    expect($subscription->timePurchases()->count())->toBe(0);
+});

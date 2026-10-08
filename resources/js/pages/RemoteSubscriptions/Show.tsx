@@ -11,6 +11,10 @@ import {
     type RemoteSubscriptionRow,
     type SubscriptionFormData,
 } from '@/components/remote-subscription-form';
+import {
+    RemoteTimePurchases,
+    type TimePurchaseRow,
+} from '@/components/remote-time-purchases';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,11 +68,13 @@ export default function RemoteSubscriptionShow({
     interventions,
     tickets,
     plans,
+    timePurchases,
 }: {
     subscription: RemoteSubscriptionRow;
     interventions: InterventionRow[];
     tickets: TicketOption[];
     plans: string[];
+    timePurchases: TimePurchaseRow[];
 }) {
     const clientLabel =
         subscription.user?.name || subscription.user?.email || 'Client';
@@ -220,7 +226,7 @@ export default function RemoteSubscriptionShow({
                                     : formatMinutes(remaining)}
                             </p>
                             <RemainingTimeBar
-                                included={subscription.included_minutes}
+                                included={subscription.total_minutes}
                                 used={subscription.used_minutes}
                             />
                         </CardContent>
@@ -236,9 +242,10 @@ export default function RemoteSubscriptionShow({
                                 {formatMinutes(subscription.used_minutes)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                sur{' '}
-                                {formatMinutes(subscription.included_minutes)}{' '}
-                                inclus
+                                sur {formatMinutes(subscription.total_minutes)}
+                                {subscription.purchased_minutes > 0
+                                    ? ` (${formatMinutes(subscription.included_minutes)} inclus + ${formatMinutes(subscription.purchased_minutes)} achetées)`
+                                    : ' inclus'}
                             </p>
                         </CardContent>
                     </Card>
@@ -525,6 +532,11 @@ export default function RemoteSubscriptionShow({
                         </CardContent>
                     </Card>
                 </div>
+
+                <RemoteTimePurchases
+                    subscriptionId={subscription.id}
+                    purchases={timePurchases}
+                />
 
                 {(subscription.ninjaone_reference ||
                     subscription.devices_count !== null ||

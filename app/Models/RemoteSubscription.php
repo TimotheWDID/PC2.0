@@ -62,6 +62,11 @@ class RemoteSubscription extends Model
         return $this->hasMany(RemoteIntervention::class);
     }
 
+    public function timePurchases(): HasMany
+    {
+        return $this->hasMany(RemoteTimePurchase::class);
+    }
+
     public function daysLeft(): ?int
     {
         if ($this->ends_on === null) {
