@@ -102,6 +102,8 @@ export default function RemoteSubscriptionShow({
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>(
         {},
     );
+    const [updating, setUpdating] = React.useState(false);
+    const [saved, setSaved] = React.useState(false);
 
     const [intervention, setIntervention] = React.useState(emptyIntervention);
     const [interventionErrors, setInterventionErrors] = React.useState<
@@ -113,6 +115,8 @@ export default function RemoteSubscriptionShow({
 
     const submitUpdate = (e: React.FormEvent) => {
         e.preventDefault();
+        setSaved(false);
+        setUpdating(true);
         router.patch(
             `/remote-subscriptions/${subscription.id}`,
             formToPayload(form),
@@ -122,7 +126,9 @@ export default function RemoteSubscriptionShow({
                 onSuccess: () => {
                     setFormErrors({});
                     setEditing(false);
+                    setSaved(true);
                 },
+                onFinish: () => setUpdating(false),
             },
         );
     };
@@ -296,6 +302,12 @@ export default function RemoteSubscriptionShow({
                     </Card>
                 </div>
 
+                {saved && !editing && (
+                    <div className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                        Abonnement enregistré.
+                    </div>
+                )}
+
                 {editing && (
                     <Card>
                         <CardHeader>
@@ -303,6 +315,12 @@ export default function RemoteSubscriptionShow({
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={submitUpdate} className="space-y-4">
+                                {Object.keys(formErrors).length > 0 && (
+                                    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                        L'abonnement n'a pas été enregistré :{' '}
+                                        {Object.values(formErrors).join(' ')}
+                                    </div>
+                                )}
                                 <RemoteSubscriptionFields
                                     data={form}
                                     setData={(key, value) =>
@@ -322,7 +340,11 @@ export default function RemoteSubscriptionShow({
                                     >
                                         Supprimer l'abonnement
                                     </Button>
-                                    <Button type="submit">Enregistrer</Button>
+                                    <Button type="submit" disabled={updating}>
+                                        {updating
+                                            ? 'Enregistrement...'
+                                            : 'Enregistrer'}
+                                    </Button>
                                 </div>
                             </form>
                         </CardContent>
