@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -16,6 +17,7 @@ export type RemoteSubscriptionRow = {
     started_on: string | null;
     ends_on: string | null;
     is_expired: boolean;
+    days_left: number | null;
     included_minutes: number;
     used_minutes: number;
     remaining_minutes: number;
@@ -64,11 +66,55 @@ export const formatMinutes = (minutes: number): string => {
     return `${sign}${hours} h${rest ? ` ${String(rest).padStart(2, '0')}` : ''}`;
 };
 
+export const EXPIRY_ALERT_DAYS = 30;
+
+// Les formules sont vendues pour 1 an : fin = début + 1 an - 1 jour
+export const oneYearAfter = (startedOn: string): string => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startedOn);
+    if (!match) return '';
+
+    const end = new Date(
+        Date.UTC(Number(match[1]) + 1, Number(match[2]) - 1, Number(match[3])),
+    );
+    end.setUTCDate(end.getUTCDate() - 1);
+
+    return end.toISOString().slice(0, 10);
+};
+
+export const isExpiringSoon = (subscription: RemoteSubscriptionRow) =>
+    subscription.status === 'active' &&
+    subscription.days_left !== null &&
+    subscription.days_left >= 0 &&
+    subscription.days_left <= EXPIRY_ALERT_DAYS;
+
+export function ExpiryBadge({
+    subscription,
+}: {
+    subscription: RemoteSubscriptionRow;
+}) {
+    if (!isExpiringSoon(subscription)) return null;
+
+    return (
+        <Badge className="bg-amber-500 text-white hover:bg-amber-500">
+            {subscription.days_left === 0
+                ? "Se termine aujourd'hui"
+                : `Fin dans ${subscription.days_left} j`}
+        </Badge>
+    );
+}
+
+const today = () => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10);
+};
+
 export const emptySubscriptionForm = (): SubscriptionFormData => ({
     plan: '',
     status: 'active',
-    started_on: new Date().toISOString().slice(0, 10),
-    ends_on: '',
+    started_on: today(),
+    ends_on: oneYearAfter(today()),
     included_hours: '',
     price: '',
     devices_count: '',
@@ -113,11 +159,24 @@ export function RemoteSubscriptionFields({
     data,
     setData,
     errors,
+    plans,
 }: {
     data: SubscriptionFormData;
     setData: (key: keyof SubscriptionFormData, value: string) => void;
     errors: Partial<Record<string, string>>;
+    plans: string[];
 }) {
+    const planOptions =
+        data.plan && !plans.includes(data.plan) ? [...plans, data.plan] : plans;
+
+    const changeStartedOn = (value: string) => {
+        // Keep the 1-year duration unless the end date was set by hand
+        if (!data.ends_on || data.ends_on === oneYearAfter(data.started_on)) {
+            setData('ends_on', oneYearAfter(value));
+        }
+        setData('started_on', value);
+    };
+
     const error = (key: string) =>
         errors[key] ? (
             <p className="text-sm text-destructive">{errors[key]}</p>
@@ -127,12 +186,21 @@ export function RemoteSubscriptionFields({
         <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
                 <Label htmlFor="plan">Formule *</Label>
-                <Input
-                    id="plan"
+                <Select
                     value={data.plan}
-                    onChange={(e) => setData('plan', e.target.value)}
-                    placeholder="Ex. NinjaOne Essentiel"
-                />
+                    onValueChange={(value) => setData('plan', value)}
+                >
+                    <SelectTrigger id="plan">
+                        <SelectValue placeholder="Choisir une formule" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {planOptions.map((plan) => (
+                            <SelectItem key={plan} value={plan}>
+                                {plan}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 {error('plan')}
             </div>
             <div className="space-y-1.5">
@@ -162,12 +230,12 @@ export function RemoteSubscriptionFields({
                     id="started_on"
                     type="date"
                     value={data.started_on}
-                    onChange={(e) => setData('started_on', e.target.value)}
+                    onChange={(e) => changeStartedOn(e.target.value)}
                 />
                 {error('started_on')}
             </div>
             <div className="space-y-1.5">
-                <Label htmlFor="ends_on">Fin / renouvellement</Label>
+                <Label htmlFor="ends_on">Fin (1 an par défaut)</Label>
                 <Input
                     id="ends_on"
                     type="date"

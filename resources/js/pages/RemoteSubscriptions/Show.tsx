@@ -1,6 +1,7 @@
 import Heading from '@/components/heading';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import {
+    ExpiryBadge,
     formatMinutes,
     formToPayload,
     RemainingTimeBar,
@@ -62,10 +63,12 @@ export default function RemoteSubscriptionShow({
     subscription,
     interventions,
     tickets,
+    plans,
 }: {
     subscription: RemoteSubscriptionRow;
     interventions: InterventionRow[];
     tickets: TicketOption[];
+    plans: string[];
 }) {
     const clientLabel =
         subscription.user?.name || subscription.user?.email || 'Client';
@@ -273,6 +276,7 @@ export default function RemoteSubscriptionShow({
                             {subscription.is_expired && (
                                 <Badge variant="destructive">Expiré</Badge>
                             )}
+                            <ExpiryBadge subscription={subscription} />
                         </CardContent>
                     </Card>
                 </div>
@@ -293,6 +297,7 @@ export default function RemoteSubscriptionShow({
                                         }))
                                     }
                                     errors={formErrors}
+                                    plans={plans}
                                 />
                                 <div className="flex flex-wrap justify-between gap-2">
                                     <Button
