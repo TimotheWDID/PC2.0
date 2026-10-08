@@ -8,14 +8,27 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 
 import MobileNativeNav from '@/components/mobile-native-nav';
+import ClientIdentityFields, { type ClientIdentityData, type ClientType, type CompanyOption } from '@/components/client-identity-fields';
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Utilisateurs', href: '/users' },
-  { title: 'Créer un utilisateur', href: '/users/create' },
+  { title: 'Créer un client', href: '/users/create' },
 ];
 
-export default function Create() {
+export default function Create({
+  companies = [],
+  defaultClientType = 'person',
+  defaultCompanyId = null,
+}: {
+  companies?: CompanyOption[];
+  defaultClientType?: ClientType;
+  defaultCompanyId?: number | null;
+}) {
   const { data, setData, post, processing, errors } = useForm({
+    client_type: defaultClientType as ClientType,
+    company_name: '',
+    siret: '',
+    company_id: defaultCompanyId ? String(defaultCompanyId) : '',
     first_name: '',
     last_name: '',
     email: '',
@@ -32,42 +45,27 @@ export default function Create() {
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Créer un utilisateur" />
+      <Head title="Créer un client" />
       <div className="py-4 w-full">
         <Heading
-          title="Créer un utilisateur"
-          description="Créer un nouvel utilisateur dans le système"
+          title="Créer un client"
+          description="Créer une personne ou une entreprise"
         />
 
         <form onSubmit={submit}>
           <Card>
             <CardHeader>
-              <CardTitle>Informations de l'utilisateur</CardTitle>
+              <CardTitle>Informations du client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <ClientIdentityFields
+                data={data as ClientIdentityData}
+                onChange={(key, value) => setData((current) => ({ ...current, [key]: value }))}
+                errors={errors}
+                companies={companies}
+              />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="first_name">Prénom *</Label>
-                  <Input
-                    id="first_name"
-                    value={data.first_name}
-                    onChange={(e) => setData('first_name', e.target.value)}
-                    required
-                  />
-                  {errors.first_name && <div className="text-destructive text-sm mt-1">{errors.first_name}</div>}
-                </div>
-
-                <div>
-                  <Label htmlFor="last_name">Nom *</Label>
-                  <Input
-                    id="last_name"
-                    value={data.last_name}
-                    onChange={(e) => setData('last_name', e.target.value)}
-                    required
-                  />
-                  {errors.last_name && <div className="text-destructive text-sm mt-1">{errors.last_name}</div>}
-                </div>
-
                 <div>
                   <Label htmlFor="email">Email</Label>
                   <Input

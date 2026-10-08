@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\User;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -40,6 +41,14 @@ class UserController extends Controller
     {
         return [
             'id' => $user->id,
+            'client_type' => $user->client_type ?? User::TYPE_PERSON,
+            'company_name' => $user->company_name,
+            'siret' => $user->siret,
+            'company_id' => $user->company_id,
+            'company' => $user->company ? [
+                'id' => $user->company->id,
+                'name' => $user->company->name,
+            ] : null,
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'name' => $user->name,
@@ -55,13 +64,19 @@ class UserController extends Controller
 
     private function getUserTickets(User $user)
     {
-        return Ticket::where('user_id', $user->id)
+        // Une entreprise voit aussi les tickets des personnes qui lui sont rattachées
+        $ownerIds = $user->isCompany()
+            ? $user->members()->pluck('id')->push($user->id)->all()
+            : [$user->id];
+
+        return Ticket::whereIn('user_id', $ownerIds)
             ->orderByDesc('created_at')
-            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
-            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
-            ->map(function ($ticket) {
+            ->with(['device:id,brand,model,serial_number,asset_tag,device_type', 'user:id,first_name,last_name'])
+            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id', 'user_id'])
+            ->map(function ($ticket) use ($user) {
                 return [
                     'id' => $ticket->id,
+                    'requester' => (int) $ticket->user_id !== (int) $user->id ? $ticket->user?->name : null,
                     'title' => $ticket->title,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
@@ -86,11 +101,72 @@ class UserController extends Controller
             ->values();
     }
 
+    private function getCompanyMembers(User $user)
+    {
+        if (! $user->isCompany()) {
+            return [];
+        }
+
+        return $user->members()
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone'])
+            ->map(fn (User $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+                'phone' => $member->phone,
+            ])
+            ->values();
+    }
+
+    private function companyOptions(?int $exceptId = null)
+    {
+        return User::companies()
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->orderBy('company_name')
+            ->get(['id', 'client_type', 'company_name', 'first_name', 'last_name'])
+            ->map(fn (User $company) => [
+                'id' => $company->id,
+                'name' => $company->name,
+            ])
+            ->values();
+    }
+
+    /**
+     * Règles communes : une entreprise a une raison sociale, une personne un prénom/nom
+     * et éventuellement une entreprise de rattachement.
+     */
+    private function clientRules(Request $request): array
+    {
+        $isCompany = $request->input('client_type') === User::TYPE_COMPANY;
+
+        return [
+            'client_type' => ['required', Rule::in(User::CLIENT_TYPES)],
+            'company_name' => [$isCompany ? 'required' : 'nullable', 'string', 'max:255'],
+            'siret' => 'nullable|string|max:20',
+            'company_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('client_type', User::TYPE_COMPANY),
+            ],
+            'first_name' => [$isCompany ? 'nullable' : 'required', 'string', 'max:255'],
+            'last_name' => [$isCompany ? 'nullable' : 'required', 'string', 'max:255'],
+        ];
+    }
+
     public function index()
     {
-        $users = User::orderBy('id', 'desc')->get()->map(function ($u) {
+        $users = User::with('company:id,client_type,company_name,first_name,last_name')
+            ->withCount('members')
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($u) {
             return [
                 'id' => $u->id,
+                'client_type' => $u->client_type ?? User::TYPE_PERSON,
+                'company' => $u->company ? ['id' => $u->company->id, 'name' => $u->company->name] : null,
+                'members_count' => $u->members_count,
                 'first_name' => $u->first_name ?? null,
                 'last_name' => $u->last_name ?? null,
                 'name' => $u->name,
@@ -103,16 +179,19 @@ class UserController extends Controller
         return Inertia::render('Users/Index', ['users' => $users]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return Inertia::render('Users/Create');
+        return Inertia::render('Users/Create', [
+            'companies' => $this->companyOptions(),
+            'defaultClientType' => $request->query('type') === User::TYPE_COMPANY ? User::TYPE_COMPANY : User::TYPE_PERSON,
+            'defaultCompanyId' => $request->integer('company_id') ?: null,
+        ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            ...$this->clientRules($request),
             'email' => 'nullable|email|max:255|unique:users,email',
             'phone' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:500',
@@ -125,9 +204,11 @@ class UserController extends Controller
             unset($validated['password']);
         }
 
-        User::create($validated);
+        $user = User::create($validated);
 
-        return redirect()->route('users.index')->with('success', 'Utilisateur créé avec succès.');
+        $message = $user->isCompany() ? 'Entreprise créée avec succès.' : 'Utilisateur créé avec succès.';
+
+        return redirect()->route('users.index', ['type' => $user->client_type])->with('success', $message);
     }
 
     public function show($id)
@@ -136,6 +217,7 @@ class UserController extends Controller
 
         return Inertia::render('Users/Show', [
             'user' => $this->serializeUser($user),
+            'members' => $this->getCompanyMembers($user),
             'tickets' => $this->getUserTickets($user),
             'devices' => $this->getUserDevices($user),
         ]);
@@ -147,6 +229,8 @@ class UserController extends Controller
 
         return Inertia::render('Users/Edit', [
             'user' => $this->serializeUser($user),
+            'companies' => $this->companyOptions($user->id),
+            'members' => $this->getCompanyMembers($user),
             'tickets' => $this->getUserTickets($user),
             'devices' => $this->getUserDevices($user),
         ]);
@@ -156,8 +240,7 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         $data = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            ...$this->clientRules($request),
             'email' => 'nullable|email|max:255|unique:users,email,' . $id,
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:1024',
@@ -172,6 +255,17 @@ class UserController extends Controller
             $data['password'] = bcrypt($data['password']);
         } else {
             unset($data['password']);
+        }
+
+        // Une entreprise qui a des personnes rattachées ne peut pas redevenir une personne
+        if ($user->isCompany() && $data['client_type'] === User::TYPE_PERSON && $user->members()->exists()) {
+            return back()->withErrors([
+                'client_type' => 'Détachez d\'abord les personnes rattachées à cette entreprise.',
+            ]);
+        }
+
+        if ((int) ($data['company_id'] ?? 0) === (int) $user->id) {
+            $data['company_id'] = null;
         }
 
         $user->update($data);
