@@ -17,9 +17,9 @@ function filesAgent(): User
     return $user;
 }
 
-function filesTicket(): Ticket
+function filesTicket(string $email = 'client@example.test'): Ticket
 {
-    $client = User::factory()->create(['email' => 'client@example.test']);
+    $client = User::factory()->create(['email' => $email]);
 
     return Ticket::create([
         'user_id' => $client->id,
@@ -151,7 +151,7 @@ it('refuses to send a file from another ticket', function () {
     Mail::fake();
     $agent = filesAgent();
     $ticket = filesTicket();
-    $other = filesTicket();
+    $other = filesTicket('autre@example.test');
 
     $this->actingAs($agent)->postJson(route('tickets.files.store', $other), [
         'files' => [UploadedFile::fake()->create('autre.pdf', 10, 'application/pdf')],
