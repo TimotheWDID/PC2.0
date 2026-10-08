@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -12,12 +12,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import MobileNativeNav from '@/components/mobile-native-nav';
 
-export default function Edit({ ticket, categories, agents, userDevices = [] }: any) {
+type ClientOption = {
+  id: number;
+  name: string;
+  client_type?: 'person' | 'company';
+  company_name?: string | null;
+  email?: string | null;
+};
+
+const clientLabel = (client: ClientOption) =>
+  [client.name, client.client_type === 'company' ? '(entreprise)' : client.company_name ? `· ${client.company_name}` : null, client.email ? `· ${client.email}` : null]
+    .filter(Boolean)
+    .join(' ');
+
+export default function Edit({ ticket, categories, agents, userDevices = [], clients = [] }: any) {
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Tickets', href: '/tickets' },
     { title: ticket.title ?? 'Modifier', href: `/tickets/${ticket.id}/edit` },
   ];
   const { data, setData, put, processing, errors } = useForm<{
+    user_id: string;
     title: string;
     message: string;
     category_id: string;
@@ -32,6 +46,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
     is_resolved: boolean;
     is_locked: boolean;
   }>({
+    user_id: ticket.user_id ? String(ticket.user_id) : '',
     title: ticket.title || '',
     message: ticket.message || '',
     category_id: ticket.category_id || '',
@@ -46,6 +61,16 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
     is_resolved: ticket.is_resolved || false,
     is_locked: ticket.is_locked || false,
   });
+
+  const [clientQuery, setClientQuery] = useState('');
+  const clientChanged = String(ticket.user_id ?? '') !== data.user_id;
+  const visibleClients = useMemo(() => {
+    const query = clientQuery.trim().toLowerCase();
+    const list = (clients as ClientOption[]).filter(
+      (client) => !query || clientLabel(client).toLowerCase().includes(query) || String(client.id) === data.user_id,
+    );
+    return list.slice(0, 200);
+  }, [clients, clientQuery, data.user_id]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +90,37 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
 
           <CardContent>
             <form onSubmit={submit} className="space-y-4">
+              {clients.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="user_id">Client (personne ou entreprise)</Label>
+                  <Input
+                    placeholder="Rechercher un client..."
+                    value={clientQuery}
+                    onChange={(e) => setClientQuery(e.target.value)}
+                  />
+                  <select
+                    id="user_id"
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                    value={data.user_id}
+                    onChange={(e) => {
+                      setData((current) => ({ ...current, user_id: e.target.value, device_id: '' }));
+                    }}
+                  >
+                    {visibleClients.map((client) => (
+                      <option key={client.id} value={String(client.id)}>
+                        {clientLabel(client)}
+                      </option>
+                    ))}
+                  </select>
+                  {clientChanged && (
+                    <p className="text-xs text-muted-foreground">
+                      Le ticket sera déplacé vers ce client. L'appareil lié est retiré ; vous pourrez lier un appareil du nouveau client après enregistrement.
+                    </p>
+                  )}
+                  {errors.user_id && <div className="text-destructive">{errors.user_id}</div>}
+                </div>
+              )}
+
               <div>
                 <Label htmlFor="title">Sujet</Label>
                 <Input id="title" name="title" value={data.title} onChange={(e) => setData('title', e.target.value)} required />
@@ -116,7 +172,7 @@ export default function Edit({ ticket, categories, agents, userDevices = [] }: a
 
               <div>
                 <Label htmlFor="device_id">Appareil lié</Label>
-                <Select value={data.device_id ? data.device_id.toString() : '0'} onValueChange={(value) => setData('device_id', value === '0' ? '' : value)}>
+                <Select disabled={clientChanged} value={data.device_id ? data.device_id.toString() : '0'} onValueChange={(value) => setData('device_id', value === '0' ? '' : value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="-- Sélectionner --" />
                   </SelectTrigger>

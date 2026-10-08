@@ -28,6 +28,8 @@ type Category = {
 type User = {
   id: number
   name: string
+  client_type?: ClientType
+  company_name?: string | null
   email: string
   phone?: string
   devices?: Device[]
@@ -39,6 +41,7 @@ type Device = {
 }
 
 import MobileNativeNav from '@/components/mobile-native-nav';
+import { ClientTypeBadge, ClientTypeToggle, type ClientType } from '@/components/client-identity-fields';
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Tickets', href: '/tickets' },
@@ -89,6 +92,10 @@ export default function CreateTicket({
   const [creatingUser, setCreatingUser] = useState(false)
   const [createUserError, setCreateUserError] = useState<string | null>(null)
   const [newUserData, setNewUserData] = useState({
+    client_type: 'person' as ClientType,
+    company_name: '',
+    siret: '',
+    company_id: '',
     first_name: '',
     last_name: '',
     email: '',
@@ -159,11 +166,17 @@ export default function CreateTicket({
   }
 
   // Filtrer les utilisateurs en fonction de la recherche
+  const companyOptions = useMemo(
+    () => users.filter((user) => user.client_type === 'company').map((user) => ({ id: user.id, name: user.name })),
+    [users],
+  )
+
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return users
     const query = searchQuery.toLowerCase()
     return users.filter(user =>
       user.name.toLowerCase().includes(query) ||
+      (user.company_name && user.company_name.toLowerCase().includes(query)) ||
       (user.email && user.email.toLowerCase().includes(query))
     )
   }, [searchQuery, users])
@@ -368,6 +381,10 @@ export default function CreateTicket({
 
     try {
       const response = await axios.post('/tickets/quick-user', {
+        client_type: newUserData.client_type,
+        company_name: newUserData.company_name,
+        siret: newUserData.siret,
+        company_id: newUserData.company_id || null,
         first_name: newUserData.first_name,
         last_name: newUserData.last_name,
         email: newUserData.email,
@@ -460,12 +477,12 @@ export default function CreateTicket({
 
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="search_user">Rechercher ou créer un utilisateur</Label>
+                      <Label htmlFor="search_user">Rechercher ou créer un client (personne ou entreprise)</Label>
                       <div className="mt-2 flex gap-2">
                         <div className="flex-1">
                           <Input
                             id="search_user"
-                            placeholder="Tapez un nom ou email..."
+                            placeholder="Tapez un nom, une entreprise ou un email..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                           />
@@ -479,32 +496,79 @@ export default function CreateTicket({
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Créer un nouvel utilisateur</DialogTitle>
+                                <DialogTitle>Créer un nouveau client</DialogTitle>
                                 <DialogDescription>
-                                  Cet utilisateur n'existe pas. Remplissez le formulaire pour le créer.
+                                  Ce client n'existe pas. Créez une personne ou une entreprise.
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label htmlFor="new_first_name">Prénom</Label>
-                                    <Input
-                                      id="new_first_name"
-                                      value={newUserData.first_name}
-                                      onChange={(e) => setNewUserData({ ...newUserData, first_name: e.target.value })}
-                                      placeholder="Prénom"
-                                    />
+                                <ClientTypeToggle
+                                  value={newUserData.client_type}
+                                  onChange={(value) => setNewUserData({ ...newUserData, client_type: value })}
+                                />
+                                {newUserData.client_type === 'company' ? (
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label htmlFor="new_company_name">Raison sociale</Label>
+                                      <Input
+                                        id="new_company_name"
+                                        value={newUserData.company_name}
+                                        onChange={(e) => setNewUserData({ ...newUserData, company_name: e.target.value })}
+                                        placeholder="Nom de l'entreprise"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label htmlFor="new_siret">SIRET</Label>
+                                      <Input
+                                        id="new_siret"
+                                        value={newUserData.siret}
+                                        onChange={(e) => setNewUserData({ ...newUserData, siret: e.target.value })}
+                                        placeholder="Facultatif"
+                                      />
+                                    </div>
                                   </div>
-                                  <div>
-                                    <Label htmlFor="new_last_name">Nom</Label>
-                                    <Input
-                                      id="new_last_name"
-                                      value={newUserData.last_name}
-                                      onChange={(e) => setNewUserData({ ...newUserData, last_name: e.target.value })}
-                                      placeholder="Nom"
-                                    />
-                                  </div>
-                                </div>
+                                ) : (
+                                  <>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label htmlFor="new_first_name">Prénom</Label>
+                                        <Input
+                                          id="new_first_name"
+                                          value={newUserData.first_name}
+                                          onChange={(e) => setNewUserData({ ...newUserData, first_name: e.target.value })}
+                                          placeholder="Prénom"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label htmlFor="new_last_name">Nom</Label>
+                                        <Input
+                                          id="new_last_name"
+                                          value={newUserData.last_name}
+                                          onChange={(e) => setNewUserData({ ...newUserData, last_name: e.target.value })}
+                                          placeholder="Nom"
+                                        />
+                                      </div>
+                                    </div>
+                                    {companyOptions.length > 0 && (
+                                      <div>
+                                        <Label htmlFor="new_company_id">Entreprise (facultatif)</Label>
+                                        <select
+                                          id="new_company_id"
+                                          className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                                          value={newUserData.company_id}
+                                          onChange={(e) => setNewUserData({ ...newUserData, company_id: e.target.value })}
+                                        >
+                                          <option value="">Aucune entreprise</option>
+                                          {companyOptions.map((company) => (
+                                            <option key={company.id} value={String(company.id)}>
+                                              {company.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                                 <div>
                                   <Label htmlFor="new_email">Email</Label>
                                   <Input
@@ -562,9 +626,12 @@ export default function CreateTicket({
                                   <Button
                                     type="button"
                                     onClick={handleCreateUser}
-                                    disabled={!newUserData.first_name || creatingUser}
+                                    disabled={
+                                      (newUserData.client_type === 'company' ? !newUserData.company_name.trim() : !newUserData.first_name.trim()) ||
+                                      creatingUser
+                                    }
                                   >
-                                    {creatingUser ? 'Création...' : "Créer l'utilisateur"}
+                                    {creatingUser ? 'Création...' : 'Créer le client'}
                                   </Button>
                                   <Button
                                     type="button"
@@ -615,7 +682,11 @@ export default function CreateTicket({
                     {/* Utilisateur sélectionné */}
                     {selectedUser && (
                       <div className="rounded-lg border border-border bg-muted/40 p-3 text-foreground">
-                        <p className="font-medium">{selectedUser.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{selectedUser.name}</p>
+                          <ClientTypeBadge type={selectedUser.client_type} />
+                          {selectedUser.company_name && <span className="text-xs text-muted-foreground">{selectedUser.company_name}</span>}
+                        </div>
                         <p className="text-sm text-muted-foreground">{selectedUser.email || 'Pas d\'email'}</p>
                         {selectedUser.phone && (
                           <p className="text-sm text-muted-foreground">{selectedUser.phone}</p>
@@ -629,6 +700,10 @@ export default function CreateTicket({
                             setSearchQuery('')
                             setData('device_id', '')
                             setNewUserData({
+                              client_type: 'person',
+                              company_name: '',
+                              siret: '',
+                              company_id: '',
                               first_name: '',
                               last_name: '',
                               email: '',
@@ -660,7 +735,11 @@ export default function CreateTicket({
                             }}
                             className="w-full border-b border-border p-3 text-left hover:bg-muted/50 last:border-b-0"
                           >
-                            <p className="font-medium">{user.name}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">{user.name}</p>
+                              <ClientTypeBadge type={user.client_type} />
+                              {user.company_name && <span className="text-xs text-muted-foreground">{user.company_name}</span>}
+                            </div>
                             <p className="text-sm text-muted-foreground">{user.email || 'Pas d\'email'}</p>
                             {user.phone && <p className="text-sm text-muted-foreground">{user.phone}</p>}
                           </button>
@@ -672,7 +751,7 @@ export default function CreateTicket({
                     {searchQuery && !selectedUser && filteredUsers.length === 0 && (
                       <Alert>
                         <AlertDescription>
-                          Aucun utilisateur trouvé. Cliquez sur "Créer" pour créer un nouvel utilisateur.
+                          Aucun client trouvé. Cliquez sur "Créer" pour créer une personne ou une entreprise.
                         </AlertDescription>
                       </Alert>
                     )}

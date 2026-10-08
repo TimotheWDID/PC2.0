@@ -10,9 +10,13 @@ import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
 import { SortableTh, useSortableData } from '@/components/sortable-table';
 import { Loader2 } from 'lucide-react';
+import { ClientTypeBadge } from '@/components/client-identity-fields';
 
 type User = {
   id: number;
+  client_type?: 'person' | 'company' | null;
+  company?: { id: number; name: string } | null;
+  members_count?: number | null;
   first_name?: string | null;
   last_name?: string | null;
   name?: string | null;
@@ -22,22 +26,58 @@ type User = {
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Utilisateurs', href: '/users' },
+  { title: 'Clients', href: '/users' },
 ];
+
+type Tab = 'all' | 'person' | 'company';
+
+const tabs: { value: Tab; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'person', label: 'Personnes' },
+  { value: 'company', label: 'Entreprises' },
+];
+
+const initialTab = (): Tab => {
+  if (typeof window === 'undefined') return 'all';
+  const type = new URLSearchParams(window.location.search).get('type');
+  return type === 'person' || type === 'company' ? type : 'all';
+};
+
+const typeOf = (u: User): Tab => (u.client_type === 'company' ? 'company' : 'person');
+
+const companyCell = (u: User): string => {
+  if (typeOf(u) === 'company') {
+    const count = u.members_count ?? 0;
+    return count ? `${count} personne${count > 1 ? 's' : ''}` : '-';
+  }
+  return u.company?.name ?? '-';
+};
 
 export default function Index({ users }: { users: User[] }) {
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const page = usePage();
   const auth = (page.props as any).auth;
   const isAdmin = !!(auth?.user?.is_admin || auth?.user?.agent?.is_admin);
 
-  const filtered = users?.filter((u) =>
+  const changeTab = (next: Tab) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === 'all') url.searchParams.delete('type');
+    else url.searchParams.set('type', next);
+    window.history.replaceState(window.history.state, '', url.toString());
+  };
+
+  const countFor = (value: Tab) => (value === 'all' ? users.length : users.filter((u) => typeOf(u) === value).length);
+
+  const filtered = users?.filter((u) => tab === 'all' || typeOf(u) === tab).filter((u) =>
     (u.name ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.first_name ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.last_name ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.email ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.phone ?? '').toLowerCase().includes(query.toLowerCase()) ||
+    (u.company?.name ?? '').toLowerCase().includes(query.toLowerCase()) ||
     (u.created_at ?? '').toLowerCase().includes(query.toLowerCase()) ||
     String(u.id).includes(query)
   ) ?? [];
@@ -45,31 +85,50 @@ export default function Index({ users }: { users: User[] }) {
   const { sortedItems: sortedFiltered, sortState, requestSort } = useSortableData(filtered, {
     id: (u) => u.id,
     name: (u) => u.name ?? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim(),
+    company: (u) => companyCell(u),
     email: (u) => u.email ?? '',
     phone: (u) => u.phone ?? '',
     created_at: (u) => u.created_at ?? '',
   });
 
   const handleDelete = (id: number) => {
-    if (!confirm('Supprimer cet utilisateur ?')) return;
+    if (!confirm('Supprimer ce client ?')) return;
     setDeletingUserId(id);
     router.delete(`/users/${id}`, { onFinish: () => setDeletingUserId(null) });
   };
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Utilisateurs" />
+      <Head title="Clients" />
       <div className="py-2 sm:py-4 w-full">
-        <Heading title="Utilisateurs" description="Liste et gestion des utilisateurs" />
+        <Heading title="Clients" description="Personnes et entreprises" />
+
+        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Type de client">
+          {tabs.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.value}
+              onClick={() => changeTab(item.value)}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === item.value ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {item.label}
+              <span className={`rounded-full px-1.5 text-xs ${tab === item.value ? 'bg-primary-foreground/20' : 'bg-muted'}`}>{countFor(item.value)}</span>
+            </button>
+          ))}
+        </div>
 
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Liste des utilisateurs</CardTitle>
+            <CardTitle>{tab === 'company' ? 'Liste des entreprises' : tab === 'person' ? 'Liste des personnes' : 'Liste des clients'}</CardTitle>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input placeholder="Rechercher ID, nom, email, telephone..." value={query} onChange={(e) => setQuery(e.target.value)} />
               {isAdmin && (
-                <Link href="/users/create">
-                  <Button variant="default" className="w-full sm:w-auto">Nouveau</Button>
+                <Link href={tab === 'company' ? '/users/create?type=company' : '/users/create'}>
+                  <Button variant="default" className="w-full sm:w-auto">{tab === 'company' ? 'Nouvelle entreprise' : 'Nouveau'}</Button>
                 </Link>
               )}
             </div>
@@ -84,6 +143,10 @@ export default function Index({ users }: { users: User[] }) {
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold">#{u.id} - {u.name ?? '-'}</p>
                         <span className="text-xs text-muted-foreground">{formatDateTimeFr(u.created_at, { timeZone: 'Europe/Paris' })}</span>
+                      </div>
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <ClientTypeBadge type={u.client_type} />
+                        {companyCell(u) !== '-' && <span className="text-xs text-muted-foreground">{companyCell(u)}</span>}
                       </div>
                       <p className="text-xs text-muted-foreground">{u.email ?? '-'}</p>
                       <p className="text-xs text-muted-foreground">{u.phone ?? '-'}</p>
@@ -113,7 +176,7 @@ export default function Index({ users }: { users: User[] }) {
                   </div>
                 ))
               ) : (
-                <div className="rounded-md border px-4 py-8 text-center text-sm text-muted-foreground">Aucun utilisateur trouvé.</div>
+                <div className="rounded-md border px-4 py-8 text-center text-sm text-muted-foreground">Aucun client trouvé.</div>
               )}
             </div>
 
@@ -123,6 +186,8 @@ export default function Index({ users }: { users: User[] }) {
                   <tr>
                     <SortableTh label="ID" sortKey="id" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <SortableTh label="Nom" sortKey="name" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Type</th>
+                    <SortableTh label="Entreprise" sortKey="company" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <SortableTh label="Email" sortKey="email" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <SortableTh label="Téléphone" sortKey="phone" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
                     <SortableTh label="Créé le" sortKey="created_at" sortState={sortState} onSort={requestSort} className="px-4 py-3 text-left text-sm font-semibold text-foreground" />
@@ -135,6 +200,8 @@ export default function Index({ users }: { users: User[] }) {
                       <tr key={u.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => window.location.href = `/users/${u.id}/show`}>
                         <td className="px-4 py-4 text-sm font-medium">{u.id}</td>
                         <td className="px-4 py-4 text-sm font-medium">{u.name ?? '-'}</td>
+                        <td className="px-4 py-4 text-sm"><ClientTypeBadge type={u.client_type} /></td>
+                        <td className="px-4 py-4 text-sm text-muted-foreground">{companyCell(u)}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.email ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{u.phone ?? '-'}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{formatDateTimeFr(u.created_at, { timeZone: 'Europe/Paris' })}</td>
@@ -166,7 +233,7 @@ export default function Index({ users }: { users: User[] }) {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun utilisateur trouvé.</td>
+                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">Aucun client trouvé.</td>
                     </tr>
                   )}
                 </tbody>
@@ -175,7 +242,7 @@ export default function Index({ users }: { users: User[] }) {
           </CardContent>
         </Card>
       </div>
-      <MobileNativeNav fabHref="/users/create" fabLabel="Nouvel utilisateur" />
+      <MobileNativeNav fabHref={tab === 'company' ? '/users/create?type=company' : '/users/create'} fabLabel={tab === 'company' ? 'Nouvelle entreprise' : 'Nouveau client'} />
     </AppLayout>
   );
 }

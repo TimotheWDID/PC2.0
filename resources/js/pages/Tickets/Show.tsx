@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2, Stethoscope, ExternalLink } from 'lucide-react';
+import { User, Mail, Phone, FolderOpen, UserCheck, MapPin, Save, Edit, Check, X, Plus, ShoppingCart, History, Sparkles, Trash2, RotateCcw, Eye, EyeOff, Ticket, Cpu, ShieldCheck, Printer, NotebookPen, Loader2, Link2, Stethoscope, ExternalLink, Building2 } from 'lucide-react';
 import TicketChat from '@/components/TicketChat';
 import { formatDateTimeFr } from '@/lib/datetime';
 import MobileNativeNav from '@/components/mobile-native-nav';
@@ -2520,6 +2520,17 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         <span className="font-medium">{ticket.user.name}</span>
                       )}
                     </div>
+                    {ticket.user.client_type === 'company' && (
+                      <p className="text-xs text-muted-foreground">Client entreprise</p>
+                    )}
+                    {ticket.user.company && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <Link href={`/users/${ticket.user.company.id}/show`} className="link-readable">
+                          {ticket.user.company.name}
+                        </Link>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       <a href={`mailto:${ticket.user.email}`} className="link-readable">

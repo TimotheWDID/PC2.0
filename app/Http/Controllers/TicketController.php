@@ -57,6 +57,7 @@ class TicketController extends Controller
     ];
 
     private const TRACKED_TICKET_FIELDS = [
+        'user_id',
         'title',
         'message',
         'brought_items',
@@ -73,6 +74,7 @@ class TicketController extends Controller
     ];
 
     private const TRACKED_FIELD_LABELS = [
+        'user_id' => 'Client',
         'title' => 'Titre',
         'message' => 'Description',
         'brought_items' => 'Objets apportes',
@@ -521,11 +523,17 @@ class TicketController extends Controller
                 'other' => 'Divers',
             ];
             $items = is_array($value) && is_array($value['items'] ?? null) ? $value['items'] : [];
-            $otherItem = is_array($value) ? trim((string) ($value['other'] ?? '')) : '';
+            $other = is_array($value) ? ($value['other'] ?? '') : '';
+            // normalizeBroughtItems stocke désormais une liste d'objets divers
+            $otherItem = is_array($other) ? implode(', ', array_filter(array_map('trim', array_map('strval', $other)))) : trim((string) $other);
 
             return collect($items)
                 ->map(fn ($item) => $item === 'other' && $otherItem !== '' ? "Divers: {$otherItem}" : ($labels[$item] ?? $item))
                 ->implode(', ') ?: null;
+        }
+
+        if ($field === 'user_id') {
+            return empty($value) ? null : (\App\Models\User::find($value)?->name ?? (string) $value);
         }
 
         if ($field === 'assignee_id') {
@@ -705,7 +713,7 @@ class TicketController extends Controller
                 'suggested_specialities' => $suggestedSpecialities,
                 'user' => $t->user ? [
                     'id' => $t->user->id,
-                    'name' => $t->user->first_name . ' ' . $t->user->last_name,
+                    'name' => $t->user->name,
                 ] : null,
                 'assignee' => $t->assignee ? [
                     'id' => $t->assignee->id,
@@ -924,11 +932,13 @@ class TicketController extends Controller
         $users = [];
         if ($isAgent) {
             $users = \App\Models\User::whereDoesntHave('agent')
-                ->with('devices')
+                ->with(['devices', 'company:id,client_type,company_name,first_name,last_name'])
                 ->get()
                 ->map(fn($u) => [
                     'id' => $u->id,
-                    'name' => $u->first_name . ' ' . $u->last_name,
+                    'name' => $u->name,
+                    'client_type' => $u->client_type ?? \App\Models\User::TYPE_PERSON,
+                    'company_name' => $u->company?->name,
                     'email' => $u->email,
                     'phone' => $u->phone,
                     'devices' => $u->devices->map(fn(Device $device) => $this->serializeDevice($device))->values(),
@@ -993,7 +1003,17 @@ class TicketController extends Controller
     {
         $this->ensureAgentOrAbort();
 
+        $isCompany = $request->input('client_type') === \App\Models\User::TYPE_COMPANY;
+
         $data = $request->validate([
+            'client_type' => ['nullable', Rule::in(\App\Models\User::CLIENT_TYPES)],
+            'company_name' => [$isCompany ? 'required' : 'nullable', 'string', 'max:255'],
+            'siret' => 'nullable|string|max:20',
+            'company_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('client_type', \App\Models\User::TYPE_COMPANY),
+            ],
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
@@ -1006,12 +1026,26 @@ class TicketController extends Controller
         $fullAddress = trim(($data['address'] ?? '') . ' ' . ($data['postal_code'] ?? '') . ' ' . ($data['city'] ?? ''));
         $email = !empty($data['email']) ? $data['email'] : null;
 
+        $identity = $isCompany
+            ? [
+                'client_type' => \App\Models\User::TYPE_COMPANY,
+                'company_name' => $data['company_name'],
+                'siret' => $data['siret'] ?? null,
+                'first_name' => '',
+                'last_name' => $data['company_name'],
+            ]
+            : [
+                'client_type' => \App\Models\User::TYPE_PERSON,
+                'company_id' => $data['company_id'] ?? null,
+                'first_name' => $data['first_name'] ?? 'Client',
+                'last_name' => $data['last_name'] ?? '',
+            ];
+
         if ($email) {
             $user = \App\Models\User::firstOrCreate(
                 ['email' => $email],
                 [
-                    'first_name' => $data['first_name'] ?? 'Client',
-                    'last_name' => $data['last_name'] ?? '',
+                    ...$identity,
                     'password' => bcrypt('defaultpassword'),
                     'phone' => $data['phone'] ?? '',
                     'address' => $fullAddress,
@@ -1020,8 +1054,7 @@ class TicketController extends Controller
             );
         } else {
             $user = \App\Models\User::create([
-                'first_name' => $data['first_name'] ?? 'Client',
-                'last_name' => $data['last_name'] ?? '',
+                ...$identity,
                 'password' => bcrypt('defaultpassword'),
                 'phone' => $data['phone'] ?? '',
                 'address' => $fullAddress,
@@ -1030,10 +1063,14 @@ class TicketController extends Controller
             ]);
         }
 
+        $user->loadMissing('company:id,client_type,company_name,first_name,last_name');
+
         return response()->json([
             'user' => [
                 'id' => $user->id,
-                'name' => trim($user->first_name . ' ' . $user->last_name),
+                'name' => $user->name,
+                'client_type' => $user->client_type ?? \App\Models\User::TYPE_PERSON,
+                'company_name' => $user->company?->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
             ],
@@ -1461,7 +1498,7 @@ class TicketController extends Controller
                 'priority' => $ticket->priority ?? null,
                 'status' => $ticket->status ?? null,
                 'user' => $ticket->user ? [
-                    'name' => $ticket->user->first_name . ' ' . $ticket->user->last_name,
+                    'name' => $ticket->user->name,
                     'email' => $ticket->user->email,
                     'phone' => $ticket->user->phone,
                     'address' => $ticket->user->address,
@@ -1641,9 +1678,14 @@ class TicketController extends Controller
                 'created_at' => $ticket->created_at ? $ticket->created_at->toIso8601String() : null,
                 'user' => $ticket->user ? [
                     'id' => $ticket->user->id,
+                    'client_type' => $ticket->user->client_type ?? \App\Models\User::TYPE_PERSON,
+                    'company' => $ticket->user->company ? [
+                        'id' => $ticket->user->company->id,
+                        'name' => $ticket->user->company->name,
+                    ] : null,
                     'first_name' => $ticket->user->first_name,
                     'last_name' => $ticket->user->last_name,
-                    'name' => $ticket->user->first_name . ' ' . $ticket->user->last_name,
+                    'name' => $ticket->user->name,
                     'email' => $ticket->user->email,
                     'phone' => $ticket->user->phone ?? null,
                     'address' => $ticket->user->address ?? null,
@@ -1725,9 +1767,28 @@ class TicketController extends Controller
             ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))
             ->values();
 
+        // Un agent peut corriger le client d'un ticket (personne ou entreprise)
+        $clients = $this->isAgentContext()
+            ? \App\Models\User::where(fn ($query) => $query->whereDoesntHave('agent')->orWhereKey($ticket->user_id))
+                ->with('company:id,client_type,company_name,first_name,last_name')
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get()
+                ->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'client_type' => $u->client_type ?? \App\Models\User::TYPE_PERSON,
+                    'company_name' => $u->company?->name,
+                    'email' => $u->email,
+                ])
+                ->values()
+            : [];
+
         return Inertia::render('Tickets/Edit', [
+            'clients' => $clients,
             'ticket' => [
                 'id' => $ticket->id,
+                'user_id' => $ticket->user_id,
                 'title' => $ticket->title,
                 'message' => $ticket->message,
                 'device_password' => $ticket->device_password,
@@ -1783,6 +1844,7 @@ class TicketController extends Controller
             'contact_email' => 'nullable|email|max:255',
             'is_resolved' => 'nullable|boolean',
             'is_locked' => 'nullable|boolean',
+            'user_id' => 'nullable|integer|exists:users,id',
         ]);
 
         $categoryIds = collect($request->input('category_ids', $data['category_id'] !== null ? [(int) $data['category_id']] : []))
@@ -1839,6 +1901,15 @@ class TicketController extends Controller
         $ticket->contact_email = $data['contact_email'] ?? null;
         $ticket->is_resolved = $data['is_resolved'] ?? false;
         $ticket->is_locked = $data['is_locked'] ?? false;
+
+        if (!empty($data['user_id']) && (int) $data['user_id'] !== (int) $ticket->user_id && $this->isAgentContext()) {
+            $ticket->user_id = (int) $data['user_id'];
+
+            // L'appareil de l'ancien client ne suit pas le ticket
+            if (!empty($ticket->device_id) && !Device::whereKey($ticket->device_id)->where('user_id', $ticket->user_id)->exists()) {
+                $ticket->device_id = null;
+            }
+        }
 
         if (!empty($ticket->device_id)) {
             $device = Device::query()
