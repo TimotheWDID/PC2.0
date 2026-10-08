@@ -57,6 +57,7 @@ class TicketController extends Controller
     ];
 
     private const TRACKED_TICKET_FIELDS = [
+        'user_id',
         'title',
         'message',
         'brought_items',
@@ -73,6 +74,7 @@ class TicketController extends Controller
     ];
 
     private const TRACKED_FIELD_LABELS = [
+        'user_id' => 'Client',
         'title' => 'Titre',
         'message' => 'Description',
         'brought_items' => 'Objets apportes',
@@ -521,11 +523,17 @@ class TicketController extends Controller
                 'other' => 'Divers',
             ];
             $items = is_array($value) && is_array($value['items'] ?? null) ? $value['items'] : [];
-            $otherItem = is_array($value) ? trim((string) ($value['other'] ?? '')) : '';
+            $other = is_array($value) ? ($value['other'] ?? '') : '';
+            // normalizeBroughtItems stocke désormais une liste d'objets divers
+            $otherItem = is_array($other) ? implode(', ', array_filter(array_map('trim', array_map('strval', $other)))) : trim((string) $other);
 
             return collect($items)
                 ->map(fn ($item) => $item === 'other' && $otherItem !== '' ? "Divers: {$otherItem}" : ($labels[$item] ?? $item))
                 ->implode(', ') ?: null;
+        }
+
+        if ($field === 'user_id') {
+            return empty($value) ? null : (\App\Models\User::find($value)?->name ?? (string) $value);
         }
 
         if ($field === 'assignee_id') {
@@ -1759,9 +1767,28 @@ class TicketController extends Controller
             ->sortByDesc(fn(array $agent) => count(array_intersect($agent['specialities'] ?? [], $suggestedSpecialities)))
             ->values();
 
+        // Un agent peut corriger le client d'un ticket (personne ou entreprise)
+        $clients = $this->isAgentContext()
+            ? \App\Models\User::where(fn ($query) => $query->whereDoesntHave('agent')->orWhereKey($ticket->user_id))
+                ->with('company:id,client_type,company_name,first_name,last_name')
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get()
+                ->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'client_type' => $u->client_type ?? \App\Models\User::TYPE_PERSON,
+                    'company_name' => $u->company?->name,
+                    'email' => $u->email,
+                ])
+                ->values()
+            : [];
+
         return Inertia::render('Tickets/Edit', [
+            'clients' => $clients,
             'ticket' => [
                 'id' => $ticket->id,
+                'user_id' => $ticket->user_id,
                 'title' => $ticket->title,
                 'message' => $ticket->message,
                 'device_password' => $ticket->device_password,
@@ -1817,6 +1844,7 @@ class TicketController extends Controller
             'contact_email' => 'nullable|email|max:255',
             'is_resolved' => 'nullable|boolean',
             'is_locked' => 'nullable|boolean',
+            'user_id' => 'nullable|integer|exists:users,id',
         ]);
 
         $categoryIds = collect($request->input('category_ids', $data['category_id'] !== null ? [(int) $data['category_id']] : []))
@@ -1873,6 +1901,15 @@ class TicketController extends Controller
         $ticket->contact_email = $data['contact_email'] ?? null;
         $ticket->is_resolved = $data['is_resolved'] ?? false;
         $ticket->is_locked = $data['is_locked'] ?? false;
+
+        if (!empty($data['user_id']) && (int) $data['user_id'] !== (int) $ticket->user_id && $this->isAgentContext()) {
+            $ticket->user_id = (int) $data['user_id'];
+
+            // L'appareil de l'ancien client ne suit pas le ticket
+            if (!empty($ticket->device_id) && !Device::whereKey($ticket->device_id)->where('user_id', $ticket->user_id)->exists()) {
+                $ticket->device_id = null;
+            }
+        }
 
         if (!empty($ticket->device_id)) {
             $device = Device::query()

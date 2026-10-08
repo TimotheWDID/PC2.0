@@ -15,7 +15,6 @@ type UserTicket = {
   status: string | null;
   priority: string | null;
   created_at: string | null;
-  requester?: string | null;
   device?: {
     id: number;
     name: string;
@@ -306,9 +305,6 @@ export default function Show({
                         <div>
                           <p className="font-medium">#{ticket.id} - {ticket.title || 'Sans titre'}</p>
                           <p className="text-sm text-muted-foreground">Créé le {formatDateTimeFr(ticket.created_at)}</p>
-                          {ticket.requester && (
-                            <p className="text-sm text-muted-foreground">Demandeur : {ticket.requester}</p>
-                          )}
                           <p className="text-sm text-muted-foreground">
                             Appareil: {ticket.device?.name || '-'}
                             {ticket.device?.asset_tag ? ` (${ticket.device.asset_tag})` : ''}

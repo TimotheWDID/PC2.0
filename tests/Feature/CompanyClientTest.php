@@ -105,7 +105,7 @@ it('refuses to link a person to another person', function () {
         ->assertSessionHasErrors('company_id');
 });
 
-it('shows company members and their tickets on the company page', function () {
+it('keeps company and member tickets on their own pages', function () {
     $company = makeCompany();
     $member = User::factory()->create(['first_name' => 'Claire', 'last_name' => 'Martin', 'company_id' => $company->id]);
 
@@ -131,7 +131,8 @@ it('shows company members and their tickets on the company page', function () {
             ->where('user.name', 'Acme SARL')
             ->has('members', 1)
             ->where('members.0.id', $member->id)
-            ->has('tickets', 2)
+            ->has('tickets', 1)
+            ->where('tickets.0.id', $companyTicket->id)
         );
 
     $this->actingAs(companyAgent())
@@ -208,4 +209,56 @@ it('creates a person attached to a company from the ticket form', function () {
         ->assertOk()
         ->assertJsonPath('user.name', 'Lea Roux')
         ->assertJsonPath('user.company_name', 'Acme SARL');
+});
+
+it('lets an agent move a ticket to another client', function () {
+    $person = User::factory()->create();
+    $company = makeCompany();
+    $device = \App\Models\Device::create([
+        'user_id' => $person->id,
+        'device_type' => 'computer',
+        'status' => 'active',
+    ]);
+    $ticket = Ticket::create([
+        'user_id' => $person->id,
+        'device_id' => $device->id,
+        'title' => 'Mauvais client',
+        'priority' => 'low',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs(companyAgent())
+        ->put(route('tickets.update', $ticket), [
+            'user_id' => $company->id,
+            'title' => 'Mauvais client',
+            'category_id' => null,
+            'device_id' => $device->id,
+            'notify_by' => 'None',
+        ])
+        ->assertRedirect(route('tickets.show', $ticket));
+
+    $ticket->refresh();
+
+    expect($ticket->user_id)->toBe($company->id)
+        ->and($ticket->device_id)->toBeNull();
+});
+
+it('does not let a customer move their ticket to another client', function () {
+    $person = User::factory()->create();
+    $other = User::factory()->create();
+    $ticket = Ticket::create([
+        'user_id' => $person->id,
+        'title' => 'Mon ticket',
+        'priority' => 'low',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($person)->put(route('tickets.update', $ticket), [
+        'user_id' => $other->id,
+        'title' => 'Mon ticket',
+        'category_id' => null,
+        'notify_by' => 'None',
+    ]);
+
+    expect($ticket->fresh()->user_id)->toBe($person->id);
 });

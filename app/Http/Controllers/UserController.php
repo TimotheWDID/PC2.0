@@ -64,19 +64,13 @@ class UserController extends Controller
 
     private function getUserTickets(User $user)
     {
-        // Une entreprise voit aussi les tickets des personnes qui lui sont rattachées
-        $ownerIds = $user->isCompany()
-            ? $user->members()->pluck('id')->push($user->id)->all()
-            : [$user->id];
-
-        return Ticket::whereIn('user_id', $ownerIds)
+        return Ticket::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->with(['device:id,brand,model,serial_number,asset_tag,device_type', 'user:id,first_name,last_name'])
-            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id', 'user_id'])
-            ->map(function ($ticket) use ($user) {
+            ->with('device:id,brand,model,serial_number,asset_tag,device_type')
+            ->get(['id', 'title', 'status', 'priority', 'created_at', 'device_id'])
+            ->map(function ($ticket) {
                 return [
                     'id' => $ticket->id,
-                    'requester' => (int) $ticket->user_id !== (int) $user->id ? $ticket->user?->name : null,
                     'title' => $ticket->title,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
