@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Commande;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -41,7 +42,7 @@ class TicketMagicLinkController extends Controller
                 ] : null,
                 'user' => $ticket->user ? [
                     'id' => $ticket->user->id,
-                    'name' => trim((string) $ticket->user->first_name . ' ' . (string) $ticket->user->last_name),
+                    'name' => trim((string) $ticket->user->first_name.' '.(string) $ticket->user->last_name),
                     'email' => $ticket->user->email,
                     'phone' => $ticket->user->phone,
                 ] : null,
@@ -52,6 +53,19 @@ class TicketMagicLinkController extends Controller
                     'asset_tag' => $ticket->device->asset_tag,
                 ] : null,
             ],
+            // Only non-sensitive fields: no supplier, order number or prices.
+            'commandes' => Commande::query()
+                ->where('ticket_id', $ticket->id)
+                ->orderBy('created_at')
+                ->get(['id', 'nom', 'statut', 'created_at', 'updated_at'])
+                ->map(fn (Commande $commande) => [
+                    'id' => $commande->id,
+                    'nom' => $commande->nom,
+                    'statut' => $commande->statut,
+                    'created_at' => $commande->created_at?->toIso8601String(),
+                    'updated_at' => $commande->updated_at?->toIso8601String(),
+                ])
+                ->values(),
             'magicAccess' => [
                 'enabled' => true,
                 'token' => $token,
