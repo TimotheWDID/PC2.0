@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\AuthorizesTicketAccess;
 use App\Models\Device;
 use App\Models\DeviceEvent;
 use App\Models\Diagnostic;
@@ -13,6 +14,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -23,6 +25,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DiagnosticController extends Controller
 {
+    use AuthorizesTicketAccess;
+
     /**
      * Diag inventory field id => [devices column, label, kind, max length].
      */
@@ -246,6 +250,63 @@ class DiagnosticController extends Controller
         return response()->json([
             'updated' => $updated,
             'warnings' => $warnings,
+        ]);
+    }
+
+    /**
+     * Share the diagnostic's customer sheet on the ticket (it then shows in the
+     * ticket's files for the customer), or take it back.
+     */
+    public function updateVisibility(Request $request, Ticket $ticket, Diagnostic $diagnostic)
+    {
+        $this->ensureBelongsToTicket($ticket, $diagnostic);
+
+        $visible = (bool) $request->validate(['client_visible' => 'required|boolean'])['client_visible'];
+
+        if ($visible !== (bool) $diagnostic->client_visible) {
+            $diagnostic->forceFill([
+                'client_visible' => $visible,
+                'client_visible_at' => $visible ? now() : null,
+            ])->save();
+
+            TicketTimelineEvent::create([
+                'ticket_id' => $ticket->id,
+                'technician_id' => Auth::id(),
+                'event_type' => $visible ? 'diagnostic_shared' : 'diagnostic_unshared',
+                'summary' => $visible ? 'Diagnostic rendu visible au client' : 'Diagnostic masqué au client',
+                'details' => ['diagnostic_id' => $diagnostic->id],
+                'happened_at' => now(),
+            ]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $diagnostic->id, 'client_visible' => (bool) $diagnostic->client_visible]);
+        }
+
+        return back()->with('success', $visible
+            ? 'Le diagnostic est visible par le client dans les fichiers du ticket.'
+            : 'Le diagnostic n\'est plus visible par le client.');
+    }
+
+    /**
+     * The customer sheet of a diagnostic. Agents can always preview it; the
+     * customer (owner or magic link) only once it was made visible.
+     */
+    public function clientReport(Request $request, Ticket $ticket, Diagnostic $diagnostic): Response
+    {
+        $this->ensureBelongsToTicket($ticket, $diagnostic);
+        $this->authorizeTicketAccess($request, $ticket);
+        abort_unless($diagnostic->client_visible || $this->isAgentContext(), 404);
+
+        $name = $diagnostic->clientReportName();
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+        return response($diagnostic->clientReportHtml(), 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Disposition' => $disposition.'; filename="'.Str::ascii($name).'"; filename*=UTF-8\'\''.rawurlencode($name),
+            'Cache-Control' => 'private, no-store',
+            'X-Robots-Tag' => 'noindex, nofollow',
+            'X-Frame-Options' => 'SAMEORIGIN',
         ]);
     }
 

@@ -1641,6 +1641,8 @@ class TicketController extends Controller
                     'viability_label' => $diagnostic->viability_label,
                     'created_at' => $diagnostic->created_at?->toIso8601String(),
                     'report_url' => route('tickets.diagnostics.show', [$ticket, $diagnostic], false),
+                    'client_visible' => (bool) $diagnostic->client_visible,
+                    'client_report_url' => route('tickets.diagnostics.clientReport', [$ticket, $diagnostic], false),
                     'technician' => $diagnostic->technician
                         ? trim(($diagnostic->technician->first_name ?? '') . ' ' . ($diagnostic->technician->last_name ?? ''))
                         : null,
