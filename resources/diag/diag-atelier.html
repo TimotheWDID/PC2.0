@@ -1303,7 +1303,7 @@ function techNarrative(r){
   const parts = [];
   if (r.hw){
     if (st.cpuTempMax){
-      parts.push(`Sur ${r.sampleCount} mesures (${fmt(r.durationMin,1)} min), la température CPU reste ${r.tempStatus==='good'?'dans une plage normale':'élevée par moments'} (moyenne ${fmt(st.cpuTempAvg.avg,0)} °C, crête ${fmt(st.cpuTempMax.max,0)} °C)` +
+      parts.push(`Sur ${r.sampleCount} mesures (${fmt(r.durationMin,1)} min), la température CPU reste ${r.tempStatus==='good'?'dans une plage normale':'élevée par moments'} (moyenne ${fmt((st.cpuTempAvg || st.cpuTempMax).avg,0)} °C, crête ${fmt(st.cpuTempMax.max,0)} °C)` +
         (r.throttlePct ? `, avec limitation thermique observée sur ${fmt(r.throttlePct,1)} % des mesures (${r.hw.flags.throttleCore}/${r.hw.rowCount})` : ', sans limitation thermique détectée') + '.');
     }
     if (st.cpuPower){
@@ -1653,6 +1653,8 @@ const appHas = v => v !== null && v !== undefined && v !== '';
 function appDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[3]}/${m[1]}` : null; }
 function appFrDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/); return m ? `${m[3]}/${m[2]}/${m[1]}` + (m[4] && m[4]+m[5] !== '0000' ? ` ${m[4]}:${m[5]}` : '') : ''; }
 
+// « ASUSTeK COMPUTER INC. PRIME B450M-A » → « ASUSTeK PRIME B450M-A »
+const appBoardName = s => String(s || '').replace(/,?\s*\b(computer|inc|co|ltd|corp|corporation|technology|international|limited)\b\.?/gi, '').replace(/\s+/g, ' ').trim();
 const appPlaceholder = v => appHas(v) && /^\s*(to be filled by o\.?e\.?m\.?|system (manufacturer|product name|version|serial number)|default string|o\.?e\.?m\.?|not (applicable|specified|available)|none|n\/a|undefined|empty|0+|x+|1234567890|123456789)\s*$/i.test(String(v));
 function parsePc2Diag(text){
   let d;
@@ -1663,11 +1665,11 @@ function parsePc2Diag(text){
   // on an assembled PC the motherboard names the machine. Scans from 1.4 do it already.
   ['manufacturer', 'model', 'family', 'productName', 'serial'].forEach(k => { if (appPlaceholder(m[k])) m[k] = null; });
   if (!m.manufacturer && !m.model && m.board){ m.model = m.board; m.assembled = true; }
-  if (m.assembled){ m.model = [m.manufacturer, m.model].filter(Boolean).join(' ') || m.board; m.manufacturer = 'PC assemblé'; m.family = null; }
+  if (m.assembled){ m.model = appBoardName([m.manufacturer, m.model].filter(Boolean).join(' ') || m.board); m.manufacturer = 'PC assemblé'; m.family = null; }
   const facts = {};
   const set = (k, v) => { if (appHas(v)) facts[k] = String(v); };
   set('Computer Name:', m.computer);
-  set('Computer Brand Name:', m.assembled ? `PC assemblé (carte mère ${m.model})` : [m.manufacturer, m.family || m.model].filter(Boolean).join(' '));
+  set('Computer Brand Name:', m.assembled ? `PC assemblé (${m.model})` : [m.manufacturer, m.family || m.model].filter(Boolean).join(' '));
   set('Operating System:', [m.os, m.displayVersion, m.build ? `(build ${m.build}${appHas(m.ubr) ? '.' + m.ubr : ''})` : ''].filter(Boolean).join(' '));
   set('CPU Brand Name:', cpu.name);
   set('Number Of Processor Cores:', cpu.cores);
@@ -3429,6 +3431,21 @@ window.diagAppSetLog = function(text, fileName){
   } else return false;
   showReport();
   return true;
+};
+
+// The content of the customer sheet (Client view), for the application's own
+// client report: same verdict, scale, tiles and advice as on the site.
+window.diagAppClient = function(){
+  const r = window.__report;
+  if (!r || state.isExample) return null;
+  const v = r.viability;
+  return {
+    machineName: r.machineName || null, machineLine: clientMachineLine(r),
+    mood: clientMood(r), viability: v ? { score: v.score, potential: v.potential, level: v.level, title: v.title } : null,
+    tiles: clientTiles(r).map(t => ({ ...t, face: face(t.lvl, 30) })),
+    advice: clientAdvice(r).map(a => ({ ...a, label: ADVICE_PRIO[a.prio].label, lvl: ADVICE_PRIO[a.prio].lvl })),
+    moodFace: face(clientMood(r).lvl, 64),
+  };
 };
 
 // Everything « Envoyer au ticket » sends, as plain data (files in base64).

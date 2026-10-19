@@ -24,7 +24,16 @@ site à l'identique.
 - **Résumé et problèmes** : score, constats classés par gravité avec la
   marche à suivre, arborescence Matériel / Windows, contrôles réussis.
 - **Capteurs en direct** (chaque seconde) : processeur, fréquence, mémoire,
-  disques, réseau, carte graphique, zones thermiques, batterie.
+  disques, réseau, carte graphique, zones thermiques, batterie. Les cartes
+  NVIDIA et AMD donnent en plus température, charge et consommation, lues
+  auprès de leur pilote (NVML, ADL), sans rien installer. Quand HWiNFO tourne
+  (la version portable suffit) avec « Shared Memory Support », ses capteurs
+  s'ajoutent : températures du processeur par cœur, consommation, ventilateurs.
+- **Relevé des capteurs** : enregistré dès le lancement (4 h au plus),
+  « Nouveau relevé » pour repartir de zéro avant un test en charge. Il part au
+  site avec l'analyse au format d'un relevé de surveillance HWiNFO : le Diag
+  Atelier (dans l'exe et sur le site) l'affiche en courbes. Un relevé HWiNFO
+  ajouté à la main dans le Diag atelier reste prioritaire.
 - **Réparations**, une par une ou enchaînées (préréglages « Entretien
   complet », « Réparer Windows Update », « Réparer le réseau ») : point de
   restauration, DISM, SFC, chkdsk en ligne ou au redémarrage, nettoyage,
@@ -34,8 +43,10 @@ site à l'identique.
   avec réouverture automatique de l'application.
 - **Test de batterie** : santé, test de décharge (avec ou sans charge CPU),
   dépannage d'une batterie non reconnue.
-- **Rapport client** (smileys, comparatif avant / après intervention à partir
-  de l'historique), **rapport technique** détaillé et **rapport
+- **Rapport client** : la fiche Client du Diag Atelier du site (verdict,
+  échelle « Où en est votre ordinateur ? », tuiles, conseils), avec en plus le
+  comparatif avant / après intervention à partir de l'historique et les
+  travaux réalisés, **rapport technique** détaillé et **rapport
   d'inventaire** personnalisable, en HTML imprimable en PDF.
 - **Envoyer au site** : association avec une clé, recherche du ticket ou
   diag rapide, envoi de l'analyse en cours ou d'une analyse enregistrée, avec
@@ -55,6 +66,11 @@ peuvent être combinés ; quand le rapport système HWiNFO est là, il prime pou
 l'identité de la machine. L'analyse de l'application ajoute ses propres
 sections : stabilité, sécurité, mises à jour, espace disque, périphériques,
 réseau, logiciels et réparations faites.
+
+PC assemblé : quand le BIOS garde les textes par défaut du fabricant de la
+carte mère (« To be filled by O.E.M. », « System manufacturer »…), le fabricant
+et le modèle affichés et envoyés au site sont ceux de la carte mère, avec la
+mention « PC assemblé ».
 
 ## Portable : rien n'est installé sur le PC du client
 
@@ -123,14 +139,16 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
 | `sensors_windows.go` | capteurs en direct (compteurs PDH) |
 | `battery_windows.go` | test de décharge |
+| `gpu_windows.go` | capteurs des cartes graphiques NVIDIA (NVML) et AMD (ADL) |
+| `hwinfo.go`, `hwinfo_windows.go` | lecture des capteurs de HWiNFO (mémoire partagée) |
 
 ## Compiler
 
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.3.0        # Linux, macOS, Git Bash
-build.cmd 1.3.0         # invite de commandes Windows
+./build.sh 1.4.0        # Linux, macOS, Git Bash
+build.cmd 1.4.0         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans

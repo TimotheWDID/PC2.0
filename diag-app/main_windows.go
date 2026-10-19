@@ -404,6 +404,15 @@ func saveHTML(name, html string) (string, error) {
 	return p, nil
 }
 
+// saveCSV writes a sensors log next to the analyses (PC2Diag-rapports).
+func saveCSV(name, csv string) (string, error) {
+	p := filepath.Join(reportsDir(), safeName(strings.TrimSuffix(name, ".csv"))+".csv")
+	if err := os.WriteFile(p, []byte(csv), 0o600); err != nil {
+		return "", fmt.Errorf("enregistrement impossible : %w", err)
+	}
+	return p, nil
+}
+
 // exportReport fills the technical report with the last analysis.
 func (a *app) exportReport(brand json.RawMessage) (string, error) {
 	a.mu.Lock()
@@ -526,6 +535,11 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		arg(0, &name)
 		arg(1, &html)
 		return saveHTML(name, html)
+	case "goSaveCSV":
+		var name, csv string
+		arg(0, &name)
+		arg(1, &csv)
+		return saveCSV(name, csv)
 	case "goReboot":
 		delay, resume := 60, true
 		arg(0, &delay)
