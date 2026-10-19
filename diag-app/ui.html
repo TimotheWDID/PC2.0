@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PC2 Diag</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#16181d;--mute:#667085;--line:#e4e7ec;--accent:#2563eb;--good:#067647;--goodbg:#ecfdf3;--warn:#b54708;--warnbg:#fffaeb;--crit:#b42318;--critbg:#fef3f2;--info:#175cd3;--infobg:#eff8ff}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a21;--ink:#e6e8ec;--mute:#98a2b3;--line:#2a2f3a;--accent:#60a5fa;--good:#47cd89;--goodbg:#0b2a1c;--warn:#fdb022;--warnbg:#2e2208;--crit:#f97066;--critbg:#2f0f0d;--info:#53b1fd;--infobg:#0b1f36}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0}
+main{padding:16px 20px;max-width:1000px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px}
+.mute{color:var(--mute)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=text],input[type=password]{flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+button{padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+.link{background:none;border:none;color:var(--accent);padding:0;text-decoration:underline}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600}
+.good,.ok{color:var(--good);background:var(--goodbg)}.warn{color:var(--warn);background:var(--warnbg)}.crit{color:var(--crit);background:var(--critbg)}.info{color:var(--info);background:var(--infobg)}
+.err{color:var(--crit)}
+.tickets{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+.tickets div{padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.tickets div:hover{background:var(--bg)}
+.sel{padding:10px;border:1px solid var(--accent);border-radius:8px;margin-top:8px}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.finding{border-left:4px solid currentColor;padding:6px 10px;border-radius:6px;margin-bottom:6px}
+.finding b,.finding p{color:var(--ink)}
+.finding p{margin:2px 0}
+.finding .adv{color:var(--mute);font-size:13px}
+.score{font-size:30px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:0}dt{color:var(--mute)}dd{margin:0}
+.hidden{display:none}
+.ok-msg{padding:10px;border-radius:8px;background:var(--goodbg);color:var(--good)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>PC2 Diag</h1><span class="mute" id="hdrSub"></span></div>
+  <div id="hdrRight" class="mute"></div>
+</header>
+<main>
+  <div id="adminWarn" class="card warn hidden">
+    L'application ne tourne pas en administrateur : l'état SMART des disques, BitLocker et l'intégrité de Windows ne seront pas relevés.
+    <button class="link" onclick="call('elevate').catch(()=>{})">Relancer en administrateur</button>
+  </div>
+
+  <section id="pairCard" class="card hidden">
+    <h2>Associer l'application au site</h2>
+    <p class="mute">Sur le site, ouvrez <b>Diag rapide</b> puis <b>Créer une clé d'association</b>, et recopiez ici l'adresse du site et la clé. Elles sont gardées à côté de l'exe (sur votre clé USB) : rien n'est écrit sur ce PC.</p>
+    <div class="row"><input id="server" type="text" placeholder="Adresse du site (ex. https://support.exemple.fr)"></div>
+    <div class="row" style="margin-top:8px"><input id="token" type="password" placeholder="Clé (pc2d_…)"><button class="primary" onclick="pair()">Associer</button></div>
+    <p id="pairErr" class="err"></p>
+  </section>
+
+  <section id="destCard" class="card hidden">
+    <h2>Destination du rapport</h2>
+    <div id="destSel"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="q" type="text" placeholder="Chercher un ticket : n°, client ou titre" oninput="searchSoon()">
+      <button onclick="selectTicket(0)">Diag rapide (sans ticket)</button>
+    </div>
+    <div id="tickets" class="tickets hidden"></div>
+    <p id="destErr" class="err"></p>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">Analyse du poste <span class="mute" id="machine"></span></h2>
+      <button class="primary" id="scanBtn" onclick="scan()">Lancer l'analyse</button>
+    </div>
+    <div id="progress" class="hidden">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="mute" id="stepLabel">Préparation…</div>
+    </div>
+    <p id="scanErr" class="err"></p>
+  </section>
+
+  <section id="resultCard" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          <h2 id="resMachine" style="font-size:18px"></h2>
+          <span id="resOverall" class="badge"></span>
+        </div>
+        <div style="text-align:right">
+          <div class="score" id="resScore"></div>
+          <div id="resVerdict" class="mute"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Envoyer au site</h2>
+        <div class="row"><button onclick="saveLocal()">Enregistrer une copie</button><button class="primary" id="sendBtn" onclick="send()">Envoyer</button></div>
+      </div>
+      <p class="mute" id="sendDest"></p>
+      <div id="sendRes"></div>
+      <p id="sendErr" class="err"></p>
+    </div>
+    <div class="card"><h2>Constats</h2><div id="findings"></div></div>
+    <div class="card"><h2>Fiche inventaire</h2><dl id="inv"></dl></div>
+  </section>
+</main>
+<script>
+let seq = 0; const pending = {};
+window.__goDone = (id, err, res) => { const p = pending[id]; if (!p) return; delete pending[id]; err ? p.rej(new Error(err)) : p.res(res); };
+function call(method, params) {
+  return new Promise((res, rej) => { const id = ++seq; pending[id] = { res, rej }; goCall(id, method, params ?? null).catch(rej); });
+}
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const show = (id, on) => $(id).classList.toggle('hidden', !on);
+const LEVEL = { crit: 'Critique', warn: 'À surveiller', info: 'Info', ok: 'OK' };
+const INV = { brand: 'Marque', model: 'Modèle', serial: 'N° de série', os: 'Système', cpu: 'Processeur', ram: 'RAM (Go)', storage: 'Stockage (Go)' };
+let S = {};
+
+function render(st) {
+  S = st || S;
+  $('hdrSub').textContent = 'v' + S.version;
+  $('machine').textContent = S.machine ? '· ' + S.machine : '';
+  show('adminWarn', !S.admin);
+  const ok = S.paired && S.me;
+  $('hdrRight').innerHTML = ok
+    ? `Connecté à <b>${esc(S.me.site || S.server)}</b> · ${esc(S.me.user)} <button class="link" onclick="unpair()">Dissocier</button>`
+    : (S.paired ? `<span class="err">${esc(S.meError || 'Vérification de la connexion…')}</span> <button class="link" onclick="recheck()">Réessayer</button> <button class="link" onclick="unpair()">Dissocier</button>` : 'Non associé');
+  show('pairCard', !S.paired);
+  if (!S.paired && S.server && !$('server').value) $('server').value = S.server;
+  show('destCard', ok);
+  $('destSel').innerHTML = S.ticket
+    ? `<div class="sel">Ticket <b>#${S.ticket.id}</b> · ${esc(S.ticket.client || 'Sans client')} · ${esc(S.ticket.title)}${S.ticket.device ? ' <span class="mute">· ' + esc(S.ticket.device) + '</span>' : ''}</div>`
+    : '<div class="sel">Diag rapide : le rapport sera rattachable à un ticket depuis le site.</div>';
+  $('sendDest').textContent = S.ticket ? `Le rapport sera ajouté au ticket #${S.ticket.id} et complétera la fiche de son appareil.` : 'Le rapport sera enregistré en diag rapide.';
+  $('sendBtn').disabled = !ok;
+  if (S.result) renderResult(S.result);
+}
+
+function renderResult(r) {
+  show('resultCard', true);
+  $('resMachine').textContent = r.machine?.name || 'Poste';
+  $('resOverall').className = 'badge ' + r.status.overall;
+  $('resOverall').textContent = r.status.overallLabel;
+  $('resScore').innerHTML = `<span class="${r.viability.level}" style="background:none">${r.viability.score}</span><span class="mute" style="font-size:14px">/100</span>`;
+  $('resVerdict').textContent = r.viability.verdict;
+  $('findings').innerHTML = (r.findings || []).map((f) => `<div class="finding ${f.level}"><b>${esc(f.title)}</b> <span class="badge ${f.level}">${LEVEL[f.level] || ''}</span> <span class="mute">${esc(f.category)}</span>${f.detail ? `<p>${esc(f.detail)}</p>` : ''}${f.advice ? `<p class="adv">${esc(f.advice)}</p>` : ''}</div>`).join('') || '<p class="mute">Aucun problème détecté.</p>';
+  $('inv').innerHTML = Object.entries(INV).map(([k, l]) => `<dt>${l}</dt><dd>${esc(r.inventory?.[k] ?? '—')}</dd>`).join('');
+}
+
+async function pair() {
+  $('pairErr').textContent = '';
+  try { render(await call('pair', { server: $('server').value, token: $('token').value })); $('token').value = ''; }
+  catch (e) { $('pairErr').textContent = e.message; }
+}
+async function unpair() { if (confirm("Dissocier l'application de ce site ?")) render(await call('unpair')); }
+async function recheck() { render(await call('recheck')); }
+
+let searchTimer = null;
+function searchSoon() { clearTimeout(searchTimer); searchTimer = setTimeout(search, 300); }
+async function search() {
+  const q = $('q').value.trim();
+  $('destErr').textContent = '';
+  if (!q) { show('tickets', false); return; }
+  try {
+    const list = await call('tickets', { q });
+    $('tickets').innerHTML = list.length
+      ? list.map((t) => `<div onclick="selectTicket(${t.id})"><b>#${t.id}</b> · ${esc(t.client || 'Sans client')} · ${esc(t.title)}${t.device ? ' <span class="mute">· ' + esc(t.device) + '</span>' : ''}</div>`).join('')
+      : '<div class="mute">Aucun ticket ouvert trouvé.</div>';
+    show('tickets', true);
+  } catch (e) { $('destErr').textContent = e.message; }
+}
+async function selectTicket(id) {
+  $('destErr').textContent = '';
+  try { render(await call('selectTicket', { id })); show('tickets', false); $('q').value = ''; $('sendRes').innerHTML = ''; }
+  catch (e) { $('destErr').textContent = e.message; }
+}
+
+async function scan() {
+  $('scanErr').textContent = ''; $('sendRes').innerHTML = ''; $('sendErr').textContent = '';
+  $('scanBtn').disabled = true; show('progress', true); $('barFill').style.width = '2%'; $('stepLabel').textContent = 'Préparation…';
+  try {
+    const r = await call('scan');
+    $('barFill').style.width = '100%'; $('stepLabel').textContent = 'Analyse terminée.';
+    renderResult(r);
+    $('resultCard').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { $('scanErr').textContent = e.message; show('progress', false); }
+  $('scanBtn').disabled = false; $('scanBtn').textContent = "Relancer l'analyse";
+}
+
+async function send() {
+  $('sendErr').textContent = ''; $('sendBtn').disabled = true;
+  try {
+    const r = await call('send');
+    const lines = [];
+    if (r.ticket) lines.push(`Rapport ajouté au ticket #${r.ticket.id}.`); else lines.push('Rapport enregistré en diag rapide.');
+    if (r.device_created) lines.push('Appareil créé et lié au ticket.');
+    if (r.filled?.length) lines.push('Fiche appareil complétée : ' + r.filled.map((f) => INV[f] || f).join(', ') + '.');
+    if (r.conflicts?.length) lines.push('Valeurs différentes non remplacées : ' + r.conflicts.map((c) => c.label).join(', ') + ' (à valider sur le site).');
+    (r.warnings || []).forEach((w) => lines.push(w));
+    $('sendRes').innerHTML = `<div class="ok-msg">${lines.map(esc).join('<br>')}<br><button class="link" onclick='openUrl(${JSON.stringify(r.report_url)})'>Ouvrir le rapport sur le site</button>${r.ticket_url ? ` · <button class="link" onclick='openUrl(${JSON.stringify(r.ticket_url)})'>Ouvrir le ticket</button>` : ''}</div>`;
+  } catch (e) { $('sendErr').textContent = e.message + ' Une copie du rapport est gardée à côté de l'exe (dossier PC2Diag-rapports).'; }
+  $('sendBtn').disabled = false;
+}
+async function saveLocal() {
+  try { const p = await call('save'); $('sendErr').textContent = ''; $('sendRes').innerHTML = `<div class="ok-msg">Copie enregistrée : ${esc(p)}</div>`; }
+  catch (e) { $('sendErr').textContent = e.message; }
+}
+function openUrl(url) { call('open', { url }).catch((e) => { $('sendErr').textContent = e.message; }); }
+
+window.onGoEvent = (ev) => {
+  if (ev.type === 'step') { $('barFill').style.width = Math.round((ev.n - 0.5) / ev.total * 100) + '%'; $('stepLabel').textContent = `Étape ${ev.n}/${ev.total} : ${ev.label}`; }
+  if (ev.type === 'state') render(ev.state);
+};
+call('state').then(render);
+</script>
+</body>
+</html>

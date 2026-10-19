@@ -8,7 +8,14 @@ import AppLayout from '@/layouts/app-layout';
 import { formatDateTimeFr } from '@/lib/datetime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { Link2, Stethoscope, Trash2 } from 'lucide-react';
+import {
+    Download,
+    KeyRound,
+    Link2,
+    MonitorCog,
+    Stethoscope,
+    Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 type QuickDiagnostic = {
@@ -31,6 +38,21 @@ type TicketOption = {
     client: string | null;
 };
 
+type AppToken = {
+    id: number;
+    name: string;
+    last_used_at: string | null;
+    last_machine: string | null;
+    created_at: string | null;
+};
+
+type DiagApp = {
+    server: string;
+    tokens: AppToken[];
+    newToken: string | null;
+    downloadUrl: string | null;
+};
+
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Diag rapide', href: '/diag' }];
 
 const diagnosticBadgeClass: Record<string, string> = {
@@ -43,11 +65,35 @@ export default function DiagnosticsIndex({
     diagnostics,
     tickets,
     toolUrl,
+    app,
 }: {
     diagnostics: QuickDiagnostic[];
     tickets: TicketOption[];
     toolUrl: string;
+    app: DiagApp;
 }) {
+    const [keyName, setKeyName] = useState('');
+
+    const issueKey = () => {
+        router.post(
+            '/diag/app-tokens',
+            { name: keyName },
+            { preserveScroll: true, onSuccess: () => setKeyName('') },
+        );
+    };
+
+    const revokeKey = (tokenId: number) => {
+        if (
+            !window.confirm(
+                'Révoquer cette clé ? L’application associée ne pourra plus envoyer de diag.',
+            )
+        ) {
+            return;
+        }
+
+        router.delete(`/diag/app-tokens/${tokenId}`, { preserveScroll: true });
+    };
+
     const [attachingId, setAttachingId] = useState<number | null>(null);
     const [ticketInput, setTicketInput] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -104,6 +150,104 @@ export default function DiagnosticsIndex({
                         </a>
                     </Button>
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <MonitorCog className="h-4 w-4" />
+                            Application PC2 Diag
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                        <p className="text-muted-foreground">
+                            L’application Windows analyse le poste (matériel,
+                            disques, batterie, Windows, sécurité, réseau) et
+                            envoie son rapport ici, sur un ticket ou en diag
+                            rapide. Elle est portable : copiez-la sur votre clé
+                            USB, associez-la une fois avec une clé d’accès, elle
+                            n’installe rien sur le PC du client.
+                        </p>
+                        {app.downloadUrl && (
+                            <Button asChild variant="outline" size="sm">
+                                <a href={app.downloadUrl} download>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Télécharger PC2Diag.exe
+                                </a>
+                            </Button>
+                        )}
+                        {app.newToken && (
+                            <div className="space-y-2 rounded-md border border-emerald-600/40 bg-emerald-50 p-3 dark:bg-emerald-950/40">
+                                <p className="font-medium">
+                                    Clé créée. Elle ne sera plus affichée.
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Dans l’application, saisissez l’adresse{' '}
+                                    <span className="font-mono">
+                                        {app.server}
+                                    </span>{' '}
+                                    et cette clé :
+                                </p>
+                                <Input
+                                    readOnly
+                                    value={app.newToken}
+                                    onFocus={(event) => event.target.select()}
+                                    className="h-8 font-mono text-xs"
+                                />
+                            </div>
+                        )}
+                        <form
+                            className="flex flex-wrap items-center gap-2"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                issueKey();
+                            }}
+                        >
+                            <Input
+                                className="h-8 max-w-xs flex-1"
+                                value={keyName}
+                                onChange={(event) =>
+                                    setKeyName(event.target.value)
+                                }
+                                placeholder="Nom (ex. clé USB atelier)"
+                                maxLength={100}
+                            />
+                            <Button type="submit" size="sm" className="h-8">
+                                <KeyRound className="mr-1 h-3.5 w-3.5" />
+                                Créer une clé d’association
+                            </Button>
+                        </form>
+                        {app.tokens.length > 0 && (
+                            <div className="space-y-1">
+                                {app.tokens.map((token) => (
+                                    <div
+                                        key={token.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="font-medium">
+                                                {token.name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {token.last_used_at
+                                                    ? `Utilisée ${formatDateTimeFr(token.last_used_at)}${token.last_machine ? ` sur ${token.last_machine}` : ''}`
+                                                    : 'Jamais utilisée'}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-muted-foreground"
+                                            onClick={() => revokeKey(token.id)}
+                                        >
+                                            Révoquer
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardHeader>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateDiagApp;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -20,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function () {
             Route::middleware('web')
                 ->group(base_path('routes/commandes.php'));
+            Route::middleware('api')
+                ->prefix('api/diag-app')
+                ->group(base_path('routes/diag-app.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -28,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'agent' => EnsureUserIsAgent::class,
+            'diag-app' => AuthenticateDiagApp::class,
         ]);
 
         $middleware->web(append: [
