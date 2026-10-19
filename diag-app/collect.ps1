@@ -40,14 +40,24 @@ $bios = Try-Get 'bios' { Get-CimInstance Win32_BIOS }
 $bb = Try-Get 'baseboard' { Get-CimInstance Win32_BaseBoard }
 $csp = Try-Get 'csproduct' { Get-CimInstance Win32_ComputerSystemProduct }
 $cv = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+# Textes laissés par défaut dans le BIOS des cartes mères vendues seules
+# (« To be filled by O.E.M. », « System manufacturer »…) : sur un PC assemblé,
+# le fabricant et le modèle sont alors ceux de la carte mère.
+function Real($v) {
+  $t = ([string]$v).Trim()
+  if ($t -match '^(to be filled by o\.?e\.?m\.?|system (manufacturer|product name|version|serial number)|default string|o\.?e\.?m\.?|oem|not (applicable|specified|available)|none|n/a|undefined|empty|base board .*|0+|x+|1234567890|123456789)?$') { $null } else { $t }
+}
+$assembled = -not (Real $cs.Manufacturer) -or -not (Real $cs.Model)
 $R.meta = [ordered]@{
   computer = $env:COMPUTERNAME; user = "$env:USERDOMAIN\$env:USERNAME"; isAdmin = $isAdmin
   os = $os.Caption; edition = (Reg $cv 'EditionID'); displayVersion = (Reg $cv 'DisplayVersion')
   build = [int]$os.BuildNumber; ubr = (Reg $cv 'UBR'); arch = $os.OSArchitecture
   installDate = (D $os.InstallDate); lastBoot = (D $os.LastBootUpTime)
   uptimeDays = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalDays, 1)
-  manufacturer = $cs.Manufacturer; model = $cs.Model; family = $cs.SystemFamily
-  productName = $csp.Version; serial = $bios.SerialNumber
+  manufacturer = $(if (Real $cs.Manufacturer) { Real $cs.Manufacturer } else { Real $bb.Manufacturer })
+  model = $(if (Real $cs.Model) { Real $cs.Model } else { Real $bb.Product })
+  family = (Real $cs.SystemFamily); assembled = $assembled
+  productName = (Real $csp.Version); serial = $(if (Real $bios.SerialNumber) { Real $bios.SerialNumber } else { Real $bb.SerialNumber })
   board = (($bb.Manufacturer, $bb.Product) -join ' ').Trim()
   bios = $bios.SMBIOSBIOSVersion; biosDate = (D $bios.ReleaseDate)
   domain = $cs.Domain; partOfDomain = $cs.PartOfDomain

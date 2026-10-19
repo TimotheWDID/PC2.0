@@ -1653,15 +1653,21 @@ const appHas = v => v !== null && v !== undefined && v !== '';
 function appDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[3]}/${m[1]}` : null; }
 function appFrDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/); return m ? `${m[3]}/${m[2]}/${m[1]}` + (m[4] && m[4]+m[5] !== '0000' ? ` ${m[4]}:${m[5]}` : '') : ''; }
 
+const appPlaceholder = v => appHas(v) && /^\s*(to be filled by o\.?e\.?m\.?|system (manufacturer|product name|version|serial number)|default string|o\.?e\.?m\.?|not (applicable|specified|available)|none|n\/a|undefined|empty|0+|x+|1234567890|123456789)\s*$/i.test(String(v));
 function parsePc2Diag(text){
   let d;
   try { d = JSON.parse(text.replace(/^\uFEFF/, '')); } catch(e){ return null; }
   if (!d || !d.meta) return null;
-  const m = d.meta || {}, cpu = d.cpu || {}, mem = d.mem || {}, sec = d.security || {};
+  const m = { ...(d.meta || {}) }, cpu = d.cpu || {}, mem = d.mem || {}, sec = d.security || {};
+  // BIOS placeholders of a motherboard sold alone (« To be filled by O.E.M. »…):
+  // on an assembled PC the motherboard names the machine. Scans from 1.4 do it already.
+  ['manufacturer', 'model', 'family', 'productName', 'serial'].forEach(k => { if (appPlaceholder(m[k])) m[k] = null; });
+  if (!m.manufacturer && !m.model && m.board){ m.model = m.board; m.assembled = true; }
+  if (m.assembled){ m.model = [m.manufacturer, m.model].filter(Boolean).join(' ') || m.board; m.manufacturer = 'PC assemblé'; m.family = null; }
   const facts = {};
   const set = (k, v) => { if (appHas(v)) facts[k] = String(v); };
   set('Computer Name:', m.computer);
-  set('Computer Brand Name:', [m.manufacturer, m.family || m.model].filter(Boolean).join(' '));
+  set('Computer Brand Name:', m.assembled ? `PC assemblé (carte mère ${m.model})` : [m.manufacturer, m.family || m.model].filter(Boolean).join(' '));
   set('Operating System:', [m.os, m.displayVersion, m.build ? `(build ${m.build}${appHas(m.ubr) ? '.' + m.ubr : ''})` : ''].filter(Boolean).join(' '));
   set('CPU Brand Name:', cpu.name);
   set('Number Of Processor Cores:', cpu.cores);
@@ -3068,7 +3074,7 @@ async function handleFiles(fileList){
       const text = decodeAuto(await f.arrayBuffer());
       const p = PARSERS.find(p => { try { return p.detect(text, f.name); } catch(e){ return false; } });
       const parsed = p ? p.parse(text) : null;
-      if (parsed){ state.sources[p.id] = parsed; state.rawFiles[p.id] = f; } else unknown.push(f.name);
+      if (parsed){ state.sources[p.id] = parsed; state.rawFiles[p.id] = f; if (p.id === 'hwinfo') state.appLog = false; } else unknown.push(f.name);
     } catch(e){ unknown.push(f.name); }
   }
   if (unknown.length) setError(`Format non reconnu pour : ${unknown.join(', ')} — formats acceptés : ${PARSERS.map(p => p.label.toLowerCase()).join(', ')}.`);
@@ -3386,6 +3392,7 @@ window.diagAppLoad = function(text, fileName){
   if (!parsed) return false;
   state.sources = { app: parsed };
   state.rawFiles = { app: new File([text], fileName || 'pc2diag.json', {type:'application/json'}) };
+  state.appLog = false;
   state.isExample = false; state.guideOpen = false; state.checksKey = null;
   setError(null);
   document.getElementById('banner').hidden = true;
@@ -3403,6 +3410,23 @@ window.diagAppSetActions = function(actions){
   app.raw.pc2diag = { ...(app.raw.pc2diag || {}), actions: list };
   const name = state.rawFiles.app && state.rawFiles.app.name || 'pc2diag.json';
   state.rawFiles.app = new File([JSON.stringify(app.raw)], name, {type:'application/json'});
+  showReport();
+  return true;
+};
+
+// Sensors log recorded by the application, in the format of a HWiNFO sensors log:
+// shown as the « Relevé de surveillance » and sent with the scan. A HWiNFO log
+// dropped by the technician is kept; null removes the application's log.
+window.diagAppSetLog = function(text, fileName){
+  if (state.sources.hwinfo && !state.appLog) return false;
+  const parsed = text ? parseHwinfo(text) : null;
+  if (parsed){
+    state.sources.hwinfo = parsed;
+    state.rawFiles.hwinfo = new File([text], fileName || 'releve-capteurs.csv', {type:'text/csv'});
+    state.appLog = true;
+  } else if (state.appLog){
+    delete state.sources.hwinfo; delete state.rawFiles.hwinfo; state.appLog = false;
+  } else return false;
   showReport();
   return true;
 };

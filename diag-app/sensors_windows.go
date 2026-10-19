@@ -48,14 +48,6 @@ type sensorDef struct {
 	h                            uintptr
 }
 
-type sensor struct {
-	ID string  `json:"id"`
-	G  string  `json:"g"`
-	L  string  `json:"l"`
-	U  string  `json:"u"`
-	V  float64 `json:"v"`
-}
-
 func addCounter(q uintptr, path string) uintptr {
 	var h uintptr
 	p, _ := windows.UTF16PtrFromString(path)
@@ -160,6 +152,7 @@ func (a *app) sensorLoop() {
 		procPdhCollectQueryData.Call(q)
 	}
 
+	gpus := openGPUs(a.log)
 	for range time.Tick(time.Second) {
 		var out []sensor
 		vals := map[string]float64{}
@@ -222,12 +215,14 @@ func (a *app) sensorLoop() {
 				sensor{ID: "ac", G: "Batterie", L: "Sur secteur", U: "bool", V: boolF(p.ACLineStatus == 1)},
 			)
 		}
+		for _, g := range gpus {
+			out = append(out, g.read()...)
+		}
+		out = append(out, readHWiNFO()...)
 		out = append(out, sensor{ID: "uptime", G: "Système", L: "Allumé depuis", U: "h", V: round2(uptimeHours())})
 		a.emitGo("sensors", out)
 	}
 }
-
-func round2(v float64) float64 { return math.Round(v*100) / 100 }
 
 func boolF(b bool) float64 {
 	if b {

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
@@ -643,6 +644,7 @@ func main() {
 			Width:  1280,
 			Height: 860,
 			Center: true,
+			IconId: 1, // icône Planète Computers (rsrc_windows_amd64.syso)
 		},
 	})
 	if w == nil {
@@ -655,6 +657,7 @@ func main() {
 		os.Exit(1)
 	}
 	a.w = w
+	setWindowIcons(w.Window())
 
 	// Un seul point d'entrée asynchrone : chaque appel tourne dans sa propre
 	// goroutine pour ne jamais figer la fenêtre, puis résout sa promesse.
@@ -683,6 +686,38 @@ func main() {
 	w.SetHtml(uiHTML)
 	w.Run()
 	w.Destroy()
+}
+
+// setWindowIcons gives the title bar (small icon) and the taskbar / Alt+Tab
+// (large icon) the Planète Computers logo, each at its native size, so it
+// stays sharp whatever the screen scaling.
+func setWindowIcons(hwnd unsafe.Pointer) {
+	if hwnd == nil {
+		return
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	loadImage, metrics, send := user32.NewProc("LoadImageW"), user32.NewProc("GetSystemMetrics"), user32.NewProc("SendMessageW")
+	var inst windows.Handle
+	_ = windows.GetModuleHandleEx(0, nil, &inst)
+	const (
+		imageIcon   = 1
+		wmSetIcon   = 0x0080
+		iconSmall   = 0
+		iconBig     = 1
+		smCxIcon    = 11
+		smCyIcon    = 12
+		smCxSmIcon  = 49
+		smCySmIcon  = 50
+		resIconMain = 1
+	)
+	for _, ic := range [][3]uintptr{{iconSmall, smCxSmIcon, smCySmIcon}, {iconBig, smCxIcon, smCyIcon}} {
+		cx, _, _ := metrics.Call(ic[1])
+		cy, _, _ := metrics.Call(ic[2])
+		h, _, _ := loadImage.Call(uintptr(inst), resIconMain, imageIcon, cx, cy, 0)
+		if h != 0 {
+			send.Call(uintptr(hwnd), wmSetIcon, ic[0], h)
+		}
+	}
 }
 
 // removeAllRetry deletes a folder the WebView2 processes may still hold for a
