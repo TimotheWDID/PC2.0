@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Planète Computers · PC2 Diag</title>
+<title>Planete-Computers 2.0 · PC2 Diag</title>
 <style>
 /* Layout : fenêtre d'atelier façon HWiNFO — barre d'outils, arborescence à gauche, panneau de détail à droite, barre d'état avec capteurs */
 :root{
@@ -173,6 +173,34 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
 .empty{color:var(--muted);padding:30px;text-align:center;border:1px dashed var(--line);border-radius:8px}
 .banner{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:12.5px}
 
+/* tests manuels */
+.tsts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.tst{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:6px;align-content:start}
+.tst.ok{border-left-color:var(--ok)} .tst.ko{border-left-color:var(--crit)} .tst.na{border-left-color:var(--faint)}
+.tst-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tst-tip{color:var(--muted);font-size:12.5px}
+.seg{display:flex;background:var(--row);border:1px solid var(--line);border-radius:7px;padding:2px;gap:2px;flex:none}
+.seg button{border:0;background:none;font:700 11.5px var(--f-ui);padding:3px 9px;border-radius:5px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"][data-tv="ok"]{background:var(--ok);color:#fff}
+.seg button[aria-pressed="true"][data-tv="ko"]{background:var(--crit);color:#fff}
+.seg button[aria-pressed="true"][data-tv="na"]{background:var(--faint);color:#fff}
+.ovl{position:fixed;inset:0;z-index:50;background:rgba(10,16,34,.55);display:flex;align-items:center;justify-content:center;padding:20px;user-select:none}
+.ovl.bare{background:#000;cursor:pointer}
+.ovl-hint{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#888;font-size:13px;transition:opacity .3s}
+.ovl-box{background:var(--panel);color:var(--fg);border-radius:12px;padding:18px 20px;max-width:640px;width:100%;max-height:100%;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.ovl-box.wide{max-width:1000px}
+.ovl-box h2{margin:0 0 6px;font:600 18px var(--f-disp)}
+.ovl-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.kb{display:grid;gap:5px;margin-top:10px}
+.kbr{display:flex;gap:5px}
+.kbk{flex:1;min-width:0;text-align:center;border:1px solid var(--line);border-radius:6px;padding:9px 2px;font-size:12px;background:var(--row);white-space:nowrap;overflow:hidden}
+.kbk.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.k-Space{flex:6} .k-Backspace,.k-Enter,.k-ShiftLeft,.k-ShiftRight,.k-CapsLock,.k-Tab{flex:1.8}
+.pad{height:260px;border:2px dashed var(--line);border-radius:10px;margin-top:10px;cursor:crosshair}
+.pad canvas{width:100%;height:100%;display:block}
+.pad-c{margin-top:8px;font-size:13px}
+.ovl video{width:100%;max-height:340px;background:#000;border-radius:8px;margin-top:6px}
+.mic{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--muted)}
 /* barre d'état */
 .status{display:flex;align-items:center;gap:18px;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden}
 .status b{font:600 12px var(--f-mono);color:var(--fg)}
@@ -183,7 +211,7 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
 </head>
 <body>
 <header class="toolbar">
-  <div class="brand"><svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg><span>Planète Computers<small>PC2 Diag</small></span></div>
+  <div class="brand"><svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg><span>Planete-Computers 2.0<small>PC2 Diag</small></span></div>
   <button class="tb primary" id="bScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Analyser</button>
   <button class="tb" data-go="atelier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Diag atelier</button>
   <button class="tb" data-go="site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>Envoyer au site</button>
@@ -471,6 +499,7 @@ function nodes(){
   add('atelier','Diag atelier (vue du site)','check',0);
   add('problems','Problèmes','alert',0,['*']);
   add('sensors','Capteurs en direct','pulse',0);
+  add('tests','Tests manuels','check',0);
   add('repair','Réparations','wrench',0);
   add('battery-test','Test de batterie','bat',0);
   add('report','Rapport client','doc',0);
@@ -574,7 +603,7 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','atelier','sensors','repair','report','site','battery-test'].includes(view)) view = 'summary';
+  if (!D && !['summary','atelier','sensors','tests','repair','report','site','battery-test'].includes(view)) view = 'summary';
   const at = view === 'atelier';
   $('#atelier').hidden = !at; c.hidden = at;
   if (at) { c.innerHTML = ''; atelierSync(); return; }
@@ -686,6 +715,145 @@ V.software = (_, n) => section('Logiciels installés', `${arr(D.software).length
 function drawSoftware(q){ q = (q || '').toLowerCase(); const b = $('#swb'); if (!b) return;
   b.innerHTML = arr(D.software).filter(x => !q || ((x.name || '') + ' ' + (x.publisher || '')).toLowerCase().includes(q)).map(x => `<tr><td>${esc(x.name)}</td><td class="mono">${esc(x.version)}</td><td>${esc(x.publisher)}</td><td class="mono">${x.date && /^\d{8}$/.test(x.date) ? x.date.slice(6,8) + '/' + x.date.slice(4,6) + '/' + x.date.slice(0,4) : ''}</td></tr>`).join(''); }
 V.passed = () => head('Contrôles réussis', `${OK.length} vérifications sans anomalie`) + props([...new Set(OK.map(o => o.cat))].map(c => [c, OK.filter(o => o.cat === c).map(o => [o.text, st('ok','OK')])]));
+
+// ----- tests manuels : la liste et les résultats du Diag atelier (envoyés avec le rapport),
+// avec pour chaque test une aide pour le faire sur place (écran, clavier, son, webcam…).
+const TESTS = {list: [], checks: {}, notes: ''};
+const TEST_HELP = {
+  ecran: {btn: 'Couleurs plein écran', tip: 'Affiche des aplats de couleur pour repérer les pixels morts, les taches et les fuites de rétroéclairage. Clic ou Espace : couleur suivante, Échap : quitter.'},
+  clavier: {btn: 'Tester le clavier', tip: 'Appuyez sur chaque touche : elle s\'allume quand Windows la reçoit.'},
+  touchpad: {btn: 'Tester souris / pavé', tip: 'Clics gauche, droit et milieu, molette et glisser : chaque action est comptée.'},
+  usb: {tip: 'Branchez une clé ou une souris sur chaque port, un par un : elle doit être reconnue à chaque fois (son de Windows, lecteur dans l\'Explorateur).'},
+  reseau: {btn: 'État du réseau', tip: 'Cartes réseau relevées par l\'analyse. Vérifiez aussi la connexion au Wi-Fi de l\'atelier.'},
+  son: {btn: 'Tester le son', tip: 'Joue une note à gauche, à droite puis des deux côtés. Refaites le test avec un casque branché sur la prise.'},
+  webcam: {btn: 'Tester webcam et micro', tip: 'Affiche l\'image de la webcam et le niveau du micro. Windows ou l\'application peuvent demander l\'autorisation.'},
+  charge: {btn: 'Suivre la charge', tip: 'Débranchez puis rebranchez le chargeur : l\'état doit changer aussitôt.'},
+  ventilo: {tip: 'Écoutez le ventilateur au démarrage et pendant une charge (Capteurs ou test de batterie sous charge) : pas de grattement ni de sifflement.'},
+  chassis: {tip: 'Ouvrez et fermez l\'écran plusieurs fois : charnières sans jeu ni craquement, coque sans fissure.'},
+};
+async function testsPull(){ // résultats saisis dans la section « Tests manuels » du Diag atelier
+  if (!ATL.ready) return;
+  try { const w = await ATL.ready; if (w.diagAppChecks) { const c = w.diagAppChecks(); TESTS.list = c.list; if (D && ATL.cur === curFile()) { TESTS.checks = c.checks; TESTS.notes = c.notes; } } } catch (_) {}
+}
+function testsPush(w){ if (w && w.diagAppSetChecks) w.diagAppSetChecks(TESTS.checks, TESTS.notes); }
+async function testsList(){
+  if (TESTS.list.length) return;
+  try { const w = await atelierFrame(); if (w.diagAppChecks) TESTS.list = w.diagAppChecks().list; } catch (_) {}
+  if (view === 'tests') render();
+}
+V.tests = () => {
+  if (!TESTS.list.length) { testsList(); return head('Tests manuels') + '<div class="empty">Chargement…</div>'; }
+  const done = TESTS.list.filter(c => TESTS.checks[c.id]).length, ko = TESTS.list.filter(c => TESTS.checks[c.id] === 'ko').length;
+  const rows = TESTS.list.map(c => { const h = TEST_HELP[c.id] || {}, v = TESTS.checks[c.id];
+    return `<div class="tst${v ? ' ' + v : ''}"><div class="tst-top"><b>${esc(c.label)}</b><span class="seg">${[['ok','OK'],['ko','KO'],['na','N/T']].map(([k, t]) => `<button data-tv="${k}" data-tid="${c.id}" aria-pressed="${v === k}">${t}</button>`).join('')}</span></div>
+      ${h.tip ? `<div class="tst-tip">${esc(h.tip)}</div>` : ''}${h.btn ? `<div><button class="btn" data-trun="${c.id}">${esc(h.btn)}</button></div>` : ''}</div>`; }).join('');
+  return head('Tests manuels', `${done}/${TESTS.list.length} testés${ko ? ' · ' + ko + ' KO' : ''}. Les résultats et les notes partent au site avec le rapport, comme ceux du Diag atelier.`) +
+    `<div class="tsts">${rows}</div><div class="card" style="margin-top:12px"><label style="display:grid;gap:4px;font-size:12px;color:var(--muted)">Notes du technicien<textarea id="t-notes" class="search" style="width:100%;min-height:80px;resize:vertical" placeholder="Observations, travaux effectués, état esthétique…">${esc(TESTS.notes)}</textarea></label></div>`;
+};
+async function testsSet(id, v){
+  if (TESTS.checks[id] === v) delete TESTS.checks[id]; else TESTS.checks[id] = v;
+  if (view === 'tests') render();
+  try { const w = await atelierSync(); testsPush(w); } catch (_) {}
+}
+$('#content').addEventListener('click', e => {
+  const b = e.target.closest('[data-tv]'); if (b) { testsSet(b.dataset.tid, b.dataset.tv); return; }
+  const r = e.target.closest('[data-trun]'); if (r) testRun(r.dataset.trun);
+});
+let notesTimer = null;
+$('#content').addEventListener('input', e => { if (e.target.id !== 't-notes') return; TESTS.notes = e.target.value;
+  clearTimeout(notesTimer); notesTimer = setTimeout(async () => { try { testsPush(await atelierSync()); } catch (_) {} }, 400); });
+
+// aides : une surcouche plein fenêtre, « Fermer » ou Échap pour revenir
+function overlay(html, opts){
+  const o = document.createElement('div'); o.className = 'ovl' + (opts && opts.bare ? ' bare' : ''); o.innerHTML = html; document.body.appendChild(o);
+  const close = () => { if (!o.isConnected) return; o.remove(); document.removeEventListener('keydown', onKey, true); opts && opts.onClose && opts.onClose(); };
+  const onKey = e => { if (opts && opts.keys) opts.keys(e); if (e.key === 'Escape' && !(opts && opts.noEsc)) { e.preventDefault(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  o.addEventListener('click', e => { if (e.target.closest('[data-close]')) close(); });
+  return {o, close};
+}
+const verdict = id => `<div class="ovl-acts"><span>Résultat :</span><button class="btn go" data-close data-tv="ok" data-tid="${id}">OK</button><button class="btn danger" data-close data-tv="ko" data-tid="${id}">KO</button><button class="btn" data-close>Fermer</button></div>`;
+const KB = [
+  ['Escape','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','Delete'],
+  ['Backquote','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','Backspace'],
+  ['Tab','KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP','BracketLeft','BracketRight','Enter'],
+  ['CapsLock','KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','Semicolon','Quote','Backslash'],
+  ['ShiftLeft','IntlBackslash','KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM','Comma','Period','Slash','ShiftRight'],
+  ['ControlLeft','MetaLeft','AltLeft','Space','AltRight','ContextMenu','ControlRight','ArrowLeft','ArrowUp','ArrowDown','ArrowRight']
+];
+// libellés d'un clavier AZERTY français (e.code désigne l'emplacement physique)
+const KBL = {Escape:'Échap',Delete:'Suppr',Backquote:'²',Digit1:'&amp; 1',Digit2:'é 2',Digit3:'" 3',Digit4:'\' 4',Digit5:'( 5',Digit6:'- 6',Digit7:'è 7',Digit8:'_ 8',Digit9:'ç 9',Digit0:'à 0',Minus:') °',Equal:'= +',Backspace:'⟵',Tab:'Tab',KeyQ:'A',KeyW:'Z',BracketLeft:'^',BracketRight:'$',Enter:'Entrée',CapsLock:'Verr. maj',KeyA:'Q',Semicolon:'M',Quote:'ù',Backslash:'*',ShiftLeft:'Maj',IntlBackslash:'&lt;',KeyZ:'W',KeyM:',',Comma:';',Period:':',Slash:'!',ShiftRight:'Maj',ControlLeft:'Ctrl',MetaLeft:'Win',AltLeft:'Alt',Space:'Espace',AltRight:'Alt Gr',ContextMenu:'Menu',ControlRight:'Ctrl',ArrowLeft:'←',ArrowUp:'↑',ArrowDown:'↓',ArrowRight:'→'};
+const kbLabel = c => KBL[c] || (c.startsWith('Key') ? c.slice(3) : c.startsWith('F') ? c : c);
+let AUDIO = null, MEDIA = null;
+function tone(pan){
+  AUDIO = AUDIO || new AudioContext();
+  const o = AUDIO.createOscillator(), g = AUDIO.createGain(), p = AUDIO.createStereoPanner();
+  o.frequency.value = 440; p.pan.value = pan; g.gain.setValueAtTime(0.0001, AUDIO.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.3, AUDIO.currentTime + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, AUDIO.currentTime + 0.9);
+  o.connect(g).connect(p).connect(AUDIO.destination); o.start(); o.stop(AUDIO.currentTime + 1);
+}
+function testRun(id){
+  if (id === 'ecran') {
+    const COLS = ['#000','#fff','#f00','#0f0','#00f','#808080','#ff0','#0ff','#f0f'];
+    let i = 0;
+    const ov = overlay('<div class="ovl-hint">Clic ou Espace : couleur suivante · Échap : quitter</div>', {bare: true,
+      keys: e => { if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); next(); } },
+      onClose: () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }});
+    const next = () => { i++; if (i >= COLS.length) { ov.close(); askVerdict('ecran'); return; } ov.o.style.background = COLS[i]; ov.o.querySelector('.ovl-hint').style.opacity = 0; };
+    ov.o.style.background = COLS[0]; ov.o.addEventListener('click', next);
+    ov.o.requestFullscreen && ov.o.requestFullscreen().catch(() => {});
+    return;
+  }
+  if (id === 'clavier') {
+    const ov = overlay(`<div class="ovl-box wide"><h2>Test du clavier</h2><p>Appuyez sur chaque touche. <span id="kbN">0</span> touche(s) reçue(s). Les touches Fn, multimédia et Impr. écran ne remontent pas toujours jusqu'à Windows.</p>
+      <div class="kb">${KB.map(r => `<div class="kbr">${r.map(c => `<span class="kbk k-${c}" data-k="${c}">${kbLabel(c)}</span>`).join('')}</div>`).join('')}</div>${verdict('clavier')}</div>`, {noEsc: true,
+      keys: e => { e.preventDefault(); e.stopPropagation(); const k = ov.o.querySelector(`[data-k="${e.code}"]`); if (k && !k.classList.contains('on')) { k.classList.add('on'); ov.o.querySelector('#kbN').textContent = ov.o.querySelectorAll('.kbk.on').length; } }});
+    return;
+  }
+  if (id === 'touchpad') {
+    const c = {0:0, 1:0, 2:0, up:0, down:0, drag:0};
+    const ov = overlay(`<div class="ovl-box"><h2>Souris et pavé tactile</h2><p>Cliquez, faites défiler et glissez dans la zone.</p><div class="pad" id="pad"><canvas id="padC"></canvas></div><div class="pad-c" id="padN"></div>${verdict('touchpad')}</div>`);
+    const pad = ov.o.querySelector('#pad'), cv = ov.o.querySelector('#padC'), n = ov.o.querySelector('#padN');
+    const show = () => { n.innerHTML = `Clic gauche <b>${c[0]}</b> · droit <b>${c[2]}</b> · milieu <b>${c[1]}</b> · molette ↑ <b>${c.up}</b> ↓ <b>${c.down}</b> · glisser <b>${c.drag}</b>`; };
+    cv.width = pad.clientWidth; cv.height = pad.clientHeight; const x = cv.getContext('2d'); x.strokeStyle = '#2A3FF5'; x.lineWidth = 3; let down = false, moved = false;
+    pad.addEventListener('contextmenu', e => e.preventDefault());
+    pad.addEventListener('mousedown', e => { e.preventDefault(); c[e.button] = (c[e.button] || 0) + 1; down = true; moved = false; x.beginPath(); x.moveTo(e.offsetX, e.offsetY); show(); });
+    pad.addEventListener('mousemove', e => { if (!down) return; moved = true; x.lineTo(e.offsetX, e.offsetY); x.stroke(); });
+    window.addEventListener('mouseup', () => { if (down && moved) { c.drag++; show(); } down = false; });
+    pad.addEventListener('wheel', e => { e.preventDefault(); c[e.deltaY < 0 ? 'up' : 'down']++; show(); }, {passive: false});
+    show(); return;
+  }
+  if (id === 'son') {
+    const ov = overlay(`<div class="ovl-box"><h2>Test du son</h2><p>Montez le volume. Chaque bouton joue une note d'une seconde.</p><div class="ovl-acts"><button class="btn" data-pan="-1">◀ Gauche</button><button class="btn" data-pan="1">Droite ▶</button><button class="btn" data-pan="0">Les deux</button></div>${verdict('son')}</div>`);
+    ov.o.addEventListener('click', e => { const b = e.target.closest('[data-pan]'); if (b) tone(+b.dataset.pan); });
+    return;
+  }
+  if (id === 'webcam') {
+    const ov = overlay(`<div class="ovl-box"><h2>Webcam et micro</h2><video id="cam" autoplay muted playsinline></video><div class="mic"><span>Micro</span><div class="progress" style="flex:1"><i id="micL" style="width:0"></i></div></div><p id="camMsg" style="color:var(--muted)">Ouverture de la webcam…</p>${verdict('webcam')}</div>`,
+      {onClose: () => { if (MEDIA) { MEDIA.getTracks().forEach(t => t.stop()); MEDIA = null; } }});
+    navigator.mediaDevices.getUserMedia({video: true, audio: true}).then(st => {
+      if (!ov.o.isConnected) { st.getTracks().forEach(t => t.stop()); return; }
+      MEDIA = st; ov.o.querySelector('#cam').srcObject = st; ov.o.querySelector('#camMsg').textContent = 'Parlez : la barre du micro doit bouger.';
+      AUDIO = AUDIO || new AudioContext(); const an = AUDIO.createAnalyser(); an.fftSize = 512; AUDIO.createMediaStreamSource(st).connect(an);
+      const buf = new Uint8Array(an.fftSize), L = ov.o.querySelector('#micL');
+      const tick = () => { if (!ov.o.isConnected) return; an.getByteTimeDomainData(buf); let m = 0; buf.forEach(v => { m = Math.max(m, Math.abs(v - 128)); }); L.style.width = Math.min(100, m / 1.28 * 1.5) + '%'; requestAnimationFrame(tick); };
+      tick();
+    }, err => { ov.o.querySelector('#camMsg').textContent = 'Webcam ou micro inaccessible : ' + (err && err.message || err) + '. Vérifiez qu\'aucune autre application ne l\'utilise et les autorisations de Windows (Paramètres › Confidentialité).'; });
+    return;
+  }
+  if (id === 'charge') {
+    const ov = overlay(`<div class="ovl-box"><h2>Charge et chargeur</h2><div id="chg" style="font-size:16px;margin:8px 0"></div><p style="color:var(--muted)">Débranchez puis rebranchez le chargeur : l'état change dans la seconde.</p>${verdict('charge')}</div>`);
+    const tick = () => { if (!ov.o.isConnected) return; const el = ov.o.querySelector('#chg');
+      el.innerHTML = S.bat ? `Sur secteur : <b>${S.ac && S.ac.v ? 'oui' : 'non'}</b> · charge <b>${fmtV(S.bat.v, '%')}</b>` : 'Pas de batterie détectée sur ce PC.'; setTimeout(tick, 500); };
+    tick(); return;
+  }
+  if (id === 'reseau') {
+    const n = (D && D.network) || {};
+    overlay(`<div class="ovl-box"><h2>Réseau</h2>${arr(n.adapters).length ? props([['Cartes réseau', arr(n.adapters).map(a => [esc(a.name), esc([a.desc, a.status, a.speed].filter(Boolean).join(' · '))])], ['Connectivité', [['Adresses IP', esc(arr(n.ip).join(', '))], ['Passerelle', esc(n.gateway)], ['Internet', navigator.onLine ? 'connecté' : 'hors ligne']]]]) : '<p>Lancez d\'abord une analyse.</p>'}${verdict('reseau')}</div>`);
+  }
+}
+function askVerdict(id){ overlay(`<div class="ovl-box"><h2>${esc((TESTS.list.find(c => c.id === id) || {}).label || '')}</h2>${verdict(id)}</div>`); }
+document.addEventListener('click', e => { const b = e.target.closest('.ovl [data-tv]'); if (b) testsSet(b.dataset.tid, b.dataset.tv); });
 
 // ----- capteurs
 function fmtV(v, u){ if (!has(v)) return '—'; if (u === 'bool') return v ? 'Oui' : 'Non'; const d = (u === '%' || u === 'MHz' || u === '' || u === '/s' || u === '°C') ? 0 : (Math.abs(v) < 10 ? 2 : 1); return (+v).toLocaleString('fr-FR', {minimumFractionDigits:d, maximumFractionDigits:d}) + (u ? ' ' + u : ''); }
@@ -1349,7 +1517,7 @@ function atelierFrame(){
     let html = '', off = 0;
     for (;;) { const p = await goAtelierPart(off); html += p.data || ''; if (!p.next) break; off = p.next; }
     if (!html) throw 'Diag atelier absent de cet exe';
-    const cfg = {shop: CFG.shop || 'Planète Computers', phone: CFG.phone || '', address: CFG.address || '', email: CFG.email || ''};
+    const cfg = {shop: CFG.shop || 'Planete-Computers 2.0', phone: CFG.phone || '', address: CFG.address || '', email: CFG.email || ''};
     html = html.replace(/<head>/i, '<head><script>window.DIAG_APP = ' + JSON.stringify(cfg).replace(/</g, '\\u003c') + ';<\/script>');
     const f = $('#atelier');
     await new Promise(res => { f.addEventListener('load', res, {once:true}); f.srcdoc = html; });
@@ -1365,7 +1533,7 @@ async function atelierSync(){
   let w;
   try { w = await atelierFrame(); } catch (_) { return null; }
   if (D && ATL.cur !== curFile()) { w.diagAppLoad(JSON.stringify(D), baseName(curFile()) || 'Analyse.json'); ATL.cur = curFile(); }
-  if (D && ATL.cur === curFile()) { w.diagAppSetActions(doneList()); atelierLog(w); }
+  if (D && ATL.cur === curFile()) { w.diagAppSetActions(doneList()); atelierLog(w); testsPush(w); }
   return w;
 }
 // The sensors log of this session goes with the current analysis (curves in the
@@ -1385,7 +1553,9 @@ async function atelierExport(file, acts){
   if (!exp) throw 'Aucune analyse à envoyer';
   return exp;
 }
-window.addEventListener('message', e => { if (e.data && e.data.diagAtelier === 'send') go('site'); });
+window.addEventListener('message', e => { if (!e.data) return;
+  if (e.data.diagAtelier === 'send') go('site');
+  if (e.data.diagAtelier === 'checks') testsPull(); });
 
 const INVL = {brand:'Marque', model:'Modèle', serial:'N° de série', os:'Système', cpu:'Processeur', ram:'RAM', storage:'Stockage'};
 async function siteSearch(){
@@ -1563,11 +1733,12 @@ function onSensors(list){
 function startScan(){ if (scanState && scanState.running) return; $('#bScan').disabled = true; scanState = {running:true, step:0, total:14, label:'Démarrage de la collecte…'}; status('Analyse en cours…'); api.scan(); if (view !== 'summary') go('summary'); else render(); }
 $('#bScan').addEventListener('click', startScan);
 (async () => {
-  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) document.title = 'Planète Computers · PC2 Diag ' + info.version;
+  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) document.title = 'Planete-Computers 2.0 · PC2 Diag ' + info.version;
   const pill = $('#adminPill'); if (!info.admin) { pill.textContent = 'Mode limité'; pill.classList.add('limited'); pill.title = 'Sans droits administrateur : diagnostic partiel'; }
   try { ACTIONS = await api.actions(); } catch (_) {}
   try { CFG = await api.cfg() || {}; } catch (_) {}
-  if (!CFG.shop) CFG.shop = 'Planète Computers';
+  // nom du magasin : « Planete-Computers 2.0 », aussi pour les en-têtes enregistrés avec l'ancien nom
+  if (!CFG.shop || /^plan[eèé]te[\s-]*computers(\s*2\.0)?$/i.test(CFG.shop.trim())) CFG.shop = 'Planete-Computers 2.0';
   try { SITE.state = await sapi.state(); } catch (_) {}
   await refreshHist();
   if (info.resumed) status('Reprise automatique après le redémarrage — nouvelle analyse en cours pour le comparatif avant/après.');

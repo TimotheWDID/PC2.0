@@ -658,7 +658,7 @@ func main() {
 			Width:  1280,
 			Height: 860,
 			Center: true,
-			IconId: 1, // icône Planète Computers (rsrc_windows_amd64.syso)
+			IconId: 1, // icône Planete-Computers 2.0 (rsrc_windows_amd64.syso)
 		},
 	})
 	if w == nil {
@@ -703,7 +703,7 @@ func main() {
 }
 
 // setWindowIcons gives the title bar (small icon) and the taskbar / Alt+Tab
-// (large icon) the Planète Computers logo, each at its native size, so it
+// (large icon) the Planete-Computers 2.0 logo, each at its native size, so it
 // stays sharp whatever the screen scaling.
 func setWindowIcons(hwnd unsafe.Pointer) {
 	if hwnd == nil {

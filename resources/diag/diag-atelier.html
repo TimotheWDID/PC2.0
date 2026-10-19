@@ -223,6 +223,9 @@ button{font-family:inherit;}
 .panels{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start;}
 .panel{grid-column:1 / -1; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
 .panel.half{grid-column:auto;}
+/* half-width sections flow in two columns (top to bottom), so short ones never leave a hole */
+.halves{grid-column:1 / -1; columns:2 320px; column-gap:12px; margin-bottom:-12px;}
+.halves > .panel{display:block; break-inside:avoid; margin:0 0 12px;}
 @media (max-width:900px){ .panels{grid-template-columns:1fr;} .panel.half{grid-column:1 / -1;} }
 .panel-head{
   display:flex; align-items:center; gap:10px; width:100%; padding:13px 16px; border:none; background:transparent;
@@ -368,20 +371,6 @@ button{font-family:inherit;}
 .notes{width:100%; min-height:84px; resize:vertical; margin-top:6px; padding:10px 12px; border-radius:10px; border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink); font:inherit; font-size:13.5px; line-height:1.5;}
 .print-notes{display:none; white-space:pre-wrap; font-size:13px; color:var(--ink-2);}
 
-/* ---------- inventory sheet ---------- */
-.inv-grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 16px; padding-top:10px;}
-.inv-field{display:flex; flex-direction:column; gap:5px; min-width:0;}
-.inv-field.wide{grid-column:1 / -1;}
-.inv-field label{font-size:12.5px; font-weight:700; color:var(--ink-2); display:flex; align-items:center; gap:6px;}
-.inv-field label .src{font-size:10.5px; font-weight:700; color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:1px 7px;}
-.inv-field label .src.edited{color:var(--ink-2); background:var(--surface-3);}
-.inv-input{display:flex; gap:6px;}
-.inv-input input, .inv-input textarea{flex:1; min-width:0; padding:8px 10px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink); font:inherit; font-size:13.5px;}
-.inv-input textarea{min-height:64px; resize:vertical;}
-.inv-input button{flex:none; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink-2); border-radius:9px; padding:0 9px; cursor:pointer; font-size:12px; font-weight:700;}
-.inv-input button:hover{color:var(--ink);}
-.inv-actions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:14px;}
-@media (max-width:640px){ .inv-grid{grid-template-columns:1fr;} }
 
 /* ---------- raw data ---------- */
 .raw-tools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding-top:12px;}
@@ -557,7 +546,7 @@ footer{margin-top:30px; text-align:center; color:var(--muted); font-size:12px;}
   #printView{display:block !important; position:static; width:auto; visibility:visible;}
 }
 
-/* Planète Computers colours: inside the PC2 Diag application (data-brand set by the app) */
+/* Planete-Computers 2.0 colours: inside the PC2 Diag application (data-brand set by the app) */
 :root[data-brand="planete"]{
   --bg:#F3F4F6; --accent:#2A3FF5; --accent-ink:#ffffff; --accent-soft:#e2e5fe; --accent-2:#1fa595;
 }
@@ -1882,6 +1871,8 @@ function loadChecksFor(key){
   } catch(e){}
 }
 function saveChecks(){
+  // in the PC2 Diag application, its « Tests manuels » view shows the same results
+  if (window.DIAG_APP && window.parent !== window){ try { window.parent.postMessage({ diagAtelier: 'checks' }, '*'); } catch(e){} }
   if (!state.checksKey) return;
   try { localStorage.setItem('diagatelier-checks:' + state.checksKey, JSON.stringify({checks:state.checks, notes:state.notes, inv:state.inv})); } catch(e){}
 }
@@ -2147,7 +2138,9 @@ registerModule({
   },
 });
 
-/* ---------------- Inventory sheet ----------------
+/* ---------------- Inventory fields ----------------
+   No sheet on screen any more: the values found by the diagnostic fill the
+   empty fields of the ticket's device on « Envoyer au ticket ».
    Same fields, same order as the equipment form of the ticketing tool, so they can
    be copied over one by one or all at once. Hardware fields are pre-filled from
    the system report; every field can be corrected or completed by hand. */
@@ -2175,58 +2168,6 @@ const INVENTORY_FIELDS = [
 ];
 function inventoryAuto(r, f){ try { const v = f.auto ? f.auto(r) : null; return v==null ? '' : String(v); } catch(e){ return ''; } }
 function inventoryValue(r, f){ const inv = state.inv || {}; return f.id in inv ? inv[f.id] : inventoryAuto(r, f); }
-// date inputs hold yyyy-mm-dd; the ticketing form expects jj/mm/aaaa
-function inventoryCopyValue(f, v){ const m = f.date && String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}/${m[2]}/${m[1]}` : v; }
-function inventoryText(r){
-  return INVENTORY_FIELDS.map(f => f.label + ' : ' + inventoryCopyValue(f, inventoryValue(r, f))).join('\n');
-}
-
-registerModule({
-  id:'inventory', title:'Fiche inventaire', order:32, views:['tech'],
-  available: r => !!r.aida,
-  summary: r => { const filled = INVENTORY_FIELDS.filter(f => inventoryValue(r, f)).length; return `${filled}/${INVENTORY_FIELDS.length} champs renseignés`; },
-  render(r, mode, body){
-    const grid = el('div', {class:'inv-grid'});
-    INVENTORY_FIELDS.forEach(f => {
-      const auto = inventoryAuto(r, f);
-      const id = 'inv-' + f.id;
-      const wrap = el('div', {class:'inv-field' + (f.wide ? ' wide' : '')});
-      const lab = el('label', {for:id}, [f.label]);
-      const src = el('span', {class:'src'});
-      const input = f.multiline ? el('textarea', {id}) : el('input', {id, type: f.date ? 'date' : 'text', autocomplete:'off'});
-      input.value = inventoryValue(r, f);
-      const refreshSrc = () => {
-        const edited = (state.inv||{})[f.id]!==undefined && state.inv[f.id]!==auto;
-        src.textContent = edited ? 'modifié' : (auto && !f.fixed ? 'diag' : '');
-        src.className = 'src' + (edited ? ' edited' : '');
-        src.hidden = !src.textContent;
-      };
-      refreshSrc();
-      lab.appendChild(src);
-      input.addEventListener('input', () => {
-        state.inv = state.inv || {};
-        if (input.value===auto) delete state.inv[f.id]; else state.inv[f.id] = input.value;
-        refreshSrc(); saveChecks();
-      });
-      const copyBtn = el('button', {type:'button', title:'Copier ' + f.label, 'aria-label':'Copier ' + f.label}, ['Copier']);
-      copyBtn.addEventListener('click', async () => {
-        const v = inventoryCopyValue(f, input.value);
-        if (!v){ toast('Champ vide'); return; }
-        toast(await copyText(v) ? f.label + ' copié ✓' : 'Copie impossible');
-      });
-      wrap.appendChild(lab);
-      wrap.appendChild(el('div', {class:'inv-input'}, [input, copyBtn]));
-      grid.appendChild(wrap);
-    });
-    body.appendChild(grid);
-    const reset = el('button', {class:'btn btn-quiet', type:'button'}, ['Revenir aux valeurs du diag']);
-    reset.addEventListener('click', () => { state.inv = {}; saveChecks(); showReport(); });
-    const copyAll = el('button', {class:'btn', type:'button'}, ['Copier toute la fiche']);
-    copyAll.addEventListener('click', async () => { toast(await copyText(inventoryText(window.__report || r)) ? 'Fiche copiée ✓' : 'Copie impossible'); });
-    body.appendChild(el('div', {class:'inv-actions'}, [reset, copyAll]));
-  },
-  json: r => Object.fromEntries(INVENTORY_FIELDS.map(f => [f.id, inventoryCopyValue(f, inventoryValue(r, f)) || null])),
-});
 
 registerModule({
   id:'machine', title:'Fiche machine', order:30, views:['tech'], span:'half',
@@ -2268,7 +2209,7 @@ registerModule({
 });
 
 registerModule({
-  id:'monitoring', title:'Relevés temps réel', order:50, views:['tech'],
+  id:'monitoring', title:'Relevés temps réel', order:68, views:['tech'],
   available: r => !!r.hw,
   status: r => worstOf([r.tempStatus, r.throttleStatus, r.ramStatus]),
   summary: r => `${r.sampleCount} mesures · ${fmt(r.durationMin,1)} min · relevé du ${r.hw.dateStart} à ${String(r.hw.timeStart).replace(/\.\d+$/,'')}`,
@@ -2339,7 +2280,7 @@ registerModule({
 });
 
 registerModule({
-  id:'analysis', title:'Analyse & recommandations', order:70, views:['tech'],
+  id:'analysis', title:'Analyse & recommandations', order:25, views:['tech'],
   status: r => r.overall==='info' ? null : r.overall,
   summary: r => { const n = techRecommendations(r).filter(x => x.level!=='good').length; return n ? `${n} recommandation${n>1?'s':''}` : 'aucune anomalie'; },
   render(r, mode, body){
@@ -2682,11 +2623,17 @@ function renderView(r, mode){
   const root = document.getElementById(mode==='tech' ? 'viewTech' : 'viewClient');
   root.innerHTML = '';
   const panels = el('div', {class:'panels'});
+  let halves = null;   // consecutive half-width sections share two columns, without holes
   for (const m of MODULES){
     if (!m.views.includes(mode)) continue;
     let ok = true;
     try { ok = !m.available || m.available(r, mode); } catch(e){ ok = false; }
-    if (ok) panels.appendChild(renderPanel(m, r, mode));
+    if (!ok) continue;
+    const p = renderPanel(m, r, mode);
+    if (m.span==='half'){
+      if (!halves){ halves = el('div', {class:'halves'}); panels.appendChild(halves); }
+      halves.appendChild(p);
+    } else { halves = null; panels.appendChild(p); }
   }
   root.appendChild(panels);
 }
@@ -3448,6 +3395,20 @@ window.diagAppClient = function(){
   };
 };
 
+// Manual tests, run from the application's own « Tests manuels » view: the same
+// list and results as the « Tests manuels » section, sent with the report.
+window.diagAppChecks = function(){
+  return { list: MANUAL_CHECKS.map(c => ({ id: c.id, label: c.label })), checks: { ...state.checks }, notes: state.notes || '' };
+};
+window.diagAppSetChecks = function(checks, notes){
+  state.checks = {};
+  Object.entries(checks || {}).forEach(([id, v]) => { if (MANUAL_CHECKS.some(c => c.id === id) && ['ok','ko','na'].includes(v)) state.checks[id] = v; });
+  if (typeof notes === 'string') state.notes = notes;
+  saveChecks();
+  if (window.__report) showReport();
+  return true;
+};
+
 // Everything « Envoyer au ticket » sends, as plain data (files in base64).
 window.diagAppExport = async function(){
   const r = window.__report;
@@ -3463,7 +3424,7 @@ window.diagAppExport = async function(){
 function initAppMode(){
   if (!DIAG_APP) return;
   document.documentElement.setAttribute('data-brand', 'planete');
-  document.querySelector('.brand').innerHTML = PLANETE_LOGO + `<span>${esc(DIAG_APP.shop || 'Planète Computers')}<small>Diagnostic PC2 Diag</small></span>`;
+  document.querySelector('.brand').innerHTML = PLANETE_LOGO + `<span>${esc(DIAG_APP.shop || 'Planete-Computers 2.0')}<small>Diagnostic PC2 Diag</small></span>`;
   ['btnReset', 'btnExample'].forEach(id => { document.getElementById(id).hidden = true; });
   const send = document.getElementById('btnSendTicket');
   send.textContent = 'Envoyer au site';

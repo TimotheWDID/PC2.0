@@ -1,6 +1,6 @@
 # PC2 Diag (application Windows)
 
-Application Windows de diagnostic et de dépannage de Planète Computers, reprise
+Application Windows de diagnostic et de dépannage de Planete-Computers 2.0, reprise
 de `DiagnosticPC.exe` (Go + fenêtre WebView2 + collecte PowerShell), avec en
 plus l'envoi du rapport au site de ticketing, sur un ticket ou en « diag
 rapide ». Son diagnostic détaillé est le **Diag Atelier du site**, intégré à
@@ -18,9 +18,14 @@ site à l'identique.
   Secure Boot, TPM, UAC, SMBv1, comptes), services, démarrage, logiciels,
   intégrité DISM, réseau et Internet.
 - **Diag atelier** : la page Diag Atelier du site (vues technicien et client,
-  viabilité, Windows 11, fiche d'inventaire, tests manuels, export PDF / JSON)
+  viabilité, Windows 11, tests manuels, export PDF / JSON)
   remplie avec l'analyse. On peut y ajouter un relevé HWiNFO ou un rapport
   batterie, comme sur le site.
+- **Tests manuels** : écran (aplats de couleur plein écran), clavier (les
+  touches s'allument), souris et pavé tactile, son gauche / droite, webcam et
+  micro, charge, réseau, USB, ventilateur, châssis. Chaque test se note OK, KO
+  ou non testé ; les résultats et les notes sont ceux de la section « Tests
+  manuels » du Diag atelier et partent au site avec le rapport.
 - **Résumé et problèmes** : score, constats classés par gravité avec la
   marche à suivre, arborescence Matériel / Windows, contrôles réussis.
 - **Capteurs en direct** (chaque seconde) : processeur, fréquence, mémoire,
@@ -51,7 +56,7 @@ site à l'identique.
 - **Envoyer au site** : association avec une clé, recherche du ticket ou
   diag rapide, envoi de l'analyse en cours ou d'une analyse enregistrée, avec
   la liste des réparations lancées. L'envoi est celui du bouton « Envoyer au
-  ticket » du Diag Atelier : rapport, fiche d'inventaire, tests manuels et
+  ticket » du Diag Atelier : rapport, valeurs de la fiche appareil, tests manuels et
   fichiers (l'analyse, et les relevés HWiNFO ou batterie ajoutés). La fiche
   appareil du ticket est complétée (seuls les champs vides sont remplis, les
   différences sont signalées).
@@ -134,7 +139,7 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
 | `api.go` | client de l'API (envoi multipart du Diag Atelier) |
-| `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planète Computers de l'exe |
+| `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planete-Computers 2.0 de l'exe |
 | `main_windows.go` | fenêtre, pont `goCall`, analyse, historique, rapports, site |
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
 | `sensors_windows.go` | capteurs en direct (compteurs PDH) |
@@ -160,7 +165,7 @@ runtime WebView2 (présent sur Windows 10 et 11 à jour). Pour proposer le
 téléchargement sur la page Diag rapide, copier l'exe dans
 `public/downloads/PC2Diag.exe` sur le serveur.
 
-Icône : `winres/icon.png` (logo Planète Computers). Pour la changer,
+Icône : `winres/icon.png` (logo Planete-Computers 2.0). Pour la changer,
 `go-winres simply --icon winres/icon.png --manifest none --arch amd64 --out rsrc`
 régénère `rsrc_windows_amd64.syso`.
 
