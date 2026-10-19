@@ -205,3 +205,77 @@ it('deletes a diagnostic with its files and device event', function () {
     Storage::disk('local')->assertMissing($diagnostic->files[0]['path']);
     $this->assertDatabaseMissing('device_events', ['event_type' => 'diagnostic', 'ticket_id' => $ticket->id]);
 });
+
+function sharedDiagReport(): string
+{
+    return diagReport([
+        'cpu' => ['name' => 'Intel Core i7-10750H SECRET-CPU'],
+        'clientReport' => [
+            'verdict' => ['lvl' => 'warn', 'title' => 'Votre ordinateur fonctionne, mais montre son âge', 'text' => 'Quelques améliorations.'],
+            'details' => [['id' => 'perf', 'title' => 'Rapidité', 'status' => 'good', 'text' => 'Processeur <b>adapté</b>.']],
+            'advice' => [['priority' => 'reco', 'priorityLabel' => 'Recommandé', 'title' => 'Passer à un SSD', 'why' => 'Démarrage plus rapide.']],
+        ],
+        'notes' => 'Nettoyage effectué.',
+    ]);
+}
+
+it('shares the customer sheet of a diagnostic on the ticket only once made visible', function () {
+    Storage::fake('local');
+    $agent = diagAgent();
+    $ticket = diagTicket();
+    $token = $ticket->getOrCreateMagicLink()['token'];
+
+    $this->actingAs($agent)->post(route('tickets.diagnostics.store', $ticket), [
+        'report' => sharedDiagReport(),
+    ], ['Accept' => 'application/json'])->assertCreated();
+    $diagnostic = Diagnostic::firstOrFail();
+    expect($diagnostic->client_visible)->toBeFalse();
+
+    $reportUrl = route('tickets.diagnostics.clientReport', [$ticket, $diagnostic]);
+
+    // Agents can preview it, the customer cannot see it yet.
+    $this->actingAs($agent)->get($reportUrl)->assertOk()->assertSee('Passer à un SSD');
+    auth()->logout();
+    $this->get($reportUrl.'?token='.$token)->assertNotFound();
+    $this->getJson(route('tickets.files.index', $ticket).'?token='.$token)
+        ->assertOk()
+        ->assertJsonCount(0, 'files');
+
+    $this->actingAs($agent)
+        ->patchJson(route('tickets.diagnostics.visibility', [$ticket, $diagnostic]), ['client_visible' => true])
+        ->assertOk()
+        ->assertJson(['client_visible' => true]);
+    $this->assertDatabaseHas('ticket_timeline_events', ['ticket_id' => $ticket->id, 'event_type' => 'diagnostic_shared']);
+    auth()->logout();
+
+    $this->getJson(route('tickets.files.index', $ticket).'?token='.$token)
+        ->assertOk()
+        ->assertJsonPath('files.0.source', 'diagnostic')
+        ->assertJsonPath('files.0.download_path', "/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/client-report");
+
+    $this->get($reportUrl.'?token='.$token)
+        ->assertOk()
+        ->assertSee('Le bilan de santé de votre ordinateur')
+        ->assertSee('Processeur adapté.')
+        ->assertSee('Nettoyage effectué.')
+        ->assertDontSee('SECRET-CPU');
+    $this->get($reportUrl)->assertForbidden();
+
+    // Taken back: the customer loses access again.
+    $this->actingAs($agent)
+        ->patchJson(route('tickets.diagnostics.visibility', [$ticket, $diagnostic]), ['client_visible' => false])
+        ->assertOk();
+    auth()->logout();
+    $this->get($reportUrl.'?token='.$token)->assertNotFound();
+});
+
+it('lets only agents change the visibility of a diagnostic', function () {
+    $ticket = diagTicket();
+    $diagnostic = Diagnostic::create(['ticket_id' => $ticket->id, 'report' => json_decode(sharedDiagReport(), true)]);
+
+    $this->actingAs($ticket->user)
+        ->patchJson(route('tickets.diagnostics.visibility', [$ticket, $diagnostic]), ['client_visible' => true])
+        ->assertForbidden();
+
+    expect($diagnostic->fresh()->client_visible)->toBeFalse();
+});

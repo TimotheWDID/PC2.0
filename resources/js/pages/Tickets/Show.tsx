@@ -111,6 +111,8 @@ const builtInEventTypeLabels: Record<string, string> = {
   commande_status_changed_direct: 'Statut commande',
   device_event_added: 'Intervention appareil',
   diagnostic_added: 'Diagnostic',
+  diagnostic_shared: 'Diagnostic partagé',
+  diagnostic_unshared: 'Diagnostic masqué',
   files_added: 'Fichiers',
   file_removed: 'Fichier supprime',
   files_sent: 'Fichiers envoyes',
@@ -244,6 +246,25 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
 
     router.delete(`/tickets/${ticket.id}/diagnostics/${diagnosticId}`, { preserveScroll: true });
   };
+
+  const [sharingDiagnosticId, setSharingDiagnosticId] = useState<number | null>(null);
+  const handleToggleDiagnosticVisibility = (diagnostic: any) => {
+    const next = !diagnostic.client_visible;
+    if (next && !window.confirm('Rendre ce diagnostic visible par le client ? Il pourra consulter le bilan (version client) dans les fichiers de son ticket.')) {
+      return;
+    }
+
+    setSharingDiagnosticId(diagnostic.id);
+    router.patch(
+      `/tickets/${ticket.id}/diagnostics/${diagnostic.id}/visibility`,
+      { client_visible: next },
+      { preserveScroll: true, onFinish: () => setSharingDiagnosticId(null) },
+    );
+  };
+  const sharedDiagnosticsKey = diagnostics
+    .filter((diagnostic: any) => diagnostic.client_visible)
+    .map((diagnostic: any) => diagnostic.id)
+    .join(',');
 
   const [isEditing, setIsEditing] = useState(false);
   const [broughtOtherItemInput, setBroughtOtherItemInput] = useState('');
@@ -2222,7 +2243,7 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
               </Dialog>
             )}
 
-            <TicketFiles ticketId={ticket.id} isAgent={isAgent} className="order-3 xl:order-2" />
+            <TicketFiles ticketId={ticket.id} isAgent={isAgent} refreshKey={sharedDiagnosticsKey} className="order-3 xl:order-2" />
 
             {isAgent && (
               <Card id="ticket-diagnostic" className="order-3 w-full max-w-full scroll-mt-24 overflow-hidden xl:order-2">
@@ -2250,6 +2271,12 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                             <Badge variant="outline" className={diagnosticBadgeClass[diagnostic.overall] ?? ''}>
                               {diagnostic.overall_label ?? 'Diagnostic partiel'}
                             </Badge>
+                            {diagnostic.client_visible && (
+                              <Badge variant="outline" className="border-sky-400 text-sky-700 dark:text-sky-300">
+                                <Eye className="mr-1 h-3 w-3" />
+                                Visible client
+                              </Badge>
+                            )}
                             {diagnostic.viability_score !== null && diagnostic.viability_score !== undefined && (
                               <Badge variant="outline" className={diagnosticBadgeClass[diagnostic.viability_level] ?? ''}>
                                 Viabilité {diagnostic.viability_score}/100
@@ -2264,12 +2291,34 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                         </p>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                           <span className="text-[11px] text-muted-foreground">{diagnostic.technician ?? ''}</span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex flex-wrap items-center gap-1">
                             <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
                               <a href={diagnostic.report_url}>
                                 <ExternalLink className="mr-1 h-3.5 w-3.5" />
                                 Ouvrir le rapport
                               </a>
+                            </Button>
+                            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Aperçu de la version client">
+                              <a href={diagnostic.client_report_url} target="_blank" rel="noopener">
+                                Version client
+                              </a>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={diagnostic.client_visible ? 'outline' : 'default'}
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              disabled={sharingDiagnosticId === diagnostic.id}
+                              onClick={() => handleToggleDiagnosticVisibility(diagnostic)}
+                            >
+                              {sharingDiagnosticId === diagnostic.id ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : diagnostic.client_visible ? (
+                                <EyeOff className="mr-1 h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="mr-1 h-3.5 w-3.5" />
+                              )}
+                              {diagnostic.client_visible ? 'Masquer au client' : 'Rendre visible au client'}
                             </Button>
                             <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => handleDeleteDiagnostic(diagnostic.id)}>
                               <Trash2 className="h-3.5 w-3.5" />

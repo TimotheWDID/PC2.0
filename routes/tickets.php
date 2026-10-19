@@ -34,6 +34,11 @@ Route::get('tickets/{ticket}/files/{file}/download', [TicketFileController::clas
     ->whereNumber(['ticket', 'file'])
     ->middleware('throttle:ticket-messages')
     ->name('tickets.files.download');
+// Customer sheet of a diagnostic: customers only once it was made visible on the ticket.
+Route::get('tickets/{ticket}/diagnostics/{diagnostic}/client-report', [DiagnosticController::class, 'clientReport'])
+    ->whereNumber(['ticket', 'diagnostic'])
+    ->middleware('throttle:ticket-messages')
+    ->name('tickets.diagnostics.clientReport');
 
 Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
 Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
@@ -57,6 +62,7 @@ Route::middleware('auth')->group(function () {
         Route::get('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'show'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.show');
         Route::get('tickets/{ticket}/diagnostics/{diagnostic}/files/{source}', [DiagnosticController::class, 'file'])->whereNumber(['ticket', 'diagnostic'])->whereIn('source', ['aida', 'hwinfo', 'battery'])->name('tickets.diagnostics.file');
         Route::post('tickets/{ticket}/diagnostics/{diagnostic}/inventory', [DiagnosticController::class, 'applyInventory'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.inventory');
+        Route::patch('tickets/{ticket}/diagnostics/{diagnostic}/visibility', [DiagnosticController::class, 'updateVisibility'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.visibility');
         Route::delete('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'destroy'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.destroy');
     });
 

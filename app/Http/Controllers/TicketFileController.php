@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\AuthorizesTicketAccess;
 use App\Mail\TicketFilesSharedMail;
+use App\Models\Diagnostic;
 use App\Models\MessageAttachment;
 use App\Models\Ticket;
 use App\Models\TicketFile;
@@ -24,6 +26,8 @@ use Throwable;
  */
 class TicketFileController extends Controller
 {
+    use AuthorizesTicketAccess;
+
     private const MIMES = 'jpg,jpeg,png,gif,webp,heic,bmp,pdf,doc,docx,odt,rtf,xls,xlsx,ods,csv,ppt,pptx,txt,xml,json,zip,7z,rar,mp4,mov,eml,msg';
 
     private const MAX_KB = 20480;
@@ -67,8 +71,27 @@ class TicketFileController extends Controller
                 'download_path' => "/tickets/{$ticket->id}/messages/{$attachment->message_id}/attachments/{$attachment->id}",
             ]);
 
+        // Diagnostics made visible to the customer show up as their customer sheet.
+        $diagnosticFiles = $ticket->diagnostics()
+            ->where('client_visible', true)
+            ->latest()
+            ->get()
+            ->map(fn (Diagnostic $diagnostic) => [
+                'id' => $diagnostic->id,
+                'source' => 'diagnostic',
+                'name' => $diagnostic->clientReportName(),
+                'mime_type' => 'text/html',
+                'size' => strlen($diagnostic->clientReportHtml()),
+                'visibility' => TicketFile::VISIBILITY_EXTERNAL,
+                'created_at' => ($diagnostic->client_visible_at ?? $diagnostic->created_at)?->toIso8601String(),
+                'uploaded_by' => null,
+                'last_sent_at' => null,
+                'last_sent_to' => null,
+                'download_path' => "/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/client-report",
+            ]);
+
         return response()->json([
-            'files' => $files->concat($chatFiles)->sortByDesc('created_at')->values(),
+            'files' => $files->concat($chatFiles)->concat($diagnosticFiles)->sortByDesc('created_at')->values(),
             'customer_email' => $isAgent ? $this->customerEmail($ticket) : null,
             'limits' => [
                 'max_kb' => self::MAX_KB,
@@ -279,50 +302,5 @@ class TicketFileController extends Controller
             'details' => $details,
             'happened_at' => now(),
         ]);
-    }
-
-    private function isAgentContext(): bool
-    {
-        $user = Auth::user();
-
-        if (! $user || ! $user->agent) {
-            return false;
-        }
-
-        $sessionPreviewMode = request()->session()->get('preview_mode');
-        $previewAsNonAgent = is_string($sessionPreviewMode)
-            ? $sessionPreviewMode === 'user'
-            : (bool) request()->session()->get('preview_as_non_agent', false);
-
-        return ! $previewAsNonAgent;
-    }
-
-    private function hasMagicTokenAccess(Request $request, Ticket $ticket): bool
-    {
-        $token = trim((string) $request->query('token', ''));
-
-        if ($token === '' || ! Ticket::looksLikeMagicToken($token)) {
-            return false;
-        }
-
-        return hash_equals((string) $ticket->ticket_token_hash, Ticket::hashMagicToken($token))
-            && ! $ticket->isMagicTokenExpired();
-    }
-
-    private function authorizeTicketAccess(Request $request, Ticket $ticket): void
-    {
-        $user = Auth::user();
-
-        if (! $user) {
-            abort_unless($this->hasMagicTokenAccess($request, $ticket), 403, 'Acces au ticket refuse: lien invalide ou expire.');
-
-            return;
-        }
-
-        if ($this->isAgentContext()) {
-            return;
-        }
-
-        abort_unless((int) $ticket->user_id === (int) $user->id, 403, 'Acces non autorise.');
     }
 }

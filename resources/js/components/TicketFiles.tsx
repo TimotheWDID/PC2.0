@@ -9,13 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDateTimeFr } from '@/lib/datetime';
-import { Download, Eye, EyeOff, FileText, Loader2, Lock, MessageSquare, Paperclip, Send, Trash2, Upload, Users } from 'lucide-react';
+import { Download, Eye, EyeOff, FileText, Loader2, Lock, MessageSquare, Paperclip, Send, Stethoscope, Trash2, Upload, Users } from 'lucide-react';
 
 type Visibility = 'internal' | 'external';
 
 type TicketFileItem = {
   id: number;
-  source: 'ticket' | 'chat';
+  source: 'ticket' | 'chat' | 'diagnostic';
   name: string;
   mime_type: string | null;
   size: number;
@@ -32,6 +32,8 @@ type TicketFilesProps = {
   isAgent: boolean;
   magicToken?: string | null;
   className?: string;
+  /** Changing it reloads the list (e.g. after a diagnostic was shared from the ticket page). */
+  refreshKey?: string | number;
 };
 
 type Filter = 'all' | Visibility;
@@ -57,7 +59,7 @@ const errorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-export default function TicketFiles({ ticketId, isAgent, magicToken = null, className }: TicketFilesProps) {
+export default function TicketFiles({ ticketId, isAgent, magicToken = null, className, refreshKey }: TicketFilesProps) {
   const [files, setFiles] = React.useState<TicketFileItem[]>([]);
   const [customerEmail, setCustomerEmail] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -98,7 +100,7 @@ export default function TicketFiles({ ticketId, isAgent, magicToken = null, clas
 
   React.useEffect(() => {
     loadFiles();
-  }, [loadFiles]);
+  }, [loadFiles, refreshKey]);
 
   const replaceFiles = (updated: TicketFileItem[]) => {
     setFiles((current) =>
@@ -332,6 +334,8 @@ export default function TicketFiles({ ticketId, isAgent, magicToken = null, clas
           <ul className="space-y-2">
             {visibleFiles.map((file) => {
               const isTicketFile = file.source === 'ticket';
+              const isDiagnostic = file.source === 'diagnostic';
+              const downloadPath = isDiagnostic ? `${file.download_path}?download=1` : file.download_path;
               const isBusy = isTicketFile && busyFileId === file.id;
 
               return (
@@ -351,7 +355,13 @@ export default function TicketFiles({ ticketId, isAgent, magicToken = null, clas
                   )}
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                    <a href={withMagicToken(file.download_path)} className="block truncate text-sm font-medium hover:underline" title={file.name}>
+                    <a
+                      href={withMagicToken(file.download_path)}
+                      target={isDiagnostic ? '_blank' : undefined}
+                      rel={isDiagnostic ? 'noopener' : undefined}
+                      className="block truncate text-sm font-medium hover:underline"
+                      title={file.name}
+                    >
                       {file.name}
                     </a>
                     <p className="text-[11px] text-muted-foreground">
@@ -370,9 +380,14 @@ export default function TicketFiles({ ticketId, isAgent, magicToken = null, clas
                             <Users className="mr-1 h-3 w-3" /> Visible client
                           </Badge>
                         )}
-                        {!isTicketFile && (
+                        {file.source === 'chat' && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground">
                             <MessageSquare className="mr-1 h-3 w-3" /> Discussion
+                          </Badge>
+                        )}
+                        {isDiagnostic && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            <Stethoscope className="mr-1 h-3 w-3" /> Diagnostic
                           </Badge>
                         )}
                         {file.last_sent_at && (
@@ -412,7 +427,7 @@ export default function TicketFiles({ ticketId, isAgent, magicToken = null, clas
                       </>
                     )}
                     <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="Telecharger">
-                      <a href={withMagicToken(file.download_path)}>
+                      <a href={withMagicToken(downloadPath)}>
                         <Download className="h-3.5 w-3.5" />
                       </a>
                     </Button>
