@@ -73,10 +73,6 @@ export default function DiagnosticsIndex({
     app: DiagApp;
 }) {
     const [keyName, setKeyName] = useState('');
-    const appRunUrl = `pc2diag://diag?server=${encodeURIComponent(app.server)}`;
-    const pairUrl = app.newToken
-        ? `pc2diag://pair?server=${encodeURIComponent(app.server)}&token=${encodeURIComponent(app.newToken)}`
-        : null;
 
     const issueKey = () => {
         router.post(
@@ -147,20 +143,12 @@ export default function DiagnosticsIndex({
                         title="Diag rapide"
                         description="Lancez le Diag Atelier sans ticket, puis rattachez le diagnostic à un ticket si besoin."
                     />
-                    <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline">
-                            <a href={appRunUrl}>
-                                <MonitorCog className="mr-2 h-4 w-4" />
-                                Avec l’application
-                            </a>
-                        </Button>
-                        <Button asChild>
-                            <a href={toolUrl}>
-                                <Stethoscope className="mr-2 h-4 w-4" />
-                                Nouveau diag
-                            </a>
-                        </Button>
-                    </div>
+                    <Button asChild>
+                        <a href={toolUrl}>
+                            <Stethoscope className="mr-2 h-4 w-4" />
+                            Nouveau diag
+                        </a>
+                    </Button>
                 </div>
 
                 <Card>
@@ -175,8 +163,9 @@ export default function DiagnosticsIndex({
                             L’application Windows analyse le poste (matériel,
                             disques, batterie, Windows, sécurité, réseau) et
                             envoie son rapport ici, sur un ticket ou en diag
-                            rapide. Associez-la une fois avec une clé, puis
-                            lancez-la depuis un ticket ou ce bouton.
+                            rapide. Elle est portable : copiez-la sur votre clé
+                            USB, associez-la une fois avec une clé d’accès, elle
+                            n’installe rien sur le PC du client.
                         </p>
                         {app.downloadUrl && (
                             <Button asChild variant="outline" size="sm">
@@ -186,22 +175,17 @@ export default function DiagnosticsIndex({
                                 </a>
                             </Button>
                         )}
-                        {pairUrl && app.newToken && (
+                        {app.newToken && (
                             <div className="space-y-2 rounded-md border border-emerald-600/40 bg-emerald-50 p-3 dark:bg-emerald-950/40">
                                 <p className="font-medium">
                                     Clé créée. Elle ne sera plus affichée.
                                 </p>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button asChild size="sm">
-                                        <a href={pairUrl}>
-                                            Associer l’application ouverte sur
-                                            ce poste
-                                        </a>
-                                    </Button>
-                                </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Ou copiez la clé dans l’application, avec
-                                    l’adresse {app.server} :
+                                    Dans l’application, saisissez l’adresse{' '}
+                                    <span className="font-mono">
+                                        {app.server}
+                                    </span>{' '}
+                                    et cette clé :
                                 </p>
                                 <Input
                                     readOnly

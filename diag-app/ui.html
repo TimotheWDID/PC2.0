@@ -53,7 +53,7 @@ dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:0}dt{c
 
   <section id="pairCard" class="card hidden">
     <h2>Associer l'application au site</h2>
-    <p class="mute">Sur le site, ouvrez <b>Diag rapide</b> puis <b>Créer une clé d'association</b> et cliquez sur « Associer l'application ouverte sur ce poste ». Ou recopiez ici l'adresse du site et la clé.</p>
+    <p class="mute">Sur le site, ouvrez <b>Diag rapide</b> puis <b>Créer une clé d'association</b>, et recopiez ici l'adresse du site et la clé. Elles sont gardées à côté de l'exe (sur votre clé USB) : rien n'est écrit sur ce PC.</p>
     <div class="row"><input id="server" type="text" placeholder="Adresse du site (ex. https://support.exemple.fr)"></div>
     <div class="row" style="margin-top:8px"><input id="token" type="password" placeholder="Clé (pc2d_…)"><button class="primary" onclick="pair()">Associer</button></div>
     <p id="pairErr" class="err"></p>
@@ -203,7 +203,7 @@ async function send() {
     if (r.conflicts?.length) lines.push('Valeurs différentes non remplacées : ' + r.conflicts.map((c) => c.label).join(', ') + ' (à valider sur le site).');
     (r.warnings || []).forEach((w) => lines.push(w));
     $('sendRes').innerHTML = `<div class="ok-msg">${lines.map(esc).join('<br>')}<br><button class="link" onclick='openUrl(${JSON.stringify(r.report_url)})'>Ouvrir le rapport sur le site</button>${r.ticket_url ? ` · <button class="link" onclick='openUrl(${JSON.stringify(r.ticket_url)})'>Ouvrir le ticket</button>` : ''}</div>`;
-  } catch (e) { $('sendErr').textContent = e.message + ' Une copie du rapport est enregistrée sur ce poste.'; }
+  } catch (e) { $('sendErr').textContent = e.message + ' Une copie du rapport est gardée à côté de l'exe (dossier PC2Diag-rapports).'; }
   $('sendBtn').disabled = false;
 }
 async function saveLocal() {

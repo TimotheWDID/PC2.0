@@ -22,28 +22,34 @@ n° de série, OS, CPU, RAM, stockage) complète l'appareil du ticket comme le
 Diag Atelier : seuls les champs vides sont remplis, les différences sont
 signalées.
 
+## Portable : rien n'est installé sur le PC du client
+
+L'exe se lance depuis une clé USB, sans installation. Tout ce qu'il garde est
+rangé **à côté de l'exe** :
+
+- `PC2Diag-config.json` : adresse du site et clé d'accès ;
+- `PC2Diag-rapports\` : une copie de chaque rapport (pour le renvoyer si le
+  site était injoignable).
+
+Sur le PC analysé, rien n'est écrit dans le registre ni dans le profil de
+l'utilisateur. Le cache de la fenêtre et les fichiers de collecte vont dans
+le dossier temporaire et sont effacés à la fermeture. Seule la demande de
+droits administrateur (UAC) apparaît au lancement : ces droits servent à lire
+l'état SMART, BitLocker et l'intégrité DISM. Si on refuse, l'analyse tourne
+quand même avec des relevés réduits.
+
+La clé d'accès est en clair dans `PC2Diag-config.json` : si la clé USB est
+perdue, révoquez la clé depuis la page Diag rapide.
+
 ## Liaison avec le site
 
 1. Sur le site, page **Diag rapide** › carte **Application PC2 Diag** ›
    **Créer une clé d'association**.
-2. Lancer `PC2Diag.exe` sur le poste, puis cliquer sur **Associer
-   l'application ouverte sur ce poste** (lien `pc2diag://pair…`), ou recopier
-   l'adresse du site et la clé dans l'application.
-3. Depuis un ticket, le bouton **Application** (carte Diagnostic) ouvre
-   l'application déjà liée à ce ticket. Sinon, chercher le ticket dans
-   l'application ou choisir **Diag rapide**.
+2. Dans l'application, saisir l'adresse du site et la clé, puis **Associer**
+   (une seule fois par clé USB).
+3. Chercher le ticket (n°, client ou titre) ou choisir **Diag rapide**.
 4. **Lancer l'analyse** puis **Envoyer** : le rapport apparaît sur le ticket
    (ou dans Diag rapide) et s'ouvre en un clic.
-
-La clé est stockée chiffrée (DPAPI, compte Windows courant) dans
-`%APPDATA%\PC2Diag\config.json`. Une copie de chaque rapport est gardée dans
-`%LOCALAPPDATA%\PC2Diag\rapports`. Une clé se révoque depuis la page Diag
-rapide.
-
-Au premier lancement, l'application enregistre le protocole `pc2diag://`
-pour l'utilisateur courant et demande les droits administrateur (UAC),
-nécessaires pour SMART, BitLocker et DISM. Si l'élévation est refusée,
-l'analyse tourne quand même avec des relevés réduits.
 
 ## API utilisée
 

@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	_ "embed"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
@@ -33,26 +31,26 @@ var uiHTML string
 //go:embed collect.ps1
 var collectPS string
 
-const protocol = "pc2diag"
-
 // ---------------------------------------------------------------- config
 
+// L'application est portable : tout ce qu'elle garde (adresse du site, clé
+// d'accès, copies des rapports) est rangé à côté de l'exe, sur la clé USB du
+// technicien. Rien n'est écrit dans le registre ni dans le profil du client.
+
 type config struct {
-	Server   string `json:"server"`
-	TokenEnc string `json:"token"` // clé d'accès chiffrée par DPAPI (compte Windows courant)
+	Server string `json:"server"`
+	Token  string `json:"token"`
 }
 
-func appDir(env string) string {
-	base := os.Getenv(env)
-	if base == "" {
-		base = os.TempDir()
+func exeDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "."
 	}
-	dir := filepath.Join(base, "PC2Diag")
-	_ = os.MkdirAll(dir, 0o700)
-	return dir
+	return filepath.Dir(exe)
 }
 
-func cfgPath() string { return filepath.Join(appDir("APPDATA"), "config.json") }
+func cfgPath() string { return filepath.Join(exeDir(), "PC2Diag-config.json") }
 
 func loadConfig() config {
 	var c config
@@ -64,54 +62,10 @@ func loadConfig() config {
 
 func (c config) save() error {
 	b, _ := json.MarshalIndent(c, "", "  ")
-	return os.WriteFile(cfgPath(), b, 0o600)
-}
-
-func (c config) token() string {
-	if c.TokenEnc == "" {
-		return ""
+	if err := os.WriteFile(cfgPath(), b, 0o600); err != nil {
+		return fmt.Errorf("impossible d'écrire à côté de l'exe (%s) : %w", exeDir(), err)
 	}
-	raw, err := base64.StdEncoding.DecodeString(c.TokenEnc)
-	if err != nil {
-		return ""
-	}
-	plain, err := dpapi(raw, false)
-	if err != nil {
-		return ""
-	}
-	return string(plain)
-}
-
-func (c *config) setToken(t string) error {
-	if t == "" {
-		c.TokenEnc = ""
-		return nil
-	}
-	enc, err := dpapi([]byte(t), true)
-	if err != nil {
-		return err
-	}
-	c.TokenEnc = base64.StdEncoding.EncodeToString(enc)
 	return nil
-}
-
-func dpapi(data []byte, protect bool) ([]byte, error) {
-	if len(data) == 0 {
-		return nil, errors.New("donnée vide")
-	}
-	in := windows.DataBlob{Size: uint32(len(data)), Data: &data[0]}
-	var out windows.DataBlob
-	var err error
-	if protect {
-		err = windows.CryptProtectData(&in, nil, nil, 0, nil, windows.CRYPTPROTECT_UI_FORBIDDEN, &out)
-	} else {
-		err = windows.CryptUnprotectData(&in, nil, nil, 0, nil, windows.CRYPTPROTECT_UI_FORBIDDEN, &out)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
-	return append([]byte(nil), unsafe.Slice(out.Data, out.Size)...), nil
 }
 
 // ---------------------------------------------------------------- Windows
@@ -141,27 +95,6 @@ func relaunchElevated(args []string) bool {
 	}
 	quoted = append(quoted, "--elevated")
 	return shellExecute("runas", exe, strings.Join(quoted, " ")) == nil
-}
-
-// registerProtocol makes pc2diag:// links from the site open this exe.
-func registerProtocol() {
-	exe, err := os.Executable()
-	if err != nil {
-		return
-	}
-	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Classes\`+protocol, registry.ALL_ACCESS)
-	if err != nil {
-		return
-	}
-	defer k.Close()
-	_ = k.SetStringValue("", "URL:PC2 Diag")
-	_ = k.SetStringValue("URL Protocol", "")
-	cmd, _, err := registry.CreateKey(k, `shell\open\command`, registry.ALL_ACCESS)
-	if err != nil {
-		return
-	}
-	defer cmd.Close()
-	_ = cmd.SetStringValue("", `"`+exe+`" "%1"`)
 }
 
 // setDPIAware keeps the window sharp on high-DPI screens (per-monitor v2).
@@ -195,35 +128,8 @@ type app struct {
 	machine  string
 }
 
-type deepLink struct {
-	action string
-	server string
-	token  string
-	ticket int
-}
-
-func parseDeepLink(args []string) *deepLink {
-	for _, a := range args {
-		if !strings.HasPrefix(strings.ToLower(a), protocol+":") {
-			continue
-		}
-		u, err := url.Parse(a)
-		if err != nil {
-			return nil
-		}
-		q := u.Query()
-		action := u.Host
-		if action == "" {
-			action = strings.Trim(u.Opaque, "/")
-		}
-		t, _ := strconv.Atoi(strings.TrimPrefix(q.Get("ticket"), "#"))
-		return &deepLink{action: action, server: q.Get("server"), token: q.Get("token"), ticket: t}
-	}
-	return nil
-}
-
 func (a *app) client() *Client {
-	return NewClient(a.cfg.Server, a.cfg.token(), a.machine)
+	return NewClient(a.cfg.Server, a.cfg.Token, a.machine)
 }
 
 func (a *app) emit(ev map[string]any) {
@@ -239,7 +145,7 @@ func (a *app) state() map[string]any {
 		"admin":   isAdmin(),
 		"machine": a.machine,
 		"server":  a.cfg.Server,
-		"paired":  a.cfg.Server != "" && a.cfg.TokenEnc != "",
+		"paired":  a.cfg.Server != "" && a.cfg.Token != "",
 		"me":      a.me,
 		"meError": a.meErr,
 		"ticket":  a.ticket,
@@ -352,7 +258,7 @@ func (a *app) saveReport() (string, error) {
 	if r == nil {
 		return "", errors.New("aucune analyse à enregistrer")
 	}
-	dir := filepath.Join(appDir("LOCALAPPDATA"), "rapports")
+	dir := filepath.Join(exeDir(), "PC2Diag-rapports")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -388,20 +294,17 @@ func (a *app) handle(method string, args json.RawMessage) (any, error) {
 			return nil, err
 		}
 		a.mu.Lock()
-		a.cfg.Server = server
-		err = a.cfg.setToken(token)
-		if err == nil {
-			err = a.cfg.save()
-		}
+		a.cfg.Server, a.cfg.Token = server, token
+		err = a.cfg.save()
 		a.me, a.meErr = me, ""
 		a.mu.Unlock()
 		if err != nil {
-			return nil, fmt.Errorf("enregistrement de la clé impossible : %w", err)
+			return nil, err
 		}
 		return a.state(), nil
 	case "unpair":
 		a.mu.Lock()
-		_ = a.cfg.setToken("")
+		a.cfg.Token = ""
 		_ = a.cfg.save()
 		a.me = nil
 		a.mu.Unlock()
@@ -465,8 +368,6 @@ func main() {
 		}
 	}
 
-	registerProtocol()
-
 	// Les relevés SMART, BitLocker, DISM et une partie des journaux exigent les
 	// droits administrateur : on relance une fois via l'UAC.
 	if !isAdmin() && !elevated {
@@ -476,26 +377,20 @@ func main() {
 	}
 
 	setDPIAware()
+	cleanupLegacy()
 	a := &app{cfg: loadConfig()}
 	a.machine, _ = os.Hostname()
 
-	link := parseDeepLink(args)
-	if link != nil && link.server != "" {
-		server := NormalizeServer(link.server)
-		if link.action == "pair" && link.token != "" {
-			a.cfg.Server = server
-			if a.cfg.setToken(link.token) == nil {
-				_ = a.cfg.save()
-			}
-		} else if a.cfg.Server == "" {
-			a.cfg.Server = server
-			_ = a.cfg.save()
-		}
+	// Cache de la fenêtre WebView2 dans un dossier temporaire, effacé à la fermeture
+	cache, err := os.MkdirTemp("", "pc2diag-webview")
+	if err != nil {
+		cache = filepath.Join(os.TempDir(), "pc2diag-webview")
 	}
+	defer removeAllRetry(cache)
 
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		AutoFocus: true,
-		DataPath:  filepath.Join(appDir("LOCALAPPDATA"), "webview"),
+		DataPath:  cache,
 		WindowOptions: webview2.WindowOptions{
 			Title:  "PC2 Diag",
 			Width:  1040,
@@ -507,9 +402,9 @@ func main() {
 		msg, _ := windows.UTF16PtrFromString("WebView2 est introuvable. Installez « Microsoft Edge WebView2 Runtime » puis relancez PC2 Diag.")
 		title, _ := windows.UTF16PtrFromString("PC2 Diag")
 		windows.MessageBox(0, msg, title, windows.MB_ICONERROR)
+		removeAllRetry(cache)
 		os.Exit(1)
 	}
-	defer w.Destroy()
 	a.w = w
 
 	_ = w.Bind("goCall", func(id int, method string, params json.RawMessage) {
@@ -528,22 +423,38 @@ func main() {
 	})
 
 	go func() {
-		if a.cfg.Server != "" && a.cfg.TokenEnc != "" {
+		if a.cfg.Server != "" && a.cfg.Token != "" {
 			a.checkPairing()
-		}
-		a.mu.Lock()
-		paired := a.me != nil
-		a.mu.Unlock()
-		if link != nil && link.ticket > 0 && paired {
-			if t, err := a.client().Ticket(link.ticket); err == nil {
-				a.mu.Lock()
-				a.ticket = t
-				a.mu.Unlock()
-			}
 		}
 		a.emit(map[string]any{"type": "state", "state": a.state()})
 	}()
 
 	w.SetHtml(uiHTML)
 	w.Run()
+	w.Destroy()
+}
+
+// removeAllRetry deletes a folder the WebView2 processes may still hold for a
+// moment after the window closed.
+func removeAllRetry(dir string) {
+	for i := 0; i < 20; i++ {
+		if os.RemoveAll(dir) == nil {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// cleanupLegacy removes what the first version (1.0.0) left on the PC:
+// the pc2diag:// protocol and its folders in the user profile.
+func cleanupLegacy() {
+	base := `Software\Classes\pc2diag`
+	for _, sub := range []string{`\shell\open\command`, `\shell\open`, `\shell`, ``} {
+		_ = registry.DeleteKey(registry.CURRENT_USER, base+sub)
+	}
+	for _, env := range []string{"APPDATA", "LOCALAPPDATA"} {
+		if root := os.Getenv(env); root != "" {
+			removeAllRetry(filepath.Join(root, "PC2Diag"))
+		}
+	}
 }
