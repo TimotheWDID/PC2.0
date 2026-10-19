@@ -35,6 +35,12 @@ var reportHTML string
 //go:embed collect.ps1
 var collectPS string
 
+// Diag Atelier of the site (resources/diag/diag-atelier.html), copied here by
+// build.sh / build.cmd: the detailed diagnostic is the same page as on the site.
+//
+//go:embed atelier.html
+var atelierHTML string
+
 // ---------------------------------------------------------------- dossiers et config
 
 // L'application est portable : tout ce qu'elle garde (en-tête de la société,
@@ -443,24 +449,9 @@ func (a *app) checkPairing() {
 	a.mu.Unlock()
 }
 
-// send posts the current analysis, or a saved one (file), to the site.
-func (a *app) send(ticketID int, actions []map[string]any, file string) (*SendResult, error) {
-	a.mu.Lock()
-	data := a.lastData
-	a.mu.Unlock()
-	if file != "" {
-		d, err := loadScan(file)
-		if err != nil {
-			return nil, err
-		}
-		data = d
-	}
-	if data == nil {
-		return nil, errors.New("lancez d'abord une analyse")
-	}
-	r := Analyze(data, time.Now())
-	r.Actions = actions
-	res, err := a.client().Send(ticketID, r, Inventory(data))
+// send posts the Diag Atelier export of an analysis to the site.
+func (a *app) send(ticketID int, exp AtelierExport) (*SendResult, error) {
+	res, err := a.client().Send(ticketID, exp)
 	if err != nil {
 		a.log("Envoi au site en échec : %v", err)
 		return nil, err
@@ -591,12 +582,16 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		return a.client().Tickets(q)
 	case "goSiteSend":
 		var id int
-		var actions []map[string]any
-		var file string
+		var exp AtelierExport
 		arg(0, &id)
-		arg(1, &actions)
-		arg(2, &file)
-		return a.send(id, actions, file)
+		arg(1, &exp)
+		return a.send(id, exp)
+	case "goAtelierPart":
+		var off int
+		arg(0, &off)
+		// the Diag Atelier page is over 1 Mo: handed to the interface in pieces
+		data, next := chunkAt(atelierHTML, off, 256<<10)
+		return map[string]any{"data": data, "next": next}, nil
 	case "goOpenURL":
 		var u string
 		arg(0, &u)

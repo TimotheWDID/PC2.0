@@ -1,8 +1,11 @@
 # PC2 Diag (application Windows)
 
-Application Windows de diagnostic et de dépannage, reprise de `DiagnosticPC.exe`
-(Go + fenêtre WebView2 + collecte PowerShell), avec en plus l'envoi du rapport
-au site de ticketing, sur un ticket ou en « diag rapide ».
+Application Windows de diagnostic et de dépannage de Planète Computers, reprise
+de `DiagnosticPC.exe` (Go + fenêtre WebView2 + collecte PowerShell), avec en
+plus l'envoi du rapport au site de ticketing, sur un ticket ou en « diag
+rapide ». Son diagnostic détaillé est le **Diag Atelier du site**, intégré à
+l'exe : même affichage, même rapport, et le diagnostic envoyé se rouvre sur le
+site à l'identique.
 
 ## Fonctions
 
@@ -14,6 +17,10 @@ au site de ticketing, sur un ticket ou en « diag rapide ».
   diagnostic mémoire, Windows Update, sécurité (antivirus, pare-feu,
   Secure Boot, TPM, UAC, SMBv1, comptes), services, démarrage, logiciels,
   intégrité DISM, réseau et Internet.
+- **Diag atelier** : la page Diag Atelier du site (vues technicien et client,
+  viabilité, Windows 11, fiche d'inventaire, tests manuels, export PDF / JSON)
+  remplie avec l'analyse. On peut y ajouter un relevé HWiNFO ou un rapport
+  batterie, comme sur le site.
 - **Résumé et problèmes** : score, constats classés par gravité avec la
   marche à suivre, arborescence Matériel / Windows, contrôles réussis.
 - **Capteurs en direct** (chaque seconde) : processeur, fréquence, mémoire,
@@ -32,9 +39,22 @@ au site de ticketing, sur un ticket ou en « diag rapide ».
   d'inventaire** personnalisable, en HTML imprimable en PDF.
 - **Envoyer au site** : association avec une clé, recherche du ticket ou
   diag rapide, envoi de l'analyse en cours ou d'une analyse enregistrée, avec
-  la liste des réparations lancées. La fiche appareil du ticket est complétée
-  comme avec le Diag Atelier (seuls les champs vides sont remplis, les
+  la liste des réparations lancées. L'envoi est celui du bouton « Envoyer au
+  ticket » du Diag Atelier : rapport, fiche d'inventaire, tests manuels et
+  fichiers (l'analyse, et les relevés HWiNFO ou batterie ajoutés). La fiche
+  appareil du ticket est complétée (seuls les champs vides sont remplis, les
   différences sont signalées).
+
+## Compatibilité avec le Diag Atelier du site
+
+Le Diag Atelier accepte l'analyse de l'application (`Analyse_….json`) comme
+une source de plus, à côté du rapport système HWiNFO, du relevé de
+surveillance HWiNFO et du rapport batterie Windows : sans l'exe sous la main,
+les exports HWiNFO et `powercfg /batteryreport` marchent toujours. Les quatre
+peuvent être combinés ; quand le rapport système HWiNFO est là, il prime pour
+l'identité de la machine. L'analyse de l'application ajoute ses propres
+sections : stabilité, sécurité, mises à jour, espace disque, périphériques,
+réseau, logiciels et réparations faites.
 
 ## Portable : rien n'est installé sur le PC du client
 
@@ -82,20 +102,23 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | GET | `/me` | vérifie la clé, renvoie le technicien |
 | GET | `/tickets?q=` | tickets ouverts (n°, titre, client) |
 | GET | `/tickets/{id}` | un ticket |
-| POST | `/diagnostics` | `{ ticket_id?, report, inventory }` |
+| POST | `/diagnostics` | multipart, comme « Envoyer au ticket » : `ticket_id?`, `report`, `inventory`, `state`, `files[]`, `file_sources[]`, `file_names[]`, `file_encodings[]` |
 
-Le rapport a le format `diag-app` et s'affiche sur le site par la vue
-`resources/views/diagnostics/app-report.blade.php`.
+Le rapport a le format `diag-atelier` et se rouvre dans le Diag Atelier. Les
+rapports au format `diag-app` des versions 1.0 à 1.2 (JSON) restent acceptés et
+s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 
 ## Organisation du code
 
 | Fichier | Rôle |
 | --- | --- |
-| `ui.html` | interface (vues, règles de diagnostic, rapports client et inventaire) |
+| `ui.html` | interface (vues, règles de diagnostic, rapports client et inventaire, Diag atelier intégré) |
+| `atelier.html` | copie de `resources/diag/diag-atelier.html` faite par la compilation (non versionnée) |
 | `report.html` | modèle du rapport technique (`__DATA__`, `__BRAND__`) |
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
-| `analyze.go`, `api.go` | rapport envoyé au site et client de l'API |
+| `api.go` | client de l'API (envoi multipart du Diag Atelier) |
+| `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planète Computers de l'exe |
 | `main_windows.go` | fenêtre, pont `goCall`, analyse, historique, rapports, site |
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
 | `sensors_windows.go` | capteurs en direct (compteurs PDH) |
@@ -106,14 +129,22 @@ Le rapport a le format `diag-app` et s'affiche sur le site par la vue
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.2.0        # Linux, macOS, Git Bash
-build.cmd 1.2.0         # invite de commandes Windows
+./build.sh 1.3.0        # Linux, macOS, Git Bash
+build.cmd 1.3.0         # invite de commandes Windows
 ```
+
+Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
+`atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
+l'exe après une modification du Diag Atelier.
 
 Résultat : `dist/PC2Diag.exe`, un seul fichier sans installation. Il faut le
 runtime WebView2 (présent sur Windows 10 et 11 à jour). Pour proposer le
 téléchargement sur la page Diag rapide, copier l'exe dans
 `public/downloads/PC2Diag.exe` sur le serveur.
+
+Icône : `winres/icon.png` (logo Planète Computers). Pour la changer,
+`go-winres simply --icon winres/icon.png --manifest none --arch amd64 --out rsrc`
+régénère `rsrc_windows_amd64.syso`.
 
 Tests : `go test ./...` ; pour vérifier les scripts PowerShell des
 réparations, `PSDUMP=<dossier> go test -run TestDumpPS` les écrit dans ce

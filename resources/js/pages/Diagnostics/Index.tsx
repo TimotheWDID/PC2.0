@@ -166,9 +166,11 @@ export default function DiagnosticsIndex({
                             réparations courantes (SFC, DISM, Windows Update,
                             réseau…), teste la batterie, produit le bilan client
                             et envoie son rapport ici, sur un ticket ou en diag
-                            rapide. Elle est portable : copiez-la sur votre clé
-                            USB, associez-la une fois avec une clé d’accès, elle
-                            n’installe rien sur le PC du client.
+                            rapide. Son diagnostic est le même Diag Atelier que
+                            sur le site : le rapport envoyé se rouvre ici à
+                            l’identique. Elle est portable : copiez-la sur votre
+                            clé USB, associez-la une fois avec une clé d’accès,
+                            elle n’installe rien sur le PC du client.
                         </p>
                         {app.downloadUrl && (
                             <Button asChild variant="outline" size="sm">

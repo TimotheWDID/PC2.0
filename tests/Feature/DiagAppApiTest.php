@@ -176,3 +176,51 @@ it('saves a diagnostic without ticket as a quick diag', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('ticket_id');
 });
+
+it('saves what the app sends in the Diag Atelier format, with its scan, and reopens it in the Diag Atelier', function () {
+    Illuminate\Support\Facades\Storage::fake('local');
+    $agent = diagAppAgent();
+    [, $plain] = DiagAppToken::issue($agent, 'App');
+    $ticket = diagAppTicket();
+
+    $scan = json_encode(['meta' => ['computer' => 'PC-CLAIRE', 'manufacturer' => 'LENOVO'], 'disks' => []]);
+    $report = [
+        'format' => 'diag-atelier',
+        'formatVersion' => 1,
+        'sources' => ['app' => true, 'aida' => false, 'hwinfo' => false, 'battery' => false],
+        'machine' => ['name' => 'LENOVO IdeaPad 5 14ALC05'],
+        'status' => ['overall' => 'warn', 'overallLabel' => 'Quelques points à surveiller'],
+        'viability' => ['score' => 92, 'level' => 'good', 'verdict' => 'PC viable'],
+    ];
+
+    $response = $this->withToken($plain)
+        ->post('/api/diag-app/diagnostics', [
+            'ticket_id' => $ticket->id,
+            'report' => json_encode($report),
+            'inventory' => json_encode(['brand' => 'LENOVO', 'serial' => 'PF2ABCDE']),
+            'state' => json_encode(['checks' => ['ecran' => 'ok'], 'notes' => 'RAS']),
+            'files' => [Illuminate\Http\UploadedFile::fake()->createWithContent('app.gz', gzencode($scan))],
+            'file_sources' => ['app'],
+            'file_names' => ['Analyse_2026-10-19_10h00m00s_PC-CLAIRE.json'],
+            'file_encodings' => ['gzip'],
+        ], ['Accept' => 'application/json'])
+        ->assertCreated()
+        ->assertJsonPath('ticket.id', $ticket->id);
+
+    $diagnostic = Diagnostic::sole();
+    expect($diagnostic->ticket_id)->toBe($ticket->id)
+        ->and($diagnostic->viability_score)->toBe(92)
+        ->and($diagnostic->state['notes'])->toBe('RAS')
+        ->and($diagnostic->files[0]['source'])->toBe('app')
+        ->and(Device::sole()->serial_number)->toBe('PF2ABCDE')
+        ->and(TicketTimelineEvent::where('event_type', 'diagnostic_added')->sole()->summary)->toContain('PC2 Diag');
+
+    $this->actingAs($agent)
+        ->get(parse_url($response->json('report_url'), PHP_URL_PATH))
+        ->assertOk()
+        ->assertSee('window.DIAG_TICKET', false)
+        ->assertSee('"source":"app"', false);
+
+    $file = $this->actingAs($agent)->get(route('tickets.diagnostics.file', [$ticket, $diagnostic, 'app'], false))->assertOk();
+    expect(gzdecode($file->streamedContent()))->toBe($scan);
+});

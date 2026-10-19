@@ -3,7 +3,9 @@
 # Nécessite Go 1.24 ou plus récent : https://go.dev/dl/
 set -e
 cd "$(dirname "$0")"
-VERSION="${1:-1.2.0}"
+VERSION="${1:-1.3.0}"
+# le diagnostic détaillé est le Diag Atelier du site, intégré à l'exe
+cp ../resources/diag/diag-atelier.html atelier.html
 mkdir -p dist
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
   -ldflags "-H windowsgui -s -w -X main.Version=$VERSION" \

@@ -51,7 +51,7 @@ $R.meta = [ordered]@{
   board = (($bb.Manufacturer, $bb.Product) -join ' ').Trim()
   bios = $bios.SMBIOSBIOSVersion; biosDate = (D $bios.ReleaseDate)
   domain = $cs.Domain; partOfDomain = $cs.PartOfDomain
-  scanDate = (D (Get-Date)); timezone = (Try-Get 'tz' { (Get-TimeZone).DisplayName })
+  scanDate = (D (Get-Date)); firmware = $env:firmware_type; timezone = (Try-Get 'tz' { (Get-TimeZone).DisplayName })
 }
 
 # ---------------------------------------------------------------- CPU / RAM / GPU
@@ -215,7 +215,8 @@ $sec.av = @(Try-Get 'securitycenter' { Get-CimInstance -Namespace root\SecurityC
   $st = [int]$_.productState; [ordered]@{ name = $_.displayName; enabled = (($st -band 0x1000) -ne 0); upToDate = (($st -band 0x10) -eq 0) } } } @())
 $sec.firewall = @(Try-Get 'firewall' { Get-NetFirewallProfile | ForEach-Object { [ordered]@{ profile = [string]$_.Name; enabled = [bool]$_.Enabled } } } @())
 $sec.secureBoot = Try-Get 'secureboot' { Confirm-SecureBootUEFI }
-$sec.tpm = Try-Get 'tpm' { $t = Get-Tpm; [ordered]@{ present = $t.TpmPresent; ready = $t.TpmReady; enabled = $t.TpmEnabled } }
+$sec.tpm = Try-Get 'tpm' { $t = Get-Tpm; $w = Get-CimInstance -Namespace root/cimv2/Security/MicrosoftTpm -ClassName Win32_Tpm -ErrorAction SilentlyContinue
+  [ordered]@{ present = $t.TpmPresent; ready = $t.TpmReady; enabled = $t.TpmEnabled; specVersion = $w.SpecVersion } }
 $sec.uac = Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'EnableLUA'
 $sec.uacPrompt = Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'ConsentPromptBehaviorAdmin'
 $sec.smb1 = Try-Get 'smb1' { (Get-SmbServerConfiguration).EnableSMB1Protocol }

@@ -2,18 +2,18 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>PC2 Diag</title>
+<title>Planète Computers · PC2 Diag</title>
 <style>
 /* Layout : fenêtre d'atelier façon HWiNFO — barre d'outils, arborescence à gauche, panneau de détail à droite, barre d'état avec capteurs */
 :root{
-  --bg:#eef1f3; --panel:#ffffff; --side:#f7f8f9; --fg:#18222b; --muted:#5d6a75; --faint:#8a96a0; --line:#d6dde2; --row:#f4f6f8;
-  --accent:#0b6e7f; --accent-fg:#ffffff; --sel:#d7ecef; --term:#0f171d; --term-fg:#cfe3e6;
+  --bg:#F3F4F6; --panel:#ffffff; --side:#f7f8f9; --fg:#18222b; --muted:#5d6a75; --faint:#8a96a0; --line:#d6dde2; --row:#f4f6f8;
+  --accent:#2A3FF5; --accent-fg:#ffffff; --sel:#e1e5fe; --brand-2:#63D7CA; --navy:#141D3A; --term:#0f171d; --term-fg:#cfe3e6;
   --crit:#b42318; --crit-bg:#fde8e6; --warn:#9a5800; --warn-bg:#fdf1dc; --info:#2459a6; --info-bg:#e5eefb; --ok:#1d7a46; --ok-bg:#e2f4ea;
   --f-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --f-disp:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; --f-mono:"Cascadia Mono","Consolas",monospace;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#12181d; --panel:#192229; --side:#151d23; --fg:#e2e9ee; --muted:#95a3ae; --faint:#6c7a85; --line:#27333d; --row:#1c262e;
-  --accent:#3fb6c6; --accent-fg:#06272c; --sel:#173a41; --term:#0b1115; --term-fg:#bfe0e4;
+  --bg:#0b1022; --panel:#141D3A; --side:#111933; --fg:#e6e9f2; --muted:#9aa3bd; --faint:#6d779a; --line:#27345e; --row:#1a2547;
+  --accent:#63D7CA; --accent-fg:#141D3A; --sel:#1c3550; --term:#0b1115; --term-fg:#bfe0e4;
   --crit:#ff8a7f; --crit-bg:#3a1c1a; --warn:#f2b45c; --warn-bg:#36290f; --info:#8db6f5; --info-bg:#1a2a42; --ok:#6fd39b; --ok-bg:#15301f; color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -22,9 +22,10 @@ button{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* barre d'outils */
-.toolbar{display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.toolbar{display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);border-top:3px solid;border-image:linear-gradient(90deg,#2A3FF5,#63D7CA) 1}
 .brand{display:flex;align-items:center;gap:8px;font:600 14px var(--f-disp);margin-right:14px;white-space:nowrap}
-.brand svg{width:22px;height:22px}
+.brand svg{width:26px;height:26px;color:var(--accent)}
+.brand small{display:block;font:500 11px var(--f-ui);color:var(--muted)}
 .tb{display:flex;align-items:center;gap:6px;background:none;border:1px solid transparent;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
 .tb:hover{background:var(--row);border-color:var(--line)}
 .tb.primary{background:var(--accent);color:var(--accent-fg)}
@@ -52,6 +53,8 @@ button{font:inherit;color:inherit}
 .sect{padding:10px 12px 3px;font:600 10.5px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
 
 .content{overflow:auto;padding:18px 22px 28px;min-width:0;user-select:text}
+.main > .content, .main > #atelier{grid-column:2;grid-row:1;min-height:0}
+#atelier{border:0;width:100%;height:100%;background:var(--bg)}
 .ph{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .ph h1{font:600 21px/1.2 var(--f-disp);margin:0}
 .ph .sub{color:var(--muted);margin-top:2px}
@@ -177,8 +180,9 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
 </head>
 <body>
 <header class="toolbar">
-  <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M6 11h3l1.5-3 2 6 1.5-3H18" stroke="var(--accent)"/></svg>PC2 Diag</div>
+  <div class="brand"><svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg><span>Planète Computers<small>PC2 Diag</small></span></div>
   <button class="tb primary" id="bScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Analyser</button>
+  <button class="tb" data-go="atelier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Diag atelier</button>
   <button class="tb" data-go="sensors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Capteurs</button>
   <button class="tb" data-go="repair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>Réparer</button>
   <button class="tb" data-go="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Rapport client</button>
@@ -190,6 +194,7 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
 <div class="main">
   <nav class="tree" id="tree" aria-label="Navigation"></nav>
   <main class="content" id="content"></main>
+  <iframe id="atelier" title="Diag atelier" hidden></iframe>
 </div>
 
 <footer class="status">
@@ -209,7 +214,7 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
   window.__goDone = (id, err, res) => { const p = pend[id]; if (!p) return; delete pend[id]; if (err) p.rej(err); else p.res(res); };
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
-   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL'].forEach(n => { window[n] = (...a) => call(n, a); });
+   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
 </script>
@@ -461,6 +466,7 @@ function nodes(){
   const add = (id, label, icon, d, cats, extra) => N.push({id, label, icon, d, cats: cats || [], ...(extra||{})});
   N.push({sect:'Diagnostic'});
   add('summary','Résumé','home',0);
+  add('atelier','Diag atelier (vue du site)','check',0);
   add('problems','Problèmes','alert',0,['*']);
   add('sensors','Capteurs en direct','pulse',0);
   add('repair','Réparations','wrench',0);
@@ -564,7 +570,10 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','sensors','repair','report','site','battery-test'].includes(view)) view = 'summary';
+  if (!D && !['summary','atelier','sensors','repair','report','site','battery-test'].includes(view)) view = 'summary';
+  const at = view === 'atelier';
+  $('#atelier').hidden = !at; c.hidden = at;
+  if (at) { c.innerHTML = ''; atelierSync(); return; }
   const n = nodes().find(x => x.id === view);
   const fn = V[view.split(':')[0]];
   c.innerHTML = fn ? fn(view.split(':')[1], n) : '';
@@ -864,6 +873,7 @@ function appendLog(id, line, replace){
 }
 
 // ----- rapport client (smileys + comparatif avant / après)
+const LOGO = '<svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg>';
 let CFG = {}, SESSION = [], HIST = [], beforeSel = null, BEFORE = null, BEFORE_META = null;
 const EXCL = new Set(); // constats décochés : exclus du bilan et du calcul de couleur
 const applyExcl = list => list.filter(f => !EXCL.has(fkey(f)));
@@ -1050,8 +1060,9 @@ function buildClientReport(brand){
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;background:#eef1f3;color:#1d262d;font:15px/1.5 "Segoe UI",system-ui,sans-serif}
 .page{max-width:900px;margin:24px auto;background:#fff;padding:34px 40px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:16px;border-bottom:3px solid #0b6e7f}
-.shop{font:700 22px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;color:#0b6e7f}
+header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:16px;border-bottom:3px solid #2A3FF5}
+.shop{font:700 22px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;color:#2A3FF5;display:flex;align-items:center;gap:10px}
+.shop svg{width:34px;height:34px;flex:none}
 .coord{color:#5d6a75;font-size:13px;margin-top:4px}
 .rt{text-align:right;font-size:13.5px;color:#3b4852}
 .rt h1{font:700 19px "Segoe UI Variable Display","Segoe UI",sans-serif;color:#1d262d;margin:0 0 4px}
@@ -1068,7 +1079,7 @@ header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;paddin
 .stats{display:flex;gap:10px;flex-wrap:wrap}
 .st{background:#f1f4f6;border-radius:999px;padding:4px 14px;font-size:14px}
 .st.ok{background:#e2f4ea;color:#1d6b40}
-h2{font:700 13px "Segoe UI",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#0b6e7f;margin:28px 0 12px}
+h2{font:700 13px "Segoe UI",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2A3FF5;margin:28px 0 12px}
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .cat{border:1px solid #dde3e7;border-radius:10px;padding:12px 14px;break-inside:avoid}
 .ch{display:flex;align-items:center;gap:8px}
@@ -1102,7 +1113,7 @@ footer{margin-top:22px;color:#7a8a96;font-size:12px}
 @media (max-width:640px){.cats{grid-template-columns:1fr}.page{padding:20px 16px;margin:0;border-radius:0}.rt{text-align:left}}
 @media print{body{background:#fff}.page{margin:0;padding:0;box-shadow:none;max-width:none}}
 </style></head><body><div class="page">
-<header><div><div class="shop">${esc(brand.shop || '')}</div><div class="coord">${coord}</div></div>
+<header><div><div class="shop">${LOGO}${esc(brand.shop || '')}</div><div class="coord">${coord}</div></div>
 <div class="rt"><h1>Bilan de santé de votre ordinateur</h1>${brand.client ? 'Client : <b>' + esc(brand.client) + '</b><br>' : ''}${brand.tech ? 'Technicien : ' + esc(brand.tech) + '<br>' : ''}Le ${today}</div></header>
 <div class="pc"><b>${esc(m.computer || '')}</b> — ${pcLine}</div>
 ${hero}
@@ -1192,7 +1203,7 @@ function buildInventory(chosen, opt){
   const body = chosen.map(sectionHTML).join('');
   // Le bloc de droite (titre, client, technicien, date) apparaît toujours ; l'en-tête société seulement si demandé.
   const rt = `<div class="rt"><h1>Inventaire matériel et logiciel</h1>${opt.client ? 'Client : <b>' + esc(opt.client) + '</b><br>' : ''}${opt.tech ? 'Technicien : ' + esc(opt.tech) + '<br>' : ''}Le ${new Date().toLocaleDateString('fr-FR')}</div>`;
-  const left = opt.head ? `<div><div class="shop">${esc(CFG.shop || '')}</div><div class="coord">${[CFG.address, CFG.phone, CFG.email].filter(Boolean).map(esc).join(' · ')}</div></div>` : '<div></div>';
+  const left = opt.head ? `<div><div class="shop">${LOGO}${esc(CFG.shop || '')}</div><div class="coord">${[CFG.address, CFG.phone, CFG.email].filter(Boolean).map(esc).join(' · ')}</div></div>` : '<div></div>';
   const header = `<header>${left}${rt}</header>`;
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventaire ${esc(m.computer || 'PC')}</title>
 <style>
@@ -1200,14 +1211,15 @@ function buildInventory(chosen, opt){
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;background:#eef1f3;color:#1d262d;font:14px/1.5 "Segoe UI",system-ui,sans-serif}
 .page{max-width:900px;margin:24px auto;background:#fff;padding:32px 38px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:14px;border-bottom:3px solid #0b6e7f}
-.shop{font:700 20px "Segoe UI",sans-serif;color:#0b6e7f}
+header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:14px;border-bottom:3px solid #2A3FF5}
+.shop{font:700 20px "Segoe UI",sans-serif;color:#2A3FF5;display:flex;align-items:center;gap:8px}
+.shop svg{width:28px;height:28px;flex:none}
 .coord{color:#5d6a75;font-size:12.5px;margin-top:3px}
 .rt{text-align:right;font-size:13px;color:#3b4852}
 .rt h1{font:700 18px "Segoe UI",sans-serif;color:#1d262d;margin:0 0 4px}
 .pcline{margin:14px 0 4px;color:#5d6a75;font-size:13px}
 .pcline b{color:#1d262d;font-size:15px}
-h2{font:700 13px "Segoe UI",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#0b6e7f;margin:24px 0 8px;border-bottom:1px solid #dde3e7;padding-bottom:4px}
+h2{font:700 13px "Segoe UI",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#2A3FF5;margin:24px 0 8px;border-bottom:1px solid #dde3e7;padding-bottom:4px}
 h2 .count{color:#8a96a0;font-weight:400;text-transform:none;letter-spacing:0}
 section{break-inside:avoid}
 table{width:100%;border-collapse:collapse;margin-bottom:6px}
@@ -1225,7 +1237,7 @@ footer{margin-top:22px;color:#8a96a0;font-size:11.5px;border-top:1px solid #dde3
 ${header}
 <div class="pcline"><b>${esc(m.computer || '')}</b> — ${[[m.manufacturer, m.model].filter(Boolean).join(' '), [m.os, m.displayVersion].filter(Boolean).join(' ')].filter(Boolean).map(esc).join(' · ')} · relevé du ${fdt(m.scanDate)}</div>
 ${body}
-<footer>Inventaire établi automatiquement par Diagnostic PC${CFG.shop ? ' — ' + esc(CFG.shop) : ''}. Document à usage interne.</footer>
+<footer>Inventaire établi automatiquement par PC2 Diag${CFG.shop ? ' — ' + esc(CFG.shop) : ''}. Document à usage interne.</footer>
 </div></body></html>`;
 }
 
@@ -1322,8 +1334,50 @@ const SITE = {state:null, q:'', tickets:null, loading:false, err:'', ticket:null
 const sapi = {
   state: () => window.goSiteState ? goSiteState() : Promise.resolve({paired:false}),
   pair: (s, t) => goSitePair(s, t), unpair: () => goSiteUnpair(), check: () => goSiteCheck(),
-  tickets: q => goSiteTickets(q), send: (id, acts, file) => goSiteSend(id, acts, file), url: u => goOpenURL(u)
+  tickets: q => goSiteTickets(q), send: async (id, acts, file) => goSiteSend(id, await atelierExport(file, acts)), url: u => goOpenURL(u)
 };
+// ===================== Diag atelier (la page du site, intégrée) =====================
+// La page Diag Atelier du site est dans l'exe : elle affiche l'analyse comme sur
+// le site, accepte en plus HWiNFO et le rapport batterie, et produit ce que le
+// site enregistre (rapport, fiche d'inventaire, tests manuels, fichiers).
+const ATL = {ready:null, cur:undefined};
+function atelierFrame(){
+  if (ATL.ready) return ATL.ready;
+  ATL.ready = (async () => {
+    let html = '', off = 0;
+    for (;;) { const p = await goAtelierPart(off); html += p.data || ''; if (!p.next) break; off = p.next; }
+    if (!html) throw 'Diag atelier absent de cet exe';
+    const cfg = {shop: CFG.shop || 'Planète Computers', phone: CFG.phone || '', address: CFG.address || '', email: CFG.email || ''};
+    html = html.replace(/<head>/i, '<head><script>window.DIAG_APP = ' + JSON.stringify(cfg).replace(/</g, '\\u003c') + ';<\/script>');
+    const f = $('#atelier');
+    await new Promise(res => { f.addEventListener('load', res, {once:true}); f.srcdoc = html; });
+    return f.contentWindow;
+  })();
+  ATL.ready.catch(err => { ATL.ready = null; status('Diag atelier indisponible : ' + err); });
+  return ATL.ready;
+}
+const doneList = () => done.map(d => ({id:d.id, title:d.title, ok:d.ok, at:d.at}));
+const baseName = f => String(f || '').split(/[\\/]/).pop();
+// Shows the current analysis (and the repairs of this session) in the Diag atelier.
+async function atelierSync(){
+  let w;
+  try { w = await atelierFrame(); } catch (_) { return null; }
+  if (D && ATL.cur !== curFile()) { w.diagAppLoad(JSON.stringify(D), baseName(curFile()) || 'Analyse.json'); ATL.cur = curFile(); }
+  if (D && ATL.cur === curFile()) w.diagAppSetActions(doneList());
+  return w;
+}
+// What « Envoyer au ticket » sends on the site, for the current analysis or a saved one.
+async function atelierExport(file, acts){
+  const w = file ? await atelierFrame() : await atelierSync();
+  if (!w) throw 'Diag atelier indisponible';
+  if (file) { w.diagAppLoad(JSON.stringify(await api.load(file)), baseName(file)); ATL.cur = file; }
+  w.diagAppSetActions(acts || []);
+  const exp = await w.diagAppExport();
+  if (!exp) throw 'Aucune analyse à envoyer';
+  return exp;
+}
+window.addEventListener('message', e => { if (e.data && e.data.diagAtelier === 'send') go('site'); });
+
 const INVL = {brand:'Marque', model:'Modèle', serial:'N° de série', os:'Système', cpu:'Processeur', ram:'RAM', storage:'Stockage'};
 async function siteSearch(){
   SITE.loading = true; SITE.err = ''; if (view === 'site') render();
@@ -1415,7 +1469,7 @@ function status(t){ $('#stMsg').textContent = t; }
 window.onGo = (kind, p) => {
   if (kind === 'site') { SITE.state = p; if (view === 'site') render(); }
   if (kind === 'scanProgress') { scanState = {running:true, ...p}; status(`Analyse ${p.step}/${p.total} — ${p.label}`); if (view === 'summary') { const lb = document.querySelector('.scanning .lbl'); if (lb) { lb.innerHTML = `<span>${esc(p.label)}</span><span class="mono">${p.step}/${p.total}</span>`; document.querySelector('.scanning .progress i').style.width = Math.round(100 * p.step / p.total) + '%'; } else render(); } }
-  if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); }
+  if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; if (ATL.ready || view === 'atelier') atelierSync(); scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); }
   if (kind === 'scanError') { scanState = {error: p}; $('#bScan').disabled = false; status('Échec de l\'analyse'); render(); }
   if (kind === 'sensors') onSensors(p);
   if (kind === 'battPoint') { BT.now = p; BT.points.push(p); if (view === 'battery-test') { render(); drawBattChart(); } }
@@ -1448,10 +1502,11 @@ function onSensors(list){
 function startScan(){ if (scanState && scanState.running) return; $('#bScan').disabled = true; scanState = {running:true, step:0, total:14, label:'Démarrage de la collecte…'}; status('Analyse en cours…'); api.scan(); if (view !== 'summary') go('summary'); else render(); }
 $('#bScan').addEventListener('click', startScan);
 (async () => {
-  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) document.title = 'PC2 Diag ' + info.version;
+  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) document.title = 'Planète Computers · PC2 Diag ' + info.version;
   const pill = $('#adminPill'); if (!info.admin) { pill.textContent = 'Mode limité'; pill.classList.add('limited'); pill.title = 'Sans droits administrateur : diagnostic partiel'; }
   try { ACTIONS = await api.actions(); } catch (_) {}
   try { CFG = await api.cfg() || {}; } catch (_) {}
+  if (!CFG.shop) CFG.shop = 'Planète Computers';
   try { SITE.state = await sapi.state(); } catch (_) {}
   await refreshHist();
   if (info.resumed) status('Reprise automatique après le redémarrage — nouvelle analyse en cours pour le comparatif avant/après.');
