@@ -9,6 +9,7 @@ use App\Models\Diagnostic;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
@@ -16,12 +17,15 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Diag Atelier inside the ticket system: serves the diagnostic tool for a
  * ticket, stores the reports it sends back and fills the ticket's device
- * from the tool's "Fiche inventaire".
+ * from the tool's "Fiche inventaire". The same tool also runs outside any
+ * ticket ("quick diag"), and its report can be attached to a ticket later.
  */
 class DiagnosticController extends Controller
 {
@@ -108,90 +112,10 @@ class DiagnosticController extends Controller
      */
     public function store(Request $request, Ticket $ticket): JsonResponse
     {
-        $data = $request->validate([
-            'report' => 'required|json|max:3000000',
-            'inventory' => 'nullable|json|max:20000',
-            'state' => 'nullable|json|max:50000',
-            'files' => 'nullable|array|max:3',
-            'files.*' => 'file|max:51200',
-            'file_sources' => 'nullable|array|max:3',
-            'file_sources.*' => 'string|in:'.implode(',', self::SOURCES),
-            'file_names' => 'nullable|array|max:3',
-            'file_names.*' => 'nullable|string|max:255',
-            'file_encodings' => 'nullable|array|max:3',
-            'file_encodings.*' => 'string|in:gzip,plain',
-        ]);
+        [$diagnostic, $inventory] = $this->createFromRequest($request, $ticket);
 
-        $report = json_decode($data['report'], true);
-        if (! is_array($report)) {
-            throw ValidationException::withMessages(['report' => 'Rapport illisible.']);
-        }
-        $inventory = $this->normalizeInventory(json_decode($data['inventory'] ?? 'null', true));
-        $state = json_decode($data['state'] ?? 'null', true);
-
-        $user = Auth::user();
-        $machine = is_array($report['machine'] ?? null) ? $report['machine'] : [];
-        $status = is_array($report['status'] ?? null) ? $report['status'] : [];
-        $viability = is_array($report['viability'] ?? null) ? $report['viability'] : [];
-
-        $diagnostic = Diagnostic::create([
-            'ticket_id' => $ticket->id,
-            'device_id' => $ticket->device_id,
-            'technician_id' => $user?->id,
-            'machine_name' => $this->shortString($machine['name'] ?? null, 255),
-            'overall' => $this->shortString($status['overall'] ?? null, 20),
-            'overall_label' => $this->shortString($status['overallLabel'] ?? null, 255),
-            'viability_score' => isset($viability['score']) && is_numeric($viability['score'])
-                ? max(0, min(100, (int) round($viability['score'])))
-                : null,
-            'viability_level' => $this->shortString($viability['level'] ?? null, 20),
-            'viability_label' => $this->shortString($viability['verdict'] ?? null, 255),
-            'report' => $report,
-            'inventory' => $inventory ?: null,
-            'state' => is_array($state) ? $state : null,
-        ]);
-
-        $diagnostic->files = $this->storeFiles($request, $diagnostic);
-
-        $sync = $inventory
-            ? $this->syncInventoryToDevice($ticket, $inventory)
-            : ['device' => $ticket->device, 'created' => false, 'filled' => [], 'conflicts' => [], 'warnings' => []];
-
+        $sync = $this->recordOnTicket($ticket, $diagnostic, $inventory);
         $device = $sync['device'];
-        $diagnostic->device_id = $device?->id;
-        $diagnostic->save();
-
-        $summary = 'Diagnostic Diag Atelier'.($diagnostic->overall_label ? ' : '.$diagnostic->overall_label : '');
-
-        if ($device) {
-            DeviceEvent::create([
-                'device_id' => $device->id,
-                'ticket_id' => $ticket->id,
-                'technician_id' => $user?->id,
-                'event_type' => 'diagnostic',
-                'summary' => mb_substr($summary, 0, 500),
-                'details' => array_filter([
-                    'diagnostic_id' => $diagnostic->id,
-                    'note' => $this->diagnosticNote($diagnostic),
-                ]),
-                'happened_at' => now(),
-            ]);
-        }
-
-        TicketTimelineEvent::create([
-            'ticket_id' => $ticket->id,
-            'technician_id' => $user?->id,
-            'event_type' => 'diagnostic_added',
-            'summary' => $summary,
-            'details' => array_filter([
-                'diagnostic_id' => $diagnostic->id,
-                'overall' => $diagnostic->overall,
-                'viability_score' => $diagnostic->viability_score,
-                'device_id' => $device?->id,
-                'device_created' => $sync['created'] ?: null,
-            ], fn ($value) => ! is_null($value)),
-            'happened_at' => now(),
-        ]);
 
         return response()->json([
             'id' => $diagnostic->id,
@@ -325,14 +249,271 @@ class DiagnosticController extends Controller
         return back()->with('success', 'Diagnostic supprimé.');
     }
 
+    /**
+     * Quick diags: the Diag run outside any ticket, kept on their own until
+     * a technician attaches them to a ticket.
+     */
+    public function quickIndex(): InertiaResponse
+    {
+        $diagnostics = Diagnostic::query()
+            ->whereNull('ticket_id')
+            ->with('technician:id,first_name,last_name')
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn (Diagnostic $diagnostic) => [
+                'id' => $diagnostic->id,
+                'machine_name' => $diagnostic->machine_name,
+                'serial' => $diagnostic->inventory['serial'] ?? null,
+                'overall' => $diagnostic->overall,
+                'overall_label' => $diagnostic->overall_label,
+                'viability_score' => $diagnostic->viability_score,
+                'viability_level' => $diagnostic->viability_level,
+                'viability_label' => $diagnostic->viability_label,
+                'created_at' => $diagnostic->created_at?->toIso8601String(),
+                'technician' => $this->technicianName($diagnostic),
+                'report_url' => route('diag.diagnostics.show', $diagnostic, false),
+            ]);
+
+        $tickets = Ticket::query()
+            ->with('user:id,first_name,last_name')
+            ->whereIn('status', ['open', 'in_progress', 'pending'])
+            ->latest()
+            ->limit(200)
+            ->get(['id', 'title', 'user_id'])
+            ->map(fn (Ticket $ticket) => [
+                'id' => $ticket->id,
+                'title' => $ticket->title,
+                'client' => $ticket->user ? trim(($ticket->user->first_name ?? '').' '.($ticket->user->last_name ?? '')) : null,
+            ]);
+
+        return Inertia::render('Diagnostics/Index', [
+            'diagnostics' => $diagnostics,
+            'tickets' => $tickets,
+            'toolUrl' => route('diag.tool', [], false),
+        ]);
+    }
+
+    public function quickTool(): Response
+    {
+        return $this->renderQuickTool();
+    }
+
+    public function quickShow(Diagnostic $diagnostic): Response|RedirectResponse
+    {
+        if ($diagnostic->ticket_id) {
+            return redirect()->route('tickets.diagnostics.show', [$diagnostic->ticket_id, $diagnostic]);
+        }
+
+        $diagnostic->loadMissing('technician:id,first_name,last_name');
+
+        $files = collect($diagnostic->files ?? [])->map(fn (array $file) => [
+            'source' => $file['source'],
+            'name' => $file['name'],
+            'encoding' => $file['encoding'],
+            'url' => route('diag.diagnostics.file', [$diagnostic, $file['source']], false),
+        ])->values()->all();
+
+        return $this->renderQuickTool([
+            'id' => $diagnostic->id,
+            'created_at' => $diagnostic->created_at?->toIso8601String(),
+            'technician' => $this->technicianName($diagnostic),
+            'files' => $files,
+            'state' => $diagnostic->state ?? (object) [],
+        ]);
+    }
+
+    public function quickFile(Diagnostic $diagnostic, string $source): StreamedResponse
+    {
+        abort_unless($diagnostic->ticket_id === null, 404);
+
+        $file = collect($diagnostic->files ?? [])->firstWhere('source', $source);
+        abort_unless($file && Storage::disk('local')->exists($file['path']), 404);
+
+        return Storage::disk('local')->response($file['path'], null, [
+            'Content-Type' => 'application/octet-stream',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    /**
+     * Report sent by the Diag run outside a ticket: saved on its own.
+     */
+    public function quickStore(Request $request): JsonResponse
+    {
+        [$diagnostic] = $this->createFromRequest($request, null);
+
+        return response()->json([
+            'id' => $diagnostic->id,
+            'report_url' => route('diag.diagnostics.show', $diagnostic, false),
+            'list_url' => route('diag.index', [], false),
+        ], 201);
+    }
+
+    /**
+     * Attach a quick diag to a ticket, as if it had been sent from there.
+     */
+    public function quickAttach(Request $request, Diagnostic $diagnostic): RedirectResponse
+    {
+        abort_unless($diagnostic->ticket_id === null, 404);
+
+        $ticketId = (int) $request->validate([
+            'ticket_id' => 'required|integer|min:1',
+        ])['ticket_id'];
+
+        $ticket = Ticket::query()->find($ticketId);
+        if (! $ticket) {
+            throw ValidationException::withMessages(['ticket_id' => "Le ticket #{$ticketId} n'existe pas."]);
+        }
+
+        $sync = $this->recordOnTicket($ticket, $diagnostic, $diagnostic->inventory ?? []);
+
+        $message = "Diagnostic rattaché au ticket #{$ticket->id}.";
+        if ($sync['conflicts']) {
+            $message .= ' Champs de la fiche appareil différents, non remplacés : '
+                .implode(', ', array_column($sync['conflicts'], 'label')).'.';
+        }
+        foreach ($sync['warnings'] as $warning) {
+            $message .= ' '.$warning;
+        }
+
+        return redirect()->route('tickets.show', $ticket)->with('success', $message);
+    }
+
+    public function quickDestroy(Diagnostic $diagnostic): RedirectResponse
+    {
+        abort_unless($diagnostic->ticket_id === null, 404);
+
+        Storage::disk('local')->deleteDirectory($diagnostic->storageDirectory());
+        $diagnostic->delete();
+
+        return back()->with('success', 'Diagnostic supprimé.');
+    }
+
+    private function renderQuickTool(?array $preload = null): Response
+    {
+        return $this->renderDiag([
+            'ticket' => null,
+            'quick' => ['url' => route('diag.index', [], false)],
+            'device' => null,
+            'storeUrl' => route('diag.diagnostics.store', [], false),
+            'preload' => $preload,
+        ]);
+    }
+
+    /**
+     * Validates the Diag's upload and saves the diagnostic with its raw files,
+     * on the ticket when there is one, on its own for a quick diag.
+     *
+     * @return array{0: Diagnostic, 1: array<string, string|int>}
+     */
+    private function createFromRequest(Request $request, ?Ticket $ticket): array
+    {
+        $data = $request->validate([
+            'report' => 'required|json|max:3000000',
+            'inventory' => 'nullable|json|max:20000',
+            'state' => 'nullable|json|max:50000',
+            'files' => 'nullable|array|max:3',
+            'files.*' => 'file|max:51200',
+            'file_sources' => 'nullable|array|max:3',
+            'file_sources.*' => 'string|in:'.implode(',', self::SOURCES),
+            'file_names' => 'nullable|array|max:3',
+            'file_names.*' => 'nullable|string|max:255',
+            'file_encodings' => 'nullable|array|max:3',
+            'file_encodings.*' => 'string|in:gzip,plain',
+        ]);
+
+        $report = json_decode($data['report'], true);
+        if (! is_array($report)) {
+            throw ValidationException::withMessages(['report' => 'Rapport illisible.']);
+        }
+        $inventory = $this->normalizeInventory(json_decode($data['inventory'] ?? 'null', true));
+        $state = json_decode($data['state'] ?? 'null', true);
+
+        $machine = is_array($report['machine'] ?? null) ? $report['machine'] : [];
+        $status = is_array($report['status'] ?? null) ? $report['status'] : [];
+        $viability = is_array($report['viability'] ?? null) ? $report['viability'] : [];
+
+        $diagnostic = Diagnostic::create([
+            'ticket_id' => $ticket?->id,
+            'device_id' => $ticket?->device_id,
+            'technician_id' => Auth::id(),
+            'machine_name' => $this->shortString($machine['name'] ?? null, 255),
+            'overall' => $this->shortString($status['overall'] ?? null, 20),
+            'overall_label' => $this->shortString($status['overallLabel'] ?? null, 255),
+            'viability_score' => isset($viability['score']) && is_numeric($viability['score'])
+                ? max(0, min(100, (int) round($viability['score'])))
+                : null,
+            'viability_level' => $this->shortString($viability['level'] ?? null, 20),
+            'viability_label' => $this->shortString($viability['verdict'] ?? null, 255),
+            'report' => $report,
+            'inventory' => $inventory ?: null,
+            'state' => is_array($state) ? $state : null,
+        ]);
+
+        $diagnostic->files = $this->storeFiles($request, $diagnostic);
+        $diagnostic->save();
+
+        return [$diagnostic, $inventory];
+    }
+
+    /**
+     * Puts a saved diagnostic on its ticket: the inventory sheet fills the
+     * ticket's device, and the device history and ticket timeline log it.
+     */
+    private function recordOnTicket(Ticket $ticket, Diagnostic $diagnostic, array $inventory): array
+    {
+        $user = Auth::user();
+
+        $sync = $inventory
+            ? $this->syncInventoryToDevice($ticket, $inventory)
+            : ['device' => $ticket->device, 'created' => false, 'filled' => [], 'conflicts' => [], 'warnings' => []];
+
+        $device = $sync['device'];
+        $diagnostic->ticket_id = $ticket->id;
+        $diagnostic->device_id = $device?->id;
+        $diagnostic->save();
+
+        $summary = 'Diagnostic Diag Atelier'.($diagnostic->overall_label ? ' : '.$diagnostic->overall_label : '');
+
+        if ($device) {
+            DeviceEvent::create([
+                'device_id' => $device->id,
+                'ticket_id' => $ticket->id,
+                'technician_id' => $user?->id,
+                'event_type' => 'diagnostic',
+                'summary' => mb_substr($summary, 0, 500),
+                'details' => array_filter([
+                    'diagnostic_id' => $diagnostic->id,
+                    'note' => $this->diagnosticNote($diagnostic),
+                ]),
+                'happened_at' => now(),
+            ]);
+        }
+
+        TicketTimelineEvent::create([
+            'ticket_id' => $ticket->id,
+            'technician_id' => $user?->id,
+            'event_type' => 'diagnostic_added',
+            'summary' => $summary,
+            'details' => array_filter([
+                'diagnostic_id' => $diagnostic->id,
+                'overall' => $diagnostic->overall,
+                'viability_score' => $diagnostic->viability_score,
+                'device_id' => $device?->id,
+                'device_created' => $sync['created'] ?: null,
+            ], fn ($value) => ! is_null($value)),
+            'happened_at' => now(),
+        ]);
+
+        return $sync;
+    }
+
     private function renderTool(Ticket $ticket, ?array $preload = null): Response
     {
-        $path = resource_path('diag/diag-atelier.html');
-        abort_unless(is_file($path), 404, 'Diag Atelier introuvable.');
-
         $ticket->loadMissing(['user', 'device']);
 
-        $config = [
+        return $this->renderDiag([
             'ticket' => [
                 'id' => $ticket->id,
                 'title' => $ticket->title,
@@ -344,9 +525,19 @@ class DiagnosticController extends Controller
                 'name' => $ticket->device->display_name,
             ] : null,
             'storeUrl' => route('tickets.diagnostics.store', $ticket, false),
-            'csrf' => csrf_token(),
             'preload' => $preload,
-        ];
+        ]);
+    }
+
+    /**
+     * The Diag page with its server config (window.DIAG_TICKET) injected.
+     */
+    private function renderDiag(array $config): Response
+    {
+        $path = resource_path('diag/diag-atelier.html');
+        abort_unless(is_file($path), 404, 'Diag Atelier introuvable.');
+
+        $config['csrf'] = csrf_token();
 
         $json = json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $html = file_get_contents($path);
