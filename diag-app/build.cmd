@@ -1,7 +1,7 @@
 @echo off
 rem Compile PC2Diag.exe sous Windows. Necessite Go 1.24+ : https://go.dev/dl/
 cd /d "%~dp0"
-if "%1"=="" (set VERSION=1.0.0) else (set VERSION=%1)
+if "%1"=="" (set VERSION=1.2.0) else (set VERSION=%1)
 if not exist dist mkdir dist
 set GOOS=windows
 set GOARCH=amd64

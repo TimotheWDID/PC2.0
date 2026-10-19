@@ -148,8 +148,13 @@ it('saves a diagnostic without ticket as a quick diag', function () {
     $agent = diagAppAgent();
     [, $plain] = DiagAppToken::issue($agent, 'App');
 
+    $payload = diagAppReport();
+    $payload['report']['actions'] = [
+        ['id' => 'sfc', 'title' => 'Vérifier les fichiers système (SFC)', 'ok' => true, 'at' => '2026-10-19T09:30:00Z'],
+        ['id' => 'dism', 'title' => 'Réparer l\'image Windows (DISM)', 'ok' => false, 'at' => 'pas une date'],
+    ];
     $response = $this->withToken($plain)
-        ->postJson('/api/diag-app/diagnostics', diagAppReport())
+        ->postJson('/api/diag-app/diagnostics', $payload)
         ->assertCreated()
         ->assertJsonPath('ticket', null);
 
@@ -159,7 +164,9 @@ it('saves a diagnostic without ticket as a quick diag', function () {
         ->get(parse_url($response->json('report_url'), PHP_URL_PATH))
         ->assertOk()
         ->assertSee('HP ProBook 450 G8')
-        ->assertSee('Diag rapide');
+        ->assertSee('Diag rapide')
+        ->assertSee('Vérifier les fichiers système (SFC)')
+        ->assertSee('Échec ou annulée');
 
     $this->withToken($plain)
         ->postJson('/api/diag-app/diagnostics', ['report' => ['format' => 'autre']])

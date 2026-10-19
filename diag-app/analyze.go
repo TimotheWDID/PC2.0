@@ -19,14 +19,15 @@ type Finding struct {
 
 // Report is what the app sends to the site (format "diag-app").
 type Report struct {
-	Format      string         `json:"format"`
-	Version     string         `json:"version"`
-	GeneratedAt string         `json:"generatedAt"`
-	Machine     map[string]any `json:"machine"`
-	Status      map[string]any `json:"status"`
-	Viability   map[string]any `json:"viability"`
-	Findings    []Finding      `json:"findings"`
-	Data        map[string]any `json:"data"`
+	Format      string           `json:"format"`
+	Version     string           `json:"version"`
+	GeneratedAt string           `json:"generatedAt"`
+	Machine     map[string]any   `json:"machine"`
+	Status      map[string]any   `json:"status"`
+	Viability   map[string]any   `json:"viability"`
+	Findings    []Finding        `json:"findings"`
+	Data        map[string]any   `json:"data"`
+	Actions     []map[string]any `json:"actions,omitempty"` // réparations lancées pendant la session
 }
 
 // Categories whose problems mean worn or failing hardware: they weigh on the

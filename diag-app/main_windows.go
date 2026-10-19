@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,18 +29,26 @@ import (
 //go:embed ui.html
 var uiHTML string
 
+//go:embed report.html
+var reportHTML string
+
 //go:embed collect.ps1
 var collectPS string
 
-// ---------------------------------------------------------------- config
+// ---------------------------------------------------------------- dossiers et config
 
-// L'application est portable : tout ce qu'elle garde (adresse du site, clé
-// d'accès, copies des rapports) est rangé à côté de l'exe, sur la clé USB du
-// technicien. Rien n'est écrit dans le registre ni dans le profil du client.
+// L'application est portable : tout ce qu'elle garde (en-tête de la société,
+// adresse du site, clé d'accès, analyses et rapports) est rangé à côté de
+// l'exe, sur la clé USB du technicien.
 
 type config struct {
-	Server string `json:"server"`
-	Token  string `json:"token"`
+	Server  string `json:"server"`
+	Token   string `json:"token"`
+	Shop    string `json:"shop"`
+	Address string `json:"address"`
+	Phone   string `json:"phone"`
+	Email   string `json:"email"`
+	Tech    string `json:"tech"`
 }
 
 func exeDir() string {
@@ -55,7 +64,7 @@ func cfgPath() string { return filepath.Join(exeDir(), "PC2Diag-config.json") }
 func loadConfig() config {
 	var c config
 	if b, err := os.ReadFile(cfgPath()); err == nil {
-		_ = json.Unmarshal(b, &c)
+		_ = json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &c)
 	}
 	return c
 }
@@ -66,6 +75,46 @@ func (c config) save() error {
 		return fmt.Errorf("impossible d'écrire à côté de l'exe (%s) : %w", exeDir(), err)
 	}
 	return nil
+}
+
+var (
+	reportsOnce sync.Once
+	reportsPath string
+)
+
+// reportsDir is PC2Diag-rapports next to the exe, or on the desktop when the
+// key is write-protected.
+func reportsDir() string {
+	reportsOnce.Do(func() {
+		for _, d := range []string{exeDir(), filepath.Join(os.Getenv("USERPROFILE"), "Desktop")} {
+			p := filepath.Join(d, "PC2Diag-rapports")
+			if os.MkdirAll(p, 0o700) != nil {
+				continue
+			}
+			probe := filepath.Join(p, ".pc2diag-test")
+			if os.WriteFile(probe, nil, 0o600) == nil {
+				os.Remove(probe)
+				reportsPath = p
+				return
+			}
+		}
+		reportsPath = filepath.Join(os.TempDir(), "PC2Diag-rapports")
+		_ = os.MkdirAll(reportsPath, 0o700)
+	})
+	return reportsPath
+}
+
+var unsafeName = regexp.MustCompile(`[^\pL\pN_-]+`)
+
+func safeName(s string) string {
+	s = strings.Trim(unsafeName.ReplaceAllString(s, "_"), "_")
+	if r := []rune(s); len(r) > 80 {
+		s = string(r[:80])
+	}
+	if s == "" {
+		s = "PC"
+	}
+	return s
 }
 
 // ---------------------------------------------------------------- Windows
@@ -91,7 +140,9 @@ func relaunchElevated(args []string) bool {
 	}
 	quoted := make([]string, 0, len(args)+1)
 	for _, a := range args {
-		quoted = append(quoted, syscall.EscapeArg(a))
+		if a != "--elevated" {
+			quoted = append(quoted, syscall.EscapeArg(a))
+		}
 	}
 	quoted = append(quoted, "--elevated")
 	return shellExecute("runas", exe, strings.Join(quoted, " ")) == nil
@@ -113,62 +164,276 @@ func openURL(u string) error {
 	return shellExecute("open", u, "")
 }
 
+// setResume reopens the app once after the reboot (RunOnce entry, deleted
+// by Windows as soon as it has run).
+func setResume() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, runOnceKey, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	return k.SetStringValue("PC2Diag", syscall.EscapeArg(exe)+" --resume")
+}
+
+func clearResume() {
+	if k, err := registry.OpenKey(registry.CURRENT_USER, runOnceKey, registry.SET_VALUE); err == nil {
+		_ = k.DeleteValue("PC2Diag")
+		k.Close()
+	}
+}
+
 // ---------------------------------------------------------------- app
 
 type app struct {
-	w        webview2.WebView
-	mu       sync.Mutex
-	cfg      config
-	me       *Me
-	meErr    string
-	ticket   *Ticket
-	report   *Report
-	inv      map[string]any
-	scanning bool
-	machine  string
+	w       webview2.WebView
+	mu      sync.Mutex
+	cfg     config
+	me      *Me
+	meErr   string
+	machine string
+	resumed bool
+
+	scanning  bool
+	lastData  map[string]any
+	runCancel context.CancelFunc
+	runPID    int
+	sensorsOn bool
+	batt      *battTest
 }
 
 func (a *app) client() *Client {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	return NewClient(a.cfg.Server, a.cfg.Token, a.machine)
 }
 
-func (a *app) emit(ev map[string]any) {
-	b, _ := json.Marshal(ev)
-	a.w.Dispatch(func() { a.w.Eval("window.onGoEvent && window.onGoEvent(" + string(b) + ")") })
+// emitGo sends an event to the interface: window.onGo(kind, payload).
+func (a *app) emitGo(kind string, payload any) {
+	k, _ := json.Marshal(kind)
+	p, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	a.w.Dispatch(func() { a.w.Eval("window.onGo && window.onGo(" + string(k) + "," + string(p) + ")") })
 }
 
-func (a *app) state() map[string]any {
+func (a *app) log(format string, args ...any) {
+	f, err := os.OpenFile(filepath.Join(reportsDir(), "PC2Diag-journal.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s  %s\r\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+}
+
+// ---------------------------------------------------------------- analyse
+
+var stepRe = regexp.MustCompile(`^(\d+)\|(\d+)\|(.*)$`)
+
+func (a *app) startScan() bool {
+	a.mu.Lock()
+	if a.scanning {
+		a.mu.Unlock()
+		return false
+	}
+	a.scanning = true
+	a.mu.Unlock()
+	go func() {
+		defer func() { a.mu.Lock(); a.scanning = false; a.mu.Unlock() }()
+		started := time.Now()
+		data, err := a.collect()
+		if err != nil {
+			a.log("Analyse en échec : %v", err)
+			a.emitGo("scanError", err.Error())
+			return
+		}
+		a.mu.Lock()
+		a.lastData = data
+		a.mu.Unlock()
+		file, err := saveScan(data)
+		if err != nil {
+			a.log("Analyse non enregistrée : %v", err)
+		}
+		a.log("Analyse terminée en %s", time.Since(started).Round(time.Second))
+		a.emitGo("scanDone", map[string]any{"file": file, "data": data, "seconds": int(time.Since(started).Seconds())})
+	}()
+	return true
+}
+
+func (a *app) collect() (map[string]any, error) {
+	dir, err := os.MkdirTemp("", "pc2diag")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	script := filepath.Join(dir, "collect.ps1")
+	out := filepath.Join(dir, "result.json")
+	progress := filepath.Join(dir, "progress.txt")
+	// BOM UTF-8 : sans lui, PowerShell 5.1 lit les accents du script en ANSI
+	body := append([]byte{0xEF, 0xBB, 0xBF}, strings.TrimPrefix(collectPS, "\ufeff")...)
+	if err := os.WriteFile(script, body, 0o600); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress)
+	hide(cmd)
+	cmd.WaitDelay = 5 * time.Second
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	a.log("Analyse lancée (administrateur : %v)", isAdmin())
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("impossible de lancer PowerShell : %w", err)
+	}
+
+	// L'avancement passe par un fichier : sans console, la sortie de
+	// PowerShell peut rester en mémoire tampon jusqu'à la fin.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	last := ""
+	var waitErr error
+	for running := true; running; {
+		select {
+		case waitErr = <-done:
+			running = false
+		case <-time.After(400 * time.Millisecond):
+		}
+		b, err := os.ReadFile(progress)
+		if err != nil {
+			continue
+		}
+		line := strings.TrimSpace(strings.TrimPrefix(string(b), "\ufeff"))
+		if m := stepRe.FindStringSubmatch(line); m != nil && line != last {
+			last = line
+			n, _ := strconv.Atoi(m[1])
+			total, _ := strconv.Atoi(m[2])
+			a.emitGo("scanProgress", map[string]any{"step": n, "total": total, "label": strings.ToValidUTF8(m[3], "?")})
+		}
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		if output.Len() > 0 {
+			a.log("Sortie PowerShell :\n%s", strings.ToValidUTF8(output.String(), "?"))
+		}
+		if ctx.Err() != nil {
+			return nil, errors.New("l'analyse a dépassé 15 minutes et a été arrêtée")
+		}
+		return nil, fmt.Errorf("la collecte n'a pas produit de résultat (PowerShell bloqué par une stratégie ou un antivirus ?) : %v", waitErr)
+	}
+	var data map[string]any
+	if err := json.Unmarshal(bytes.TrimPrefix(raw, []byte("\xEF\xBB\xBF")), &data); err != nil {
+		return nil, fmt.Errorf("résultat de collecte illisible : %w", err)
+	}
+	return data, nil
+}
+
+const scanStamp = "2006-01-02_15h04m05s"
+
+func saveScan(data map[string]any) (string, error) {
+	name := "Analyse_" + time.Now().Format(scanStamp) + "_" + safeName(str(asMap(data["meta"])["computer"])) + ".json"
+	b, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return name, os.WriteFile(filepath.Join(reportsDir(), name), b, 0o600)
+}
+
+type histItem struct {
+	File string `json:"file"`
+	Date string `json:"date"`
+}
+
+// history lists the analyses kept next to the exe, newest first.
+func history() []histItem {
+	entries, _ := os.ReadDir(reportsDir())
+	out := []histItem{}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !strings.HasPrefix(n, "Analyse_") || !strings.HasSuffix(n, ".json") {
+			continue
+		}
+		date := ""
+		stamp := strings.TrimPrefix(n, "Analyse_")
+		if len(stamp) >= len(scanStamp) {
+			if t, err := time.ParseInLocation(scanStamp, stamp[:len(scanStamp)], time.Local); err == nil {
+				date = t.Format(time.RFC3339)
+			}
+		}
+		if date == "" {
+			if info, err := e.Info(); err == nil {
+				date = info.ModTime().Format(time.RFC3339)
+			}
+		}
+		out = append(out, histItem{File: n, Date: date})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	return out
+}
+
+func loadScan(file string) (map[string]any, error) {
+	if filepath.Base(file) != file || !strings.HasPrefix(file, "Analyse_") {
+		return nil, errors.New("analyse introuvable")
+	}
+	b, err := os.ReadFile(filepath.Join(reportsDir(), file))
+	if err != nil {
+		return nil, errors.New("analyse introuvable")
+	}
+	var data map[string]any
+	return data, json.Unmarshal(b, &data)
+}
+
+// saveHTML writes a report next to the exe and opens it in the browser.
+func saveHTML(name, html string) (string, error) {
+	p := filepath.Join(reportsDir(), safeName(name)+"_"+time.Now().Format("2006-01-02_15h04")+".html")
+	if err := os.WriteFile(p, []byte(html), 0o600); err != nil {
+		return "", fmt.Errorf("enregistrement impossible : %w", err)
+	}
+	_ = shellExecute("open", p, "")
+	return p, nil
+}
+
+// exportReport fills the technical report with the last analysis.
+func (a *app) exportReport(brand json.RawMessage) (string, error) {
+	a.mu.Lock()
+	data := a.lastData
+	a.mu.Unlock()
+	if data == nil {
+		return "", errors.New("lancez d'abord une analyse")
+	}
+	d, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	if len(brand) == 0 || string(brand) == "null" {
+		brand = json.RawMessage("{}")
+	}
+	html := strings.Replace(reportHTML, "__DATA__", string(d), 1)
+	html = strings.Replace(html, "__BRAND__", string(brand), 1)
+	return saveHTML("Rapport_technique_"+str(asMap(data["meta"])["computer"]), html)
+}
+
+// ---------------------------------------------------------------- site
+
+func (a *app) siteState() map[string]any {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	st := map[string]any{
+	return map[string]any{
 		"version": Version,
-		"admin":   isAdmin(),
-		"machine": a.machine,
 		"server":  a.cfg.Server,
 		"paired":  a.cfg.Server != "" && a.cfg.Token != "",
 		"me":      a.me,
 		"meError": a.meErr,
-		"ticket":  a.ticket,
-	}
-	if a.report != nil {
-		st["result"] = summary(a.report, a.inv)
-	}
-	return st
-}
-
-func summary(r *Report, inv map[string]any) map[string]any {
-	return map[string]any{
-		"machine":   r.Machine,
-		"status":    r.Status,
-		"viability": r.Viability,
-		"findings":  r.Findings,
-		"inventory": inv,
+		"scanned": a.lastData != nil,
 	}
 }
 
 func (a *app) checkPairing() {
-	c := a.client()
-	me, err := c.Me()
+	me, err := a.client().Me()
 	a.mu.Lock()
 	if err != nil {
 		a.me, a.meErr = nil, err.Error()
@@ -178,147 +443,122 @@ func (a *app) checkPairing() {
 	a.mu.Unlock()
 }
 
-var stepRe = regexp.MustCompile(`^##STEP\|(\d+)\|(\d+)\|(.*)$`)
-
-func (a *app) scan() (map[string]any, error) {
+// send posts the current analysis, or a saved one (file), to the site.
+func (a *app) send(ticketID int, actions []map[string]any, file string) (*SendResult, error) {
 	a.mu.Lock()
-	if a.scanning {
-		a.mu.Unlock()
-		return nil, errors.New("une analyse est déjà en cours")
-	}
-	a.scanning = true
+	data := a.lastData
 	a.mu.Unlock()
-	defer func() { a.mu.Lock(); a.scanning = false; a.mu.Unlock() }()
-
-	dir, err := os.MkdirTemp("", "pc2diag")
+	if file != "" {
+		d, err := loadScan(file)
+		if err != nil {
+			return nil, err
+		}
+		data = d
+	}
+	if data == nil {
+		return nil, errors.New("lancez d'abord une analyse")
+	}
+	r := Analyze(data, time.Now())
+	r.Actions = actions
+	res, err := a.client().Send(ticketID, r, Inventory(data))
 	if err != nil {
+		a.log("Envoi au site en échec : %v", err)
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
-	script := filepath.Join(dir, "collect.ps1")
-	out := filepath.Join(dir, "result.json")
-	// BOM UTF-8 : sans lui, PowerShell 5.1 lit les accents du script en ANSI
-	if err := os.WriteFile(script, append([]byte{0xEF, 0xBB, 0xBF}, collectPS...), 0o600); err != nil {
-		return nil, err
-	}
+	a.log("Rapport envoyé au site (ticket %d)", ticketID)
+	return res, nil
+}
 
-	progress := filepath.Join(dir, "progress.txt")
-	ps := filepath.Join(os.Getenv("SystemRoot"), `System32\WindowsPowerShell\v1.0\powershell.exe`)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	a.log("Analyse lancée (administrateur : %v)", isAdmin())
-	if err := cmd.Start(); err != nil {
-		a.log("PowerShell introuvable ou bloqué : %v", err)
-		return nil, fmt.Errorf("impossible de lancer PowerShell : %w", err)
-	}
+// ---------------------------------------------------------------- pont avec l'interface
 
-	// L'avancement passe par un fichier : la sortie de PowerShell sans console
-	// peut rester en mémoire tampon jusqu'à la fin.
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	started, last := time.Now(), ""
-	var waitErr error
-	for running := true; running; {
-		select {
-		case waitErr = <-done:
-			running = false
-		case <-time.After(500 * time.Millisecond):
+func (a *app) handle(method string, raw json.RawMessage) (any, error) {
+	var p []json.RawMessage
+	_ = json.Unmarshal(raw, &p)
+	arg := func(i int, v any) {
+		if i < len(p) {
+			_ = json.Unmarshal(p[i], v)
 		}
-		ev := map[string]any{"type": "tick", "elapsed": int(time.Since(started).Seconds())}
-		if b, err := os.ReadFile(progress); err == nil {
-			line := strings.TrimSpace(strings.TrimPrefix(string(b), "\ufeff"))
-			if m := stepRe.FindStringSubmatch("##STEP|" + line); m != nil {
-				n, _ := strconv.Atoi(m[1])
-				total, _ := strconv.Atoi(m[2])
-				ev["n"], ev["total"], ev["label"] = n, total, strings.ToValidUTF8(m[3], "?")
-				if line != last {
-					last = line
-					a.log("Étape %s", line)
-				}
-			}
-		}
-		a.emit(ev)
 	}
-	if output.Len() > 0 {
-		a.log("Sortie PowerShell :\n%s", strings.ToValidUTF8(output.String(), "?"))
-	}
-
-	raw, err := os.ReadFile(out)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, errors.New("l'analyse a dépassé 15 minutes et a été arrêtée")
-		}
-		a.log("Aucun résultat (%v)", waitErr)
-		return nil, fmt.Errorf("la collecte n'a rien produit (%v). Détails dans PC2Diag-journal.txt à côté de l'exe", waitErr)
-	}
-	a.log("Collecte terminée en %s", time.Since(started).Round(time.Second))
-	var data map[string]any
-	if err := json.Unmarshal(raw, &data); err != nil {
-		return nil, fmt.Errorf("résultat de collecte illisible : %w", err)
-	}
-
-	report := Analyze(data, time.Now())
-	inv := Inventory(data)
-	a.mu.Lock()
-	a.report, a.inv = &report, inv
-	a.mu.Unlock()
-	if p, err := a.saveReport(); err == nil {
-		a.emit(map[string]any{"type": "saved", "path": p})
-	}
-	return summary(&report, inv), nil
-}
-
-// saveReport keeps a local copy of the last report, to resend it later if
-// the site was unreachable.
-func (a *app) log(format string, args ...any) {
-	f, err := os.OpenFile(filepath.Join(exeDir(), "PC2Diag-journal.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintf(f, "%s  %s\r\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
-}
-
-func (a *app) saveReport() (string, error) {
-	a.mu.Lock()
-	r, inv := a.report, a.inv
-	a.mu.Unlock()
-	if r == nil {
-		return "", errors.New("aucune analyse à enregistrer")
-	}
-	dir := filepath.Join(exeDir(), "PC2Diag-rapports")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	name := regexp.MustCompile(`[^\pL\pN_.-]+`).ReplaceAllString(str(r.Machine["computer"]), "_")
-	p := filepath.Join(dir, time.Now().Format("2006-01-02_15h04")+"_"+name+".json")
-	b, _ := json.MarshalIndent(map[string]any{"report": r, "inventory": inv}, "", " ")
-	return p, os.WriteFile(p, b, 0o600)
-}
-
-func (a *app) send(ticketID int) (*SendResult, error) {
-	a.mu.Lock()
-	r, inv := a.report, a.inv
-	a.mu.Unlock()
-	if r == nil {
-		return nil, errors.New("lancez d'abord l'analyse")
-	}
-	return a.client().Send(ticketID, *r, inv)
-}
-
-func (a *app) handle(method string, args json.RawMessage) (any, error) {
 	switch method {
-	case "state":
-		return a.state(), nil
-	case "pair":
-		var p struct{ Server, Token string }
-		_ = json.Unmarshal(args, &p)
-		server, token := NormalizeServer(p.Server), strings.TrimSpace(p.Token)
+	case "goInfo":
+		return map[string]any{"computer": a.machine, "admin": isAdmin(), "resumed": a.resumed, "version": Version, "folder": reportsDir()}, nil
+	case "goScan":
+		return a.startScan(), nil
+	case "goSensorsStart":
+		a.startSensors()
+		return true, nil
+	case "goActions":
+		return Actions, nil
+	case "goRunAction":
+		var id string
+		arg(0, &id)
+		return a.runAction(id), nil
+	case "goCancelAction":
+		return a.cancelAction(), nil
+	case "goOpenTool":
+		var id string
+		arg(0, &id)
+		return nil, openTool(id)
+	case "goGetConfig":
+		a.mu.Lock()
+		c := a.cfg
+		a.mu.Unlock()
+		return map[string]string{"shop": c.Shop, "address": c.Address, "phone": c.Phone, "email": c.Email, "tech": c.Tech}, nil
+	case "goSaveConfig":
+		var c config
+		arg(0, &c)
+		a.mu.Lock()
+		a.cfg.Shop, a.cfg.Address, a.cfg.Phone, a.cfg.Email, a.cfg.Tech = c.Shop, c.Address, c.Phone, c.Email, c.Tech
+		err := a.cfg.save()
+		a.mu.Unlock()
+		return err == nil, nil
+	case "goExport":
+		var b json.RawMessage
+		arg(0, &b)
+		return a.exportReport(b)
+	case "goOpenPath":
+		var f string
+		arg(0, &f)
+		if rel, err := filepath.Rel(reportsDir(), f); err != nil || strings.HasPrefix(rel, "..") {
+			return false, nil
+		}
+		return shellExecute("open", f, "") == nil, nil
+	case "goHistory":
+		return history(), nil
+	case "goLoadScan":
+		var f string
+		arg(0, &f)
+		return loadScan(f)
+	case "goSaveHTML":
+		var name, html string
+		arg(0, &name)
+		arg(1, &html)
+		return saveHTML(name, html)
+	case "goReboot":
+		delay, resume := 60, true
+		arg(0, &delay)
+		arg(1, &resume)
+		return a.reboot(delay, resume), nil
+	case "goCancelReboot":
+		return a.cancelReboot(), nil
+	case "goBatteryTest":
+		var minutes int
+		var load bool
+		arg(0, &minutes)
+		arg(1, &load)
+		return a.batteryTest(minutes, load), nil
+	case "goBatteryCtl":
+		var c string
+		arg(0, &c)
+		return a.batteryCtl(c), nil
+
+	case "goSiteState":
+		return a.siteState(), nil
+	case "goSitePair":
+		var server, token string
+		arg(0, &server)
+		arg(1, &token)
+		server, token = NormalizeServer(server), strings.TrimSpace(token)
 		if server == "" || token == "" {
 			return nil, errors.New("indiquez l'adresse du site et la clé")
 		}
@@ -334,75 +574,51 @@ func (a *app) handle(method string, args json.RawMessage) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return a.state(), nil
-	case "unpair":
+		return a.siteState(), nil
+	case "goSiteUnpair":
 		a.mu.Lock()
 		a.cfg.Token = ""
 		_ = a.cfg.save()
 		a.me = nil
 		a.mu.Unlock()
-		return a.state(), nil
-	case "recheck":
+		return a.siteState(), nil
+	case "goSiteCheck":
 		a.checkPairing()
-		return a.state(), nil
-	case "tickets":
-		var p struct{ Q string }
-		_ = json.Unmarshal(args, &p)
-		return a.client().Tickets(p.Q)
-	case "selectTicket":
-		var p struct{ ID int }
-		_ = json.Unmarshal(args, &p)
-		if p.ID <= 0 {
-			a.mu.Lock()
-			a.ticket = nil
-			a.mu.Unlock()
-			return a.state(), nil
-		}
-		t, err := a.client().Ticket(p.ID)
-		if err != nil {
-			return nil, err
-		}
-		a.mu.Lock()
-		a.ticket = t
-		a.mu.Unlock()
-		return a.state(), nil
-	case "scan":
-		return a.scan()
-	case "send":
-		a.mu.Lock()
-		id := 0
-		if a.ticket != nil {
-			id = a.ticket.ID
-		}
-		a.mu.Unlock()
-		return a.send(id)
-	case "save":
-		return a.saveReport()
-	case "open":
-		var p struct{ URL string }
-		_ = json.Unmarshal(args, &p)
-		return nil, openURL(p.URL)
-	case "elevate":
-		if relaunchElevated(nil) {
-			a.w.Dispatch(a.w.Terminate)
-			return nil, nil
-		}
-		return nil, errors.New("élévation refusée")
+		return a.siteState(), nil
+	case "goSiteTickets":
+		var q string
+		arg(0, &q)
+		return a.client().Tickets(q)
+	case "goSiteSend":
+		var id int
+		var actions []map[string]any
+		var file string
+		arg(0, &id)
+		arg(1, &actions)
+		arg(2, &file)
+		return a.send(id, actions, file)
+	case "goOpenURL":
+		var u string
+		arg(0, &u)
+		return nil, openURL(u)
 	}
-	return nil, fmt.Errorf("action inconnue : %s", method)
+	return nil, fmt.Errorf("fonction inconnue : %s", method)
 }
 
 func main() {
 	args := os.Args[1:]
-	elevated := false
+	elevated, resumed := false, false
 	for _, a := range args {
-		if a == "--elevated" {
+		switch a {
+		case "--elevated":
 			elevated = true
+		case "--resume":
+			resumed = true
 		}
 	}
 
-	// Les relevés SMART, BitLocker, DISM et une partie des journaux exigent les
-	// droits administrateur : on relance une fois via l'UAC.
+	// SMART, BitLocker, DISM, une partie des journaux et toutes les réparations
+	// exigent les droits administrateur : on relance une fois via l'UAC.
 	if !isAdmin() && !elevated {
 		if relaunchElevated(args) {
 			return
@@ -411,7 +627,10 @@ func main() {
 
 	setDPIAware()
 	cleanupLegacy()
-	a := &app{cfg: loadConfig()}
+	if resumed {
+		clearResume()
+	}
+	a := &app{cfg: loadConfig(), resumed: resumed}
 	a.machine, _ = os.Hostname()
 
 	// Cache de la fenêtre WebView2 dans un dossier temporaire, effacé à la fermeture
@@ -425,21 +644,25 @@ func main() {
 		AutoFocus: true,
 		DataPath:  cache,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "PC2 Diag",
-			Width:  1040,
-			Height: 780,
+			Title:  "PC2 Diag " + Version,
+			Width:  1280,
+			Height: 860,
 			Center: true,
 		},
 	})
 	if w == nil {
-		msg, _ := windows.UTF16PtrFromString("WebView2 est introuvable. Installez « Microsoft Edge WebView2 Runtime » puis relancez PC2 Diag.")
+		msg, _ := windows.UTF16PtrFromString("Ce PC n'a pas le composant Microsoft Edge WebView2 nécessaire à l'interface.\n\nOuvrir la page de téléchargement Microsoft ?")
 		title, _ := windows.UTF16PtrFromString("PC2 Diag")
-		windows.MessageBox(0, msg, title, windows.MB_ICONERROR)
+		if r, _ := windows.MessageBox(0, msg, title, windows.MB_ICONERROR|windows.MB_YESNO); r == 6 { // IDYES
+			_ = openURL("https://developer.microsoft.com/microsoft-edge/webview2/")
+		}
 		removeAllRetry(cache)
 		os.Exit(1)
 	}
 	a.w = w
 
+	// Un seul point d'entrée asynchrone : chaque appel tourne dans sa propre
+	// goroutine pour ne jamais figer la fenêtre, puis résout sa promesse.
 	_ = w.Bind("goCall", func(id int, method string, params json.RawMessage) {
 		go func() {
 			res, err := a.handle(method, params)
@@ -458,8 +681,8 @@ func main() {
 	go func() {
 		if a.cfg.Server != "" && a.cfg.Token != "" {
 			a.checkPairing()
+			a.emitGo("site", a.siteState())
 		}
-		a.emit(map[string]any{"type": "state", "state": a.state()})
 	}()
 
 	w.SetHtml(uiHTML)
