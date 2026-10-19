@@ -60,7 +60,7 @@ Route::middleware('auth')->group(function () {
         Route::get('tickets/{ticket}/diag', [DiagnosticController::class, 'tool'])->whereNumber('ticket')->name('tickets.diag');
         Route::post('tickets/{ticket}/diagnostics', [DiagnosticController::class, 'store'])->whereNumber('ticket')->name('tickets.diagnostics.store');
         Route::get('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'show'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.show');
-        Route::get('tickets/{ticket}/diagnostics/{diagnostic}/files/{source}', [DiagnosticController::class, 'file'])->whereNumber(['ticket', 'diagnostic'])->whereIn('source', ['aida', 'hwinfo', 'battery'])->name('tickets.diagnostics.file');
+        Route::get('tickets/{ticket}/diagnostics/{diagnostic}/files/{source}', [DiagnosticController::class, 'file'])->whereNumber(['ticket', 'diagnostic'])->whereIn('source', ['app', 'aida', 'hwinfo', 'battery'])->name('tickets.diagnostics.file');
         Route::post('tickets/{ticket}/diagnostics/{diagnostic}/inventory', [DiagnosticController::class, 'applyInventory'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.inventory');
         Route::patch('tickets/{ticket}/diagnostics/{diagnostic}/visibility', [DiagnosticController::class, 'updateVisibility'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.visibility');
         Route::delete('tickets/{ticket}/diagnostics/{diagnostic}', [DiagnosticController::class, 'destroy'])->whereNumber(['ticket', 'diagnostic'])->name('tickets.diagnostics.destroy');

@@ -27,3 +27,4 @@ yarn-error.log
 /.vscode
 /.zed
 /diag-app/dist
+/diag-app/atelier.html

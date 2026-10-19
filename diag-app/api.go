@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -92,26 +96,81 @@ func (c *Client) Ticket(id int) (*Ticket, error) {
 	return &out.Ticket, nil
 }
 
-func (c *Client) Send(ticketID int, report Report, inventory map[string]any) (*SendResult, error) {
-	body := map[string]any{"report": report, "inventory": inventory}
+// AtelierExport is what the Diag Atelier sends with « Envoyer au ticket »
+// (diagAppExport() in the page): the report, the inventory sheet, the manual
+// checks and the files it was built from (base64).
+type AtelierExport struct {
+	Report    json.RawMessage `json:"report"`
+	Inventory json.RawMessage `json:"inventory"`
+	State     json.RawMessage `json:"state"`
+	Files     []AtelierFile   `json:"files"`
+}
+
+type AtelierFile struct {
+	Source string `json:"source"`
+	Name   string `json:"name"`
+	B64    string `json:"b64"`
+}
+
+// Send posts the export as the Diag Atelier does (multipart, files gzipped),
+// so the diagnostic reopens in the Diag Atelier on the site.
+func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
+	if len(e.Report) == 0 || string(e.Report) == "null" {
+		return nil, errors.New("rapport vide : lancez d'abord une analyse")
+	}
+	raw := func(m json.RawMessage) string {
+		if len(m) == 0 {
+			return "null"
+		}
+		return string(m)
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
 	if ticketID > 0 {
-		body["ticket_id"] = ticketID
+		_ = w.WriteField("ticket_id", strconv.Itoa(ticketID))
+	}
+	_ = w.WriteField("report", raw(e.Report))
+	_ = w.WriteField("inventory", raw(e.Inventory))
+	_ = w.WriteField("state", raw(e.State))
+	for _, f := range e.Files {
+		data, err := base64.StdEncoding.DecodeString(f.B64)
+		if err != nil {
+			return nil, fmt.Errorf("fichier %s illisible : %w", f.Name, err)
+		}
+		var gz bytes.Buffer
+		zw := gzip.NewWriter(&gz)
+		_, _ = zw.Write(data)
+		_ = zw.Close()
+		fw, err := w.CreateFormFile("files[]", f.Source+".gz")
+		if err != nil {
+			return nil, err
+		}
+		_, _ = fw.Write(gz.Bytes())
+		_ = w.WriteField("file_sources[]", f.Source)
+		_ = w.WriteField("file_names[]", f.Name)
+		_ = w.WriteField("file_encodings[]", "gzip")
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
 	}
 	var res SendResult
-	return &res, c.do("POST", "/diagnostics", body, &res)
+	return &res, c.request("POST", "/diagnostics", &buf, w.FormDataContentType(), &res)
 }
 
 func (c *Client) do(method, path string, body any, out any) error {
+	if body == nil {
+		return c.request(method, path, nil, "", out)
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	return c.request(method, path, bytes.NewReader(b), "application/json", out)
+}
+
+func (c *Client) request(method, path string, rd io.Reader, contentType string, out any) error {
 	if c.Server == "" || c.Token == "" {
 		return errors.New("application non associée au site")
-	}
-	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		rd = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, c.Server+"/api/diag-app"+path, rd)
 	if err != nil {
@@ -123,8 +182,8 @@ func (c *Client) do(method, path string, body any, out any) error {
 	if c.Machine != "" {
 		req.Header.Set("X-Diag-Machine", c.Machine)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

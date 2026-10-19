@@ -161,11 +161,16 @@ export default function DiagnosticsIndex({
                     <CardContent className="space-y-3 text-sm">
                         <p className="text-muted-foreground">
                             L’application Windows analyse le poste (matériel,
-                            disques, batterie, Windows, sécurité, réseau) et
-                            envoie son rapport ici, sur un ticket ou en diag
-                            rapide. Elle est portable : copiez-la sur votre clé
-                            USB, associez-la une fois avec une clé d’accès, elle
-                            n’installe rien sur le PC du client.
+                            disques, batterie, Windows, sécurité, réseau),
+                            affiche les capteurs en direct, lance les
+                            réparations courantes (SFC, DISM, Windows Update,
+                            réseau…), teste la batterie, produit le bilan client
+                            et envoie son rapport ici, sur un ticket ou en diag
+                            rapide. Son diagnostic est le même Diag Atelier que
+                            sur le site : le rapport envoyé se rouvre ici à
+                            l’identique. Elle est portable : copiez-la sur votre
+                            clé USB, associez-la une fois avec une clé d’accès,
+                            elle n’installe rien sur le PC du client.
                         </p>
                         {app.downloadUrl && (
                             <Button asChild variant="outline" size="sm">

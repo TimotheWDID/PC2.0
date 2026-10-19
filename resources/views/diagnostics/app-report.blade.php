@@ -91,6 +91,21 @@ details summary{cursor:pointer;font-weight:600}
     @endforelse
 </section>
 
+@php $actions = $list($report['actions'] ?? []); @endphp
+@if ($actions)
+    <section class="card">
+        <h2>Réparations lancées par l'application</h2>
+        <table>
+            @foreach ($actions as $a)
+                <tr>
+                    <td>{{ $a['title'] ?? ($a['id'] ?? '') }}</td>
+                    <td>{{ !empty($a['ok']) ? 'Terminée' : 'Échec ou annulée' }}@if (!empty($a['at'])) · {{ rescue(fn () => \Illuminate\Support\Carbon::parse($a['at'])->timezone(config('app.timezone'))->format('d/m/Y H:i'), '', false) }}@endif</td>
+                </tr>
+            @endforeach
+        </table>
+    </section>
+@endif
+
 <div class="grid">
     <section class="card">
         <h2>Système</h2>

@@ -57,7 +57,7 @@ class DiagnosticController extends Controller
     /** Columns with a unique index on devices. */
     private const UNIQUE_COLUMNS = ['serial_number', 'asset_tag', 'imei'];
 
-    private const SOURCES = ['aida', 'hwinfo', 'battery'];
+    protected const SOURCES = ['app', 'aida', 'hwinfo', 'battery'];
 
     /**
      * The Diag page, opened from a ticket, ready to send its report back.
@@ -455,19 +455,19 @@ class DiagnosticController extends Controller
      *
      * @return array{0: Diagnostic, 1: array<string, string|int>}
      */
-    private function createFromRequest(Request $request, ?Ticket $ticket): array
+    protected function createFromRequest(Request $request, ?Ticket $ticket): array
     {
         $data = $request->validate([
             'report' => 'required|json|max:3000000',
             'inventory' => 'nullable|json|max:20000',
             'state' => 'nullable|json|max:50000',
-            'files' => 'nullable|array|max:3',
+            'files' => 'nullable|array|max:4',
             'files.*' => 'file|max:51200',
-            'file_sources' => 'nullable|array|max:3',
+            'file_sources' => 'nullable|array|max:4',
             'file_sources.*' => 'string|in:'.implode(',', self::SOURCES),
-            'file_names' => 'nullable|array|max:3',
+            'file_names' => 'nullable|array|max:4',
             'file_names.*' => 'nullable|string|max:255',
-            'file_encodings' => 'nullable|array|max:3',
+            'file_encodings' => 'nullable|array|max:4',
             'file_encodings.*' => 'string|in:gzip,plain',
         ]);
 
@@ -522,7 +522,8 @@ class DiagnosticController extends Controller
         $diagnostic->device_id = $device?->id;
         $diagnostic->save();
 
-        $summary = 'Diagnostic Diag Atelier'.($diagnostic->overall_label ? ' : '.$diagnostic->overall_label : '');
+        $tool = $this->isAppReport($diagnostic) || ! empty($diagnostic->report['sources']['app']) ? 'PC2 Diag' : 'Diag Atelier';
+        $summary = 'Diagnostic '.$tool.($diagnostic->overall_label ? ' : '.$diagnostic->overall_label : '');
 
         if ($device) {
             DeviceEvent::create([

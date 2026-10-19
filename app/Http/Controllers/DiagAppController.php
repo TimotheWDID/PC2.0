@@ -74,11 +74,24 @@ class DiagAppController extends DiagnosticController
      * Diagnostic sent by the app: on the ticket when one is given (the
      * inventory fills its device, as from the Diag Atelier), else kept as a
      * quick diag to attach later.
+     *
+     * Since version 1.3 the app sends what the Diag Atelier's « Envoyer au
+     * ticket » sends (report as a JSON string, inventory, state and the raw
+     * files), so the diagnostic reopens in the Diag Atelier. Older versions
+     * post a « diag-app » JSON report, shown by its own page.
      */
     public function submit(Request $request): JsonResponse
     {
+        $request->validate(['ticket_id' => 'nullable|integer|min:1']);
+        $ticket = $this->ticketFromRequest($request);
+
+        if (is_string($request->input('report'))) {
+            [$diagnostic, $inventory] = $this->createFromRequest($request, $ticket);
+
+            return $this->submitted($diagnostic, $ticket, $inventory);
+        }
+
         $data = $request->validate([
-            'ticket_id' => 'nullable|integer|min:1',
             'report' => 'required|array',
             'report.format' => 'required|in:diag-app',
             'inventory' => 'nullable|array',
@@ -89,14 +102,6 @@ class DiagAppController extends DiagnosticController
 
         if (strlen((string) json_encode($report)) > 3000000) {
             throw ValidationException::withMessages(['report' => 'Rapport trop volumineux.']);
-        }
-
-        $ticket = null;
-        if (! empty($data['ticket_id'])) {
-            $ticket = Ticket::query()->find($data['ticket_id']);
-            if (! $ticket) {
-                throw ValidationException::withMessages(['ticket_id' => "Le ticket #{$data['ticket_id']} n'existe pas."]);
-            }
         }
 
         $inventory = $this->normalizeInventory($data['inventory'] ?? null);
@@ -119,6 +124,22 @@ class DiagAppController extends DiagnosticController
             'inventory' => $inventory ?: null,
         ]);
 
+        return $this->submitted($diagnostic, $ticket, $inventory);
+    }
+
+    private function ticketFromRequest(Request $request): ?Ticket
+    {
+        $id = $request->input('ticket_id');
+        if (empty($id)) {
+            return null;
+        }
+
+        return Ticket::query()->find($id)
+            ?? throw ValidationException::withMessages(['ticket_id' => "Le ticket #{$id} n'existe pas."]);
+    }
+
+    private function submitted(Diagnostic $diagnostic, ?Ticket $ticket, array $inventory): JsonResponse
+    {
         if (! $ticket) {
             return response()->json([
                 'id' => $diagnostic->id,

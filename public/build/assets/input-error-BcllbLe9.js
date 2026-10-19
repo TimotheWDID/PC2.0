@@ -1,1 +1,0 @@
-import{j as o}from"./app-BUD3bXyb.js";import{c as s}from"./button-Df0wV03R.js";function i({message:t,className:r="",...n}){return t?o.jsx("p",{...n,className:s("text-sm text-destructive",r),children:t}):null}export{i as I};

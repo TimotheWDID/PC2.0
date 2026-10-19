@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planète Computers · PC2 Diag</title>
+<style>
+/* Layout : fiche d'intervention — en-tête machine, verdict, onglets (Problèmes / Matériel / Logiciel / Contrôles OK), cartes de constats avec bande de gravité */
+:root{
+  --bg:#f2f4f5; --panel:#fff; --fg:#16202a; --muted:#5a6773; --line:#d8dfe4; --accent:#2A3FF5; --soft:#e8eef0;
+  --crit:#b42318; --crit-bg:#fde8e6; --warn:#a15c00; --warn-bg:#fdf1dc; --info:#2459a6; --info-bg:#e5eefb; --ok:#1d7a46; --ok-bg:#e2f4ea;
+  --f-body:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif; --f-display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --f-mono:"Cascadia Mono","Consolas",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#10161b; --panel:#172029; --fg:#e3e9ee; --muted:#93a1ad; --line:#293642; --accent:#63D7CA; --soft:#1e2a34;
+  --crit:#ff8a7f; --crit-bg:#3a1c1a; --warn:#f2b45c; --warn-bg:#382a14; --info:#8db6f5; --info-bg:#1a2a42; --ok:#6fd39b; --ok-bg:#163126; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body)}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 56px;display:flex;flex-direction:column;gap:18px}
+.head{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:flex-end;justify-content:space-between}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:700 1.9rem/1.15 var(--f-display);margin:2px 0 0;letter-spacing:-.01em}
+.head .model{color:var(--muted)}
+.stamp{font-family:var(--f-mono);font-size:.8rem;color:var(--muted);text-align:right}
+.verdict{border-radius:10px;padding:14px 18px;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between}
+.verdict strong{font-size:1.05rem}
+.verdict.crit{background:var(--crit-bg);color:var(--crit)} .verdict.warn{background:var(--warn-bg);color:var(--warn)} .verdict.ok{background:var(--ok-bg);color:var(--ok)}
+.tally{display:flex;gap:16px;font-family:var(--f-mono);font-size:.85rem}
+.notice{background:var(--info-bg);color:var(--info);border-radius:8px;padding:10px 14px;font-size:.9rem}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)}
+.tab{font:600 .92rem var(--f-body);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 14px;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--fg);border-color:var(--accent)}
+.tab:focus-visible,.chip:focus-visible,.copy:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tab .n{font-family:var(--f-mono);font-size:.8rem;margin-left:6px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:600 .8rem var(--f-body);border-radius:999px;padding:5px 12px;background:var(--panel);color:var(--muted);border:1px solid var(--line);cursor:pointer}
+.chip[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--sev);border-radius:8px;padding:14px 16px;display:grid;gap:7px;min-width:0}
+.item.crit{--sev:var(--crit)} .item.warn{--sev:var(--warn)} .item.info{--sev:var(--info)}
+.top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}
+.badge{font:700 .68rem var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--sev)}
+.cat{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 6px}
+.item h3{margin:0;font-size:1.02rem;flex:1 1 300px;min-width:0}
+.where{font-size:.85rem;color:var(--muted)}
+code,.mono{font-family:var(--f-mono);font-size:.82rem}
+.where code{background:var(--soft);border-radius:4px;padding:1px 6px;overflow-wrap:anywhere}
+.fix{font-size:.93rem;max-width:80ch}
+.fix b.l{color:var(--accent)}
+.fix ol,.fix ul{margin:4px 0 0;padding-left:20px}
+.cmd{display:flex;gap:8px;align-items:stretch;min-width:0}
+.cmd pre{margin:0;flex:1;min-width:0;background:var(--soft);border-radius:6px;padding:8px 10px;overflow-x:auto;font:.82rem var(--f-mono)}
+.copy{font:600 .78rem var(--f-body);border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:6px;padding:0 10px;cursor:pointer}
+.empty{color:var(--muted);text-align:center;padding:28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.card h2{font:600 .78rem var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+.kv{display:grid;grid-template-columns:minmax(110px,40%) 1fr;gap:3px 12px;margin:0;font-size:.9rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.sub{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.bar{height:6px;border-radius:3px;background:var(--soft);overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--accent)} .bar i.w{background:var(--warn)} .bar i.c{background:var(--crit)}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+.tbl{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.search{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);width:100%;max-width:360px}
+.oklist{columns:2 300px;gap:24px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:0;list-style:none}
+.oklist li{break-inside:avoid;padding:4px 0 4px 22px;position:relative;font-size:.9rem}
+.oklist li::before{content:"";position:absolute;left:2px;top:.65em;width:10px;height:6px;border-left:2px solid var(--ok);border-bottom:2px solid var(--ok);transform:rotate(-45deg)}
+.oklist li span{color:var(--muted)}
+footer{color:var(--muted);font-size:.8rem}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.bhead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-bottom:14px;border-bottom:2px solid var(--accent)}
+.bhead .shop{font:700 1.35rem/1.2 var(--f-display);color:var(--accent);display:flex;align-items:center;gap:10px}
+.bhead .shop svg{width:32px;height:32px;flex:none}
+.bhead .coord{color:var(--muted);font-size:.88rem;white-space:pre-line}
+.bhead .rt{text-align:right;font-size:.9rem}
+.bhead .rt b{font-size:1rem}
+.notes{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;white-space:pre-wrap}
+.notes h2,.ptitle{font:600 .78rem var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+.ptitle{display:none;margin-top:18px}
+.done li{margin:2px 0}
+@media print{
+  body{background:#fff;color:#000;font-size:12px}
+  .tabs,.chips,.copy,.search,footer{display:none!important}
+  #p-pb,#p-hw,#p-ok,#p-pb[hidden],#p-hw[hidden],#p-ok[hidden]{display:block!important}
+  #p-sw,#p-sw[hidden]{display:none!important}
+  .ptitle{display:block}
+  .item,.card,.notes{break-inside:avoid}
+  .wrap{max-width:none;padding:0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="brand"></div>
+  <div class="head">
+    <div>
+      <div class="eyebrow">Rapport de diagnostic</div>
+      <h1 id="pcname">—</h1>
+      <div class="model" id="pcmodel"></div>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </div>
+  <div class="verdict" id="verdict"></div>
+  <div class="notice" id="adminNote" hidden>Analyse lancée sans droits administrateur : l'état SMART des disques, BitLocker, DISM et une partie des journaux n'ont pas pu être lus. Relancez l'outil et acceptez l'élévation pour un diagnostic complet.</div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-pb" data-t="pb" aria-selected="true">Problèmes<span class="n" id="n-pb"></span></button>
+    <button class="tab" role="tab" id="t-hw" data-t="hw" aria-selected="false">Matériel</button>
+    <button class="tab" role="tab" id="t-sw" data-t="sw" aria-selected="false">Logiciel</button>
+    <button class="tab" role="tab" id="t-ok" data-t="ok" aria-selected="false">Contrôles réussis<span class="n" id="n-ok"></span></button>
+  </div>
+
+  <section id="p-pb" class="list-wrap" style="display:flex;flex-direction:column;gap:12px">
+    <h2 class="ptitle">Problèmes détectés</h2>
+    <div class="chips" id="chips"></div>
+    <div class="list" id="list"></div>
+  </section>
+  <section id="p-hw" hidden><h2 class="ptitle">Inventaire matériel</h2><div class="grid" id="hw"></div></section>
+  <section id="p-sw" hidden style="display:flex;flex-direction:column;gap:12px"></section>
+  <section id="p-ok" hidden><h2 class="ptitle">Contrôles réussis</h2><ul class="oklist" id="oklist"></ul></section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const D = __DATA__;
+const BRAND = __BRAND__;
+const LOGO = '<svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg>';
+
+// ---------- utilitaires ----------
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const arr = v => v == null ? [] : (Array.isArray(v) ? v : [v]);
+const days = iso => iso ? (Date.now() - new Date(iso)) / 864e5 : null;
+const fdate = iso => iso ? new Date(iso).toLocaleDateString('fr-FR') : '—';
+const fdt = iso => iso ? new Date(iso).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : '—';
+const has = v => v !== null && v !== undefined && v !== '';
+
+// ---------- règles ----------
+const F = [], OK = [];
+const add = (sev, cat, title, where, fix, cmd) => F.push({sev, cat, title, where, fix, cmd});
+const ok = (cat, text) => OK.push({cat, text});
+
+const CM = {1:'mal configuré',3:'pilote corrompu ou mémoire insuffisante',10:'ne peut pas démarrer',12:'ressources insuffisantes',14:'redémarrage requis',18:'pilotes à réinstaller',19:'registre corrompu',21:'en cours de suppression',22:'désactivé',24:'absent ou mal installé',28:'pilote non installé',29:'désactivé dans le BIOS',31:'pilote ne se charge pas',32:'service du pilote désactivé',37:'échec d\'initialisation du pilote',39:'pilote corrompu ou absent',41:'matériel non détecté',43:'arrêté après avoir signalé un problème',48:'pilote bloqué (incompatible)',52:'pilote non signé'};
+const BSOD = {'0x00000124':'WHEA_UNCORRECTABLE_ERROR — erreur matérielle (CPU, RAM, alimentation, surchauffe)','0x0000001a':'MEMORY_MANAGEMENT — souvent la RAM','0x00000050':'PAGE_FAULT_IN_NONPAGED_AREA — RAM ou pilote','0x0000003b':'SYSTEM_SERVICE_EXCEPTION — pilote','0x000000d1':'DRIVER_IRQL_NOT_LESS_OR_EQUAL — pilote (réseau souvent)','0x0000000a':'IRQL_NOT_LESS_OR_EQUAL — pilote ou RAM','0x0000007e':'SYSTEM_THREAD_EXCEPTION_NOT_HANDLED — pilote','0x000000ef':'CRITICAL_PROCESS_DIED — fichiers système ou disque','0x00000133':'DPC_WATCHDOG_VIOLATION — pilote de stockage ou firmware SSD','0x0000009f':'DRIVER_POWER_STATE_FAILURE — pilote et mise en veille','0x00000116':'VIDEO_TDR_FAILURE — pilote graphique','0x00000139':'KERNEL_SECURITY_CHECK_FAILURE — pilote ou RAM','0x0000007a':'KERNEL_DATA_INPAGE_ERROR — disque ou câble'};
+const bsodName = c => { if (!c) return ''; let h = c; if (/^\d+$/.test(c)) h = '0x' + (+c).toString(16).padStart(8,'0'); h = h.toLowerCase(); return BSOD[h] || h; };
+
+function rules(D){
+  const m = D.meta || {};
+  // ---- Stockage
+  arr(D.disks).forEach(d => {
+    const w = `${d.name} (${d.bus || '?'}, ${d.sizeGB} Go)`;
+    if (d.health && !/healthy|sain/i.test(d.health)) add(/unhealthy/i.test(d.health)||/predict|fail/i.test(d.op||'')?'crit':'warn','Stockage',`Disque en état « ${d.health} »`,w,
+      `Windows considère ce disque comme défaillant (état opérationnel : ${esc(d.op)}).<ol><li><b>Sauvegardez immédiatement</b> les données.</li><li>Vérifiez avec l'outil du fabricant ou CrystalDiskInfo.</li><li>Remplacez le disque.</li></ol>`);
+    else if (d.health) ok('Stockage', `${d.name} : état Windows « sain »`);
+    if (has(d.wear)) { if (d.wear >= 90) add('crit','Stockage',`SSD usé à ${d.wear} %`,w,'Le SSD arrive en fin d\'endurance. Sauvegarde et remplacement rapides.');
+      else if (d.wear >= 70) add('warn','Stockage',`SSD usé à ${d.wear} %`,w,'Usure avancée. Prévoir le remplacement dans les prochains mois.');
+      else ok('Stockage', `${d.name} : usure ${d.wear} %`); }
+    if (has(d.readErr) && d.readErr > 0) add('crit','Stockage',`${d.readErr} erreur(s) de lecture non corrigée(s)`,w,'Le disque n\'arrive plus à relire certaines données. Sauvegarde puis test long constructeur ; remplacement si les erreurs augmentent.');
+    if (has(d.writeErr) && d.writeErr > 0) add('crit','Stockage',`${d.writeErr} erreur(s) d'écriture non corrigée(s)`,w,'Sauvegarde puis remplacement du disque.');
+    if (has(d.temp) && d.temp >= 65) add('warn','Stockage',`Disque à ${d.temp} °C`,w,'Température élevée : vérifier la ventilation, nettoyer la poussière, ajouter un dissipateur au SSD M.2.');
+    if (/HDD/i.test(d.media) && /^C|SATA/.test(d.bus||'') ) {}
+  });
+  if (arr(D.smartPredict).length) add('crit','Stockage','Le disque annonce une panne imminente (SMART)', arr(D.smartPredict).join(', '),
+    '<b>Sauvegardez maintenant</b> puis remplacez le disque : l\'auto-diagnostic SMART prédit une défaillance.');
+  const sysHdd = arr(D.disks).find(d => /HDD/i.test(d.media) && !/USB/i.test(d.bus));
+  if (sysHdd) add('info','Performance','Disque dur mécanique détecté',`${sysHdd.name}`,'Si Windows est installé dessus, le passage à un SSD est l\'amélioration la plus visible (démarrage et ouverture des logiciels 3 à 5 fois plus rapides).');
+
+  arr(D.volumes).forEach(v => {
+    const w = `Lecteur ${v.letter}${v.label ? ' « ' + v.label + ' »' : ''} — ${v.freeGB} Go libres sur ${v.sizeGB} Go`;
+    if (has(v.freePct)) {
+      if (v.freePct < 10 || v.freeGB < 10) add('crit','Stockage',`Lecteur ${v.letter} presque plein (${v.freePct} % libre)`,w,
+        'Windows ralentit et les mises à jour échouent sous ~10 % libre.<ol><li>Nettoyage de disque avec « Nettoyer les fichiers système ».</li><li>Paramètres › Système › Stockage › Fichiers temporaires.</li><li>Déplacer photos/vidéos vers un autre support.</li></ol>','cleanmgr /sageset:1 & cleanmgr /sagerun:1');
+      else if (v.freePct < 20) add('warn','Stockage',`Lecteur ${v.letter} à ${100-v.freePct} % plein`,w,'Prévoir un nettoyage ou un disque plus grand.','cleanmgr /d ' + v.letter);
+      else ok('Stockage', `Lecteur ${v.letter} : ${v.freePct} % libre`);
+    }
+    if (v.dirty) add('warn','Stockage',`Système de fichiers ${v.letter} marqué comme incohérent`,w,'Windows a détecté des erreurs NTFS. Planifier une vérification au prochain redémarrage.','chkdsk ' + v.letter + ' /f');
+    if (v.letter === 'C:' && D.meta.isAdmin) {
+      if (/on|1/i.test(String(v.bitlocker))) ok('Sécurité','C: chiffré par BitLocker');
+      else if (has(v.bitlocker) && m.edition && !/core|home/i.test(m.edition)) add('info','Sécurité','Disque système non chiffré (BitLocker désactivé)',w,'En cas de vol du portable, les données sont lisibles. Activer BitLocker et conserver la clé de récupération (compte Microsoft ou impression).');
+    }
+  });
+  if (D.junkGB >= 5) add('info','Stockage',`${D.junkGB} Go de fichiers temporaires`,'%TEMP%, C:\\Windows\\Temp, cache Windows Update','Espace récupérable sans risque.','cleanmgr /sageset:1 & cleanmgr /sagerun:1');
+
+  // ---- Batterie
+  const b = D.battery || {};
+  if (b.present) {
+    if (has(b.wearPct)) { if (b.wearPct >= 40) add('crit','Matériel',`Batterie usée à ${b.wearPct} %`,`${b.name} — ${b.cycles ?? '?'} cycles`,'Autonomie fortement réduite : remplacement de la batterie conseillé.');
+      else if (b.wearPct >= 20) add('warn','Matériel',`Batterie usée à ${b.wearPct} %`,`${b.name} — ${b.cycles ?? '?'} cycles`,'Usure normale avec l\'âge. Activer la limite de charge à 80 % dans l\'utilitaire du constructeur (Lenovo Vantage, MyASUS, Dell Power Manager…) pour la ralentir.');
+      else ok('Matériel', `Batterie : ${b.wearPct} % d'usure, ${b.cycles ?? '?'} cycles`); }
+  }
+
+  // ---- Périphériques
+  const devs = arr(D.devices);
+  devs.forEach(d => {
+    const sev = d.code === 22 ? 'info' : (d.code === 28 ? 'warn' : 'warn');
+    add(sev,'Pilotes',`${d.name} : ${CM[d.code] || 'erreur code ' + d.code}`,`Classe ${d.cls || '?'} — code ${d.code} — ${d.id}`,
+      d.code === 22 ? 'Périphérique désactivé volontairement. Le réactiver dans le Gestionnaire de périphériques s\'il doit servir.' :
+      d.code === 28 || d.code === 18 ? 'Installer le pilote : Windows Update (Paramètres › Windows Update › Options avancées › Mises à jour facultatives) ou site du constructeur, en cherchant l\'ID matériel ci-dessus.' :
+      d.code === 43 ? 'Débrancher/rebrancher, mettre à jour le pilote et le BIOS. Si le code revient, le composant (ou son port) est suspect.' :
+      'Gestionnaire de périphériques › clic droit › Désinstaller le périphérique, puis « Rechercher les modifications sur le matériel ». Mettre à jour le pilote depuis le site du constructeur.', 'devmgmt.msc');
+  });
+  if (!devs.length) ok('Pilotes','Aucun périphérique en erreur dans le Gestionnaire de périphériques');
+  arr(D.gpu).forEach(g => { const a = days(g.driverDate);
+    if (a && a > 730 && !/basic|microsoft/i.test(g.name)) add('info','Pilotes',`Pilote graphique daté de ${new Date(g.driverDate).getFullYear()}`,`${g.name} — ${g.driver}`,'Mettre à jour depuis le site Intel / AMD / NVIDIA ou du constructeur du PC.');
+    if (/basic display|vga standard|de base/i.test(g.name)) add('warn','Pilotes','Carte graphique sans pilote (affichage de base)',g.name,'Installer le pilote graphique du constructeur : affichage lent, résolution limitée et pas d\'accélération sinon.'); });
+
+  // ---- Stabilité
+  const e = D.events || {};
+  const bs = arr(e.bsod);
+  if (bs.length) { const codes = [...new Set(bs.map(x => bsodName(x.code)))].filter(Boolean);
+    add(bs.length >= 3 ? 'crit' : 'warn','Stabilité',`${bs.length} écran(s) bleu(s) sur 30 jours`, `Dernier : ${fdt(bs[0].date)}${D.events.dumps && D.events.dumps.count ? ' — ' + D.events.dumps.count + ' fichier(s) minidump' : ''}`,
+      `Codes relevés :<ul>${codes.map(c => '<li><code>' + esc(c) + '</code></li>').join('')}</ul>Analyser C:\\Windows\\Minidump avec WinDbg ou BlueScreenView pour identifier le pilote en cause. Mettre à jour BIOS et pilotes, puis tester la RAM.`, 'mdsched.exe'); }
+  else ok('Stabilité','Aucun écran bleu sur 30 jours');
+  if (e.kernelPower41 > 0) add(e.kernelPower41 >= 3 ? 'warn' : 'info','Stabilité',`${e.kernelPower41} redémarrage(s) / arrêt(s) brutal(aux)`,'Journal Système — Kernel-Power 41',
+    'Le PC s\'est éteint sans arrêt propre : coupure de courant, appui long sur le bouton, batterie vide, ou plantage/surchauffe. Si l\'utilisateur ne l\'explique pas : vérifier l\'alimentation, la température et les écrans bleus.');
+  else ok('Stabilité','Aucun arrêt brutal sur 30 jours');
+  if (e.whea > 0) add(e.whea >= 10 ? 'crit' : 'warn','Matériel',`${e.whea} erreur(s) matérielle(s) WHEA`,'Journal Système — WHEA-Logger',
+    `Erreurs signalées directement par le processeur, la RAM ou le bus PCIe.${arr(e.wheaSample).length ? '<br>Exemple : <code>' + esc(arr(e.wheaSample)[0]) + '</code>' : ''}<ol><li>Mettre à jour BIOS et chipset.</li><li>Annuler tout overclocking / profil XMP-EXPO.</li><li>Tester la RAM (Diagnostic mémoire Windows ou MemTest86).</li><li>Si « PCI Express » : reseater la carte/SSD concerné, désactiver l'ASPM dans le BIOS.</li></ol>`, 'mdsched.exe');
+  else ok('Matériel','Aucune erreur matérielle WHEA');
+  const de = (e.disk || 0) + (e.ntfs || 0) + (e.storReset || 0);
+  if (de > 0) add(de >= 5 ? 'crit' : 'warn','Stockage',`${de} erreur(s) disque dans le journal`,`disque : ${e.disk || 0} · NTFS : ${e.ntfs || 0} · réinitialisations contrôleur : ${e.storReset || 0}`,
+    'Secteurs défectueux, câble ou contrôleur instable.<ol><li>Sauvegarder.</li><li>Lancer un test SMART long et <code>chkdsk C: /r</code>.</li><li>Pour un SSD NVMe : mettre à jour son firmware et le pilote de stockage (Intel RST / AMD).</li></ol>','chkdsk C: /scan');
+  else ok('Stockage','Aucune erreur disque ou NTFS dans le journal');
+  if (e.memDiag && e.memDiag.id === 1101) add('crit','Matériel','Le dernier diagnostic mémoire a trouvé des erreurs',fdt(e.memDiag.date),'Une ou plusieurs barrettes de RAM sont défectueuses. Tester barrette par barrette (MemTest86) et remplacer la défaillante.');
+  if (has(D.reliability)) { if (D.reliability < 3) add('warn','Stabilité',`Indice de fiabilité Windows : ${D.reliability}/10`,'Analyse de fiabilité','Ouvrir l\'Analyse de fiabilité pour voir chaque plantage et son origine jour par jour.','perfmon /rel');
+    else ok('Stabilité', `Indice de fiabilité : ${D.reliability}/10`); }
+  const ac = arr(e.appCrashes);
+  if (e.appCrashTotal >= 5) add('info','Logiciel',`${e.appCrashTotal} plantages d'applications`,'Journal Application — événement 1000',
+    `Les plus fréquents :<ul>${ac.slice(0,5).map(a => `<li>${esc(a.app)} : ${a.count}×</li>`).join('')}</ul>Mettre à jour ou réinstaller ces logiciels ; si c'est <code>explorer.exe</code>, suspecter une extension de l'explorateur (antivirus, cloud, archiveur).`,'perfmon /rel');
+  const sc = arr(e.svcCrash);
+  if (sc.length) add('info','Logiciel',`Services Windows qui s'arrêtent de façon inattendue`,'Journal Système — 7031/7034',`<ul>${sc.map(s => `<li>${esc(s.svc)} : ${s.count}×</li>`).join('')}</ul>Mettre à jour ou réinstaller le logiciel propriétaire du service.`);
+
+  // ---- Matériel / perf
+  const mem = D.mem || {};
+  if (mem.totalGB && mem.totalGB < 7.5) add('warn','Performance',`Seulement ${mem.totalGB} Go de RAM`,`${arr(mem.modules).length} barrette(s), ${mem.slots ?? '?'} emplacement(s)`,'8 Go est le minimum confortable pour Windows 11, 16 Go pour un usage bureautique avec navigateur chargé.');
+  if (mem.usedPct >= 90) add('warn','Performance',`Mémoire utilisée à ${mem.usedPct} %`,'Au moment de l\'analyse','Voir les processus les plus gourmands dans l\'onglet Matériel. Fermer les applications inutiles, réduire les programmes au démarrage, ou ajouter de la RAM.');
+  arr(D.thermal).forEach(t => { if (t.c >= 90 && t.c < 150) add('warn','Matériel',`Zone thermique à ${t.c} °C`,t.zone,'Nettoyer les ventilateurs et grilles, renouveler la pâte thermique si le PC a plusieurs années, vérifier que les ventilateurs tournent.'); });
+  if (m.biosDate && days(m.biosDate) > 3*365) add('info','Matériel',`BIOS de ${new Date(m.biosDate).getFullYear()}`,`${m.bios}`,'Vérifier les mises à jour du BIOS chez le constructeur : correctifs de sécurité (Spectre, firmware ME…) et de stabilité.');
+  if (m.uptimeDays > 14) add('info','Performance',`PC allumé depuis ${Math.floor(m.uptimeDays)} jours sans redémarrage`,`Dernier démarrage : ${fdt(m.lastBoot)}`,'Le démarrage rapide fait que « Arrêter » ne remet pas Windows à zéro. Redémarrer régulièrement (ou désactiver le démarrage rapide) applique les mises à jour et libère la mémoire.');
+  const st = arr(D.startup);
+  if (st.length > 12) add('info','Performance',`${st.length} programmes lancés au démarrage`,'Gestionnaire des tâches › Démarrage','Désactiver ceux qui ne sont pas indispensables pour accélérer le démarrage.','taskmgr /0 /startup');
+
+  // ---- Mises à jour
+  const u = D.updates || {};
+  const build = +m.build || 0;
+  const EOL = [[0,21999,'2025-10-14','Windows 10'],[22000,22000,'2023-10-10','Windows 11 21H2'],[22621,22621,'2024-10-08','Windows 11 22H2'],[22631,22631,'2025-11-11','Windows 11 23H2'],[26100,26100,'2026-10-13','Windows 11 24H2'],[26200,26200,'2027-10-12','Windows 11 25H2']];
+  const ent = /enterprise|education/i.test(m.edition || '');
+  const row = EOL.find(r => build >= r[0] && build <= r[1]);
+  if (row && new Date(row[2]) < new Date() && !(ent && build >= 22000)) add(build < 22000 ? 'crit' : 'warn','Mises à jour',`${row[3]} n'est plus pris en charge depuis le ${fdate(row[2])}`,`${m.os} — build ${build}.${m.ubr ?? ''}`,
+    build < 22000 ? 'Plus aucun correctif de sécurité (sauf abonnement ESU). Passer à Windows 11 si le matériel est compatible, sinon souscrire aux mises à jour étendues ou prévoir le remplacement du poste.' : 'Installer la dernière version de Windows 11 : Paramètres › Windows Update, ou l\'Assistant d\'installation Windows 11.','ms-settings:windowsupdate');
+  else if (row) ok('Mises à jour', `${row[3]} pris en charge jusqu'au ${fdate(row[2])}`);
+  const last = u.lastSuccess || u.lastHotfix; const age = days(last);
+  if (age !== null) { if (age > 60) add(age > 120 ? 'crit' : 'warn','Mises à jour',`Aucune mise à jour installée depuis ${Math.round(age)} jours`,`Dernière : ${fdate(last)}${u.lastTitle ? ' — ' + u.lastTitle : (u.lastHotfixId ? ' — ' + u.lastHotfixId : '')}`,
+      'Lancer Windows Update. Si les mises à jour échouent en boucle : réinitialiser les composants Windows Update (arrêter wuauserv/bits, vider SoftwareDistribution).','ms-settings:windowsupdate');
+    else ok('Mises à jour', `Dernière mise à jour il y a ${Math.round(age)} jours`); }
+  arr(u.failed).length && add('warn','Mises à jour',`${arr(u.failed).length} mise(s) à jour en échec récemment`,arr(u.failed).map(f => f.title).join(' · '),'Relancer Windows Update ; en cas d\'échec répété, lancer l\'utilitaire de résolution des problèmes Windows Update puis réparer l\'image système.','DISM /Online /Cleanup-Image /RestoreHealth');
+  if (u.rebootPending) add('warn','Mises à jour','Redémarrage en attente pour terminer des mises à jour','Windows Update / maintenance','Redémarrer le PC pour finaliser l\'installation.','shutdown /r /t 0');
+  if (u.wuService === 'Disabled') add('crit','Mises à jour','Service Windows Update désactivé','Service wuauserv','Les mises à jour de sécurité ne s\'installent plus. Remettre le service en démarrage manuel.','sc config wuauserv start= demand');
+  if (u.pausedUntil && new Date(u.pausedUntil) > new Date()) add('info','Mises à jour','Mises à jour suspendues',`Jusqu'au ${fdate(u.pausedUntil)}`,'Reprendre les mises à jour dans Paramètres › Windows Update.');
+  if (D.dism) { if (!/healthy/i.test(D.dism)) add('crit','Logiciel',`Image Windows endommagée (${D.dism})`,'DISM CheckHealth','Réparer l\'image puis les fichiers système (connexion Internet requise, 10 à 30 minutes) :','DISM /Online /Cleanup-Image /RestoreHealth && sfc /scannow');
+    else ok('Logiciel','Image Windows intègre (DISM)'); }
+
+  // ---- Sécurité
+  const s = D.security || {};
+  const avs = arr(s.av); const activeAv = avs.filter(a => a.enabled);
+  const def = s.defender;
+  if (activeAv.length === 0 && !(def && def.rtp)) add('crit','Sécurité','Aucun antivirus actif','Centre de sécurité Windows','Réactiver Microsoft Defender (Sécurité Windows › Protection contre les virus) ou installer un antivirus.','windowsdefender:');
+  else ok('Sécurité', 'Antivirus actif : ' + (activeAv.map(a => a.name).join(', ') || 'Microsoft Defender'));
+  if (activeAv.length > 1 && activeAv.some(a => !/defender/i.test(a.name)) && activeAv.filter(a => !/defender/i.test(a.name)).length > 1) add('warn','Sécurité','Plusieurs antivirus actifs en même temps',activeAv.map(a => a.name).join(' + '),'Deux antivirus se gênent (lenteurs, plantages). En garder un seul et désinstaller l\'autre avec l\'outil de désinstallation de l\'éditeur.');
+  avs.filter(a => a.enabled && !a.upToDate).forEach(a => add('warn','Sécurité',`${a.name} : définitions obsolètes`,'Centre de sécurité Windows','Forcer la mise à jour de l\'antivirus et vérifier sa licence.'));
+  if (def && def.rtp && def.sigAge > 7) add('warn','Sécurité',`Définitions Defender vieilles de ${def.sigAge} jours`,'Microsoft Defender','Mettre à jour les définitions.','"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe" -SignatureUpdate');
+  if (def && def.rtp && def.tamper === false) add('info','Sécurité','Protection contre les falsifications désactivée','Microsoft Defender','L\'activer dans Sécurité Windows › Protection contre les virus › Gérer les paramètres : empêche un logiciel malveillant de couper l\'antivirus.','windowsdefender://threatsettings');
+  const fwOff = arr(s.firewall).filter(f => !f.enabled);
+  if (fwOff.length) add(fwOff.some(f => /public/i.test(f.profile)) ? 'crit' : 'warn','Sécurité',`Pare-feu désactivé (${fwOff.map(f => f.profile).join(', ')})`,'Pare-feu Windows Defender','Réactiver le pare-feu sur tous les profils (sauf si un pare-feu tiers le remplace).','netsh advfirewall set allprofiles state on');
+  else if (arr(s.firewall).length) ok('Sécurité','Pare-feu actif sur tous les profils');
+  if (s.secureBoot === false) add('warn','Sécurité','Démarrage sécurisé (Secure Boot) désactivé','UEFI','Activer Secure Boot dans le BIOS (protège contre les bootkits, requis par Windows 11).');
+  else if (s.secureBoot === true) ok('Sécurité','Secure Boot actif');
+  if (s.tpm && !s.tpm.present) add('warn','Sécurité','Aucun TPM détecté','UEFI','Activer le TPM (Intel PTT / AMD fTPM) dans le BIOS : nécessaire pour BitLocker et Windows 11.');
+  else if (s.tpm && s.tpm.present) ok('Sécurité','TPM présent' + (s.tpm.ready ? ' et prêt' : ''));
+  if (s.uac === 0) add('crit','Sécurité','Contrôle de compte utilisateur (UAC) désactivé','Registre EnableLUA = 0','Tout programme s\'exécute avec les droits administrateur. Réactiver l\'UAC puis redémarrer.','reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v EnableLUA /t REG_DWORD /d 1 /f');
+  else if (s.uacPrompt === 0) add('warn','Sécurité','UAC réglé sur « Ne jamais m\'avertir »','ConsentPromptBehaviorAdmin = 0','Remonter le curseur de l\'UAC au niveau par défaut.','UserAccountControlSettings.exe');
+  else if (s.uac === 1) ok('Sécurité','Contrôle de compte utilisateur actif');
+  if (s.smb1 === true) add('warn','Sécurité','Protocole SMBv1 activé','Partage de fichiers','Protocole obsolète exploité par WannaCry. Le désactiver (vérifier avant qu\'aucun vieux NAS/copieur n\'en dépende).','powershell -c "Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force"');
+  else if (s.smb1 === false) ok('Sécurité','SMBv1 désactivé');
+  if (s.rdp) add(s.rdpNla ? 'info' : 'warn','Sécurité',`Bureau à distance activé${s.rdpNla ? '' : ' sans authentification réseau (NLA)'}`,'Paramètres › Système › Bureau à distance',s.rdpNla ? 'Normal si utilisé. Ne jamais exposer le port 3389 directement sur Internet (passer par un VPN).' : 'Activer l\'authentification au niveau du réseau, ou désactiver le Bureau à distance s\'il ne sert pas.');
+  if (s.autologon && s.autologonPwd) add('crit','Sécurité','Ouverture de session automatique avec mot de passe en clair','HKLM\\…\\Winlogon\\DefaultPassword','Le mot de passe est stocké en clair dans le registre. Désactiver l\'ouverture automatique (netplwiz) ou utiliser Autologon de Sysinternals qui le chiffre.','netplwiz');
+  arr(s.users).forEach(x => {
+    if (/-501$/.test(x.sid) && x.enabled) add('warn','Sécurité','Compte Invité activé',x.name,'Désactiver le compte Invité.','net user "' + x.name + '" /active:no');
+    if (/-500$/.test(x.sid) && x.enabled) add('info','Sécurité','Compte Administrateur intégré activé',x.name,'Cible classique des attaques par mot de passe. Le désactiver si un autre compte administrateur existe.','net user "' + x.name + '" /active:no');
+    if (x.enabled && x.pwdRequired === false && !/-50[0-3]$/.test(x.sid)) add('info','Sécurité',`Compte « ${x.name} » sans mot de passe obligatoire`,'Comptes locaux','Vérifier que le compte a bien un mot de passe.');
+  });
+  if (arr(s.admins).length > 3) add('info','Sécurité',`${arr(s.admins).length} comptes administrateurs`,arr(s.admins).join(', '),'Limiter les droits administrateur aux comptes qui en ont besoin ; l\'utilisateur au quotidien devrait être « standard ».','lusrmgr.msc');
+
+  // ---- Services
+  const sv = arr(D.services);
+  if (sv.length) add('info','Logiciel',`${sv.length} service(s) automatique(s) arrêté(s)`,'Services Windows',`<ul>${sv.slice(0,10).map(x => `<li>${esc(x.display)} <code>${esc(x.name)}</code>${x.exit ? ' — code ' + x.exit : ''}</li>`).join('')}</ul>Un service censé démarrer seul est arrêté : souvent un logiciel désinstallé incomplètement ou en panne. Le redémarrer, sinon réparer/réinstaller le logiciel concerné.`,'services.msc');
+
+  // ---- Réseau
+  const n = D.network || {};
+  if (n.gateway && n.gwPing === false) add('warn','Réseau','La box / passerelle ne répond pas au ping',`Passerelle ${n.gateway}`,'Vérifier le câble ou le Wi-Fi, redémarrer la box. Certaines box bloquent le ping : à confirmer si Internet ne marche pas.');
+  if (!n.gateway) add('warn','Réseau','Aucune passerelle par défaut','Configuration IP','Pas de route vers Internet : câble débranché, Wi-Fi non connecté ou DHCP en échec.','ipconfig /renew');
+  if (n.internet === false) add('warn','Réseau','Pas d\'accès Internet (TCP 443 vers 1.1.1.1)','Test de connexion','Vérifier la box, un éventuel proxy ou pare-feu bloquant.');
+  else if (n.internet) ok('Réseau','Accès Internet fonctionnel');
+  if (n.dns === false && n.internet) add('warn','Réseau','Résolution DNS en échec alors qu\'Internet répond','Serveurs DNS : ' + arr(n.dnsServers).join(', '),'Les sites ne s\'affichent pas par leur nom. Vider le cache DNS ou passer sur des DNS publics.','ipconfig /flushdns');
+  else if (n.dns) ok('Réseau','Résolution DNS fonctionnelle');
+  arr(n.apipa).forEach(a => add('warn','Réseau',`Adresse IP automatique 169.254.x.x sur « ${a} »`,a,'La carte n\'a pas obtenu d\'adresse du serveur DHCP (box). Débrancher/rebrancher, redémarrer la box.','ipconfig /release && ipconfig /renew'));
+  if (n.wifi && has(n.wifi.signal) && n.wifi.signal < 50) add('info','Réseau',`Signal Wi-Fi faible (${n.wifi.signal} %)`,`Réseau « ${n.wifi.ssid} »`,'Rapprocher le PC de la box, ou ajouter un répéteur / point d\'accès.');
+  arr(n.adapters).forEach(a => { if (/up/i.test(a.status) && /802\.3|ethernet/i.test(a.media + a.desc) && /^100 Mbps|^10 Mbps/.test(a.speed)) add('warn','Réseau',`Liaison Ethernet limitée à ${a.speed}`,a.desc,'Câble abîmé ou de mauvaise catégorie (4 fils au lieu de 8), ou port de switch/box limité. Changer le câble (cat 5e minimum).'); });
+
+  if (!m.isAdmin) document.getElementById('adminNote').hidden = false;
+  arr(D.errors).length && ok('Logiciel', `${arr(D.errors).length} contrôle(s) non disponible(s) sur ce poste : ${arr(D.errors).map(x => x.check).join(', ')}`);
+}
+
+// ---------- rendu ----------
+const SEV = {crit:'Critique', warn:'À corriger', info:'Conseil'};
+let filter = 'all';
+function renderProblems(){
+  const c = {crit:0, warn:0, info:0}; F.forEach(f => c[f.sev]++);
+  const order = {crit:0, warn:1, info:2}; F.sort((a,b) => order[a.sev] - order[b.sev]);
+  const v = document.getElementById('verdict');
+  v.className = 'verdict ' + (c.crit ? 'crit' : c.warn ? 'warn' : 'ok');
+  v.innerHTML = `<strong>${c.crit ? c.crit + ' problème(s) critique(s) à traiter en priorité' : c.warn ? 'Rien de critique, ' + c.warn + ' point(s) à corriger' : 'Aucun problème important détecté'}</strong>
+    <span class="tally"><span>${c.crit} critique</span><span>${c.warn} à corriger</span><span>${c.info} conseil</span><span>${OK.length} OK</span></span>`;
+  document.getElementById('n-pb').textContent = F.length;
+  document.getElementById('n-ok').textContent = OK.length;
+  const cats = [...new Set(F.map(f => f.cat))];
+  document.getElementById('chips').innerHTML = [['all','Tout'],['crit',SEV.crit],['warn',SEV.warn],['info',SEV.info],...cats.map(x => ['cat:'+x, x])]
+    .map(([k,l]) => `<button class="chip" data-f="${esc(k)}" aria-pressed="${filter===k}">${esc(l)}</button>`).join('');
+  drawList();
+}
+function drawList(){
+  const L = F.filter(f => filter === 'all' || f.sev === filter || 'cat:' + f.cat === filter);
+  document.getElementById('list').innerHTML = L.length ? L.map((f,i) => `
+    <article class="item ${f.sev}">
+      <div class="top"><span class="badge">${SEV[f.sev]}</span><h3>${esc(f.title)}</h3><span class="cat">${esc(f.cat)}</span></div>
+      ${f.where ? `<div class="where"><code>${esc(f.where)}</code></div>` : ''}
+      <div class="fix"><b class="l">Que faire :</b> ${f.fix}</div>
+      ${f.cmd ? `<div class="cmd"><pre>${esc(f.cmd)}</pre><button class="copy" data-cmd="${esc(f.cmd)}">Copier</button></div>` : ''}
+    </article>`).join('') : '<div class="empty">Rien dans cette catégorie.</div>';
+  document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
+}
+const kv = rows => '<dl class="kv">' + rows.filter(r => has(r[1])).map(([k,v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('') + '</dl>';
+const bar = (pct, warnAt, critAt, inverse) => { const p = Math.max(0, Math.min(100, pct)); const bad = inverse ? (p <= critAt ? 'c' : p <= warnAt ? 'w' : '') : (p >= critAt ? 'c' : p >= warnAt ? 'w' : ''); return `<div class="bar"><i class="${bad}" style="width:${p}%"></i></div>`; };
+function renderHardware(){
+  const m = D.meta || {}, c = D.cpu || {}, mem = D.mem || {}, b = D.battery || {}, n = D.network || {};
+  const cards = [];
+  cards.push(`<div class="card"><h2>Système</h2>${kv([['Fabricant',esc(m.manufacturer)],['Modèle',esc([m.model, m.productName && m.productName !== m.model ? '(' + m.productName + ')' : ''].join(' '))],['N° de série',`<span class="mono">${esc(m.serial)}</span>`],['Carte mère',esc(m.board)],['BIOS',esc(m.bios) + ' — ' + fdate(m.biosDate)],['Windows',esc(m.os) + (m.displayVersion ? ' ' + esc(m.displayVersion) : '')],['Build',`<span class="mono">${esc(m.build)}.${esc(m.ubr)}</span> (${esc(m.arch)})`],['Installé le',fdate(m.installDate)],['Démarré le',fdt(m.lastBoot) + ` (${m.uptimeDays} j)`],['Domaine',esc(m.domain)],['Mode d\'alimentation',esc(D.power)]])}</div>`);
+  cards.push(`<div class="card"><h2>Processeur</h2>${kv([['Modèle',esc(c.name)],['Cœurs / threads',`${c.cores} / ${c.threads}`],['Fréquence max',c.maxMHz ? (c.maxMHz/1000).toFixed(2) + ' GHz' : ''],['Charge',has(c.load) ? c.load + ' %' + bar(c.load,80,95) : ''],['Virtualisation',c.virt === true ? 'Activée' : c.virt === false ? 'Désactivée dans le BIOS' : '']])}
+    <div class="sub"><h2>Mémoire</h2>${kv([['Installée',`${mem.totalGB} Go`],['Utilisée',`${mem.usedPct} % (${mem.freeGB} Go libres)` + bar(mem.usedPct,80,92)],['Emplacements',`${arr(mem.modules).length} occupé(s) sur ${mem.slots ?? '?'}`]])}
+    ${arr(mem.modules).length ? `<div style="overflow-x:auto"><table><tr><th>Slot</th><th>Taille</th><th>Vitesse</th><th>Référence</th></tr>${arr(mem.modules).map(x => `<tr><td>${esc(x.slot)}</td><td class="num">${x.sizeGB} Go</td><td class="num">${esc(x.configured || x.speed)} MT/s</td><td>${esc(x.maker)} ${esc(x.part)}</td></tr>`).join('')}</table></div>` : ''}</div></div>`);
+  cards.push(`<div class="card"><h2>Stockage</h2>${arr(D.disks).map(d => `<div style="margin-bottom:10px"><strong>${esc(d.name)}</strong>${kv([['Type',`${esc(d.media)} · ${esc(d.bus)} · ${d.sizeGB} Go`],['État',esc(d.health)],['Usure',has(d.wear) ? d.wear + ' %' + bar(d.wear,70,90) : ''],['Température',has(d.temp) && d.temp ? d.temp + ' °C' + (d.tempMax ? ` (max ${d.tempMax} °C)` : '') : ''],['Heures',has(d.hours) ? d.hours + ' h' : ''],['Erreurs lecture',has(d.readErr) ? d.readErr : ''],['Firmware',esc(d.firmware)],['N° série',`<span class="mono">${esc(d.serial)}</span>`]])}</div>`).join('')}
+    <div class="sub"><h2>Volumes</h2>${arr(D.volumes).map(v => `<div style="margin-bottom:8px"><strong>${esc(v.letter)}</strong> ${esc(v.label)} — ${v.freeGB} Go libres / ${v.sizeGB} Go ${esc(v.fs)}${v.bitlocker ? ' · BitLocker ' + esc(v.bitlocker) : ''}${has(v.freePct) ? bar(100 - v.freePct, 80, 90) : ''}</div>`).join('')}</div></div>`);
+  cards.push(`<div class="card"><h2>Graphique et écrans</h2>${arr(D.gpu).map(g => `<div style="margin-bottom:8px"><strong>${esc(g.name)}</strong>${kv([['Pilote',esc(g.driver) + ' — ' + fdate(g.driverDate)],['Affichage',esc(g.res)]])}</div>`).join('')}
+    ${arr(D.monitors).length ? '<div class="sub">' + kv(arr(D.monitors).map((x,i) => ['Écran ' + (i+1), esc(x.maker + ' ' + x.name) + (x.year ? ' (' + x.year + ')' : '')])) + '</div>' : ''}
+    ${arr(D.audio).length ? '<div class="sub"><h2>Audio</h2>' + arr(D.audio).map(esc).join('<br>') + '</div>' : ''}</div>`);
+  if (b.present) cards.push(`<div class="card"><h2>Batterie</h2>${kv([['Modèle',esc(b.name)],['Charge',b.charge + ' %'],['Capacité d\'origine',b.design ? (b.design/1000).toFixed(1) + ' Wh' : ''],['Capacité actuelle',b.full ? (b.full/1000).toFixed(1) + ' Wh' : ''],['Usure',has(b.wearPct) ? b.wearPct + ' %' + bar(b.wearPct,20,40) : ''],['Cycles',b.cycles]])}</div>`);
+  cards.push(`<div class="card"><h2>Réseau</h2>${arr(n.adapters).map(a => `<div style="margin-bottom:8px"><strong>${esc(a.name)}</strong> — ${esc(a.desc)}${kv([['État',esc(a.status) + (a.speed ? ' · ' + esc(a.speed) : '')],['MAC',`<span class="mono">${esc(a.mac)}</span>`]])}</div>`).join('')}
+    <div class="sub">${kv([['Adresses IP',arr(n.ip).map(esc).join('<br>')],['Passerelle',esc(n.gateway) + (n.gwPing ? ' (répond)' : n.gwPing === false ? ' (ne répond pas)' : '')],['DNS',arr(n.dnsServers).map(esc).join(', ')],['Wi-Fi',n.wifi ? esc(n.wifi.ssid) + ' — ' + n.wifi.signal + ' %' : ''],['Internet',n.internet ? 'OK' : 'Échec']])}</div></div>`);
+  if (arr(D.thermal).length || arr(D.topProcesses).length) cards.push(`<div class="card"><h2>Processus les plus gourmands (RAM)</h2><table>${arr(D.topProcesses).map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.ramMB} Mo</td></tr>`).join('')}</table>
+    ${arr(D.thermal).length ? '<div class="sub"><h2>Zones thermiques ACPI</h2>' + kv(arr(D.thermal).map(t => [t.zone, t.c + ' °C'])) + '</div>' : ''}</div>`);
+  document.getElementById('hw').innerHTML = cards.join('');
+}
+function renderSoftware(){
+  const sw = arr(D.software), st = arr(D.startup), s = D.security || {};
+  const p = document.getElementById('p-sw');
+  p.innerHTML = `<div class="grid">
+     <div class="card"><h2>Sécurité</h2>${kv([['Antivirus',arr(s.av).map(a => esc(a.name) + (a.enabled ? ' (actif)' : ' (inactif)')).join('<br>')],['Defender',s.defender ? (s.defender.rtp ? 'Protection temps réel active' : 'Temps réel inactif') + ` · définitions ${s.defender.sigAge} j` : ''],['Pare-feu',arr(s.firewall).map(f => esc(f.profile) + ' ' + (f.enabled ? 'actif' : 'INACTIF')).join(' · ')],['Secure Boot',s.secureBoot === true ? 'Actif' : s.secureBoot === false ? 'Désactivé' : ''],['TPM',s.tpm ? (s.tpm.present ? 'Présent' : 'Absent') : ''],['Administrateurs',arr(s.admins).map(esc).join(', ')]])}</div>
+     <div class="card"><h2>Démarrage (${st.length})</h2><table>${st.map(x => `<tr><td>${esc(x.name)}</td><td class="mono" style="font-size:.75rem;overflow-wrap:anywhere">${esc(x.cmd)}</td></tr>`).join('')}</table></div>
+   </div>
+   <input class="search" id="swq" type="search" placeholder="Filtrer les ${sw.length} logiciels installés…" aria-label="Filtrer les logiciels">
+   <div class="tbl"><table><thead><tr><th>Logiciel</th><th>Version</th><th>Éditeur</th><th>Installé</th></tr></thead><tbody id="swb"></tbody></table></div>`;
+  const draw = q => { q = (q || '').toLowerCase(); document.getElementById('swb').innerHTML = sw.filter(x => !q || (x.name + ' ' + x.publisher).toLowerCase().includes(q)).map(x =>
+    `<tr><td>${esc(x.name)}</td><td class="mono">${esc(x.version)}</td><td>${esc(x.publisher)}</td><td class="mono">${x.date && /^\d{8}$/.test(x.date) ? x.date.slice(6,8) + '/' + x.date.slice(4,6) + '/' + x.date.slice(0,4) : ''}</td></tr>`).join(''); };
+  draw(); document.getElementById('swq').addEventListener('input', e => draw(e.target.value));
+}
+function renderOk(){ document.getElementById('oklist').innerHTML = OK.map(o => `<li>${esc(o.text)} <span>· ${esc(o.cat)}</span></li>`).join(''); }
+
+// ---------- démarrage ----------
+const m = D.meta || {};
+document.title = 'Diagnostic ' + (m.computer || 'PC');
+document.getElementById('pcname').textContent = m.computer || 'PC';
+document.getElementById('pcmodel').textContent = [m.manufacturer, m.model, '—', m.os, m.displayVersion].filter(Boolean).join(' ');
+document.getElementById('stamp').innerHTML = `Analyse du ${fdt(m.scanDate)}<br>Durée ${m.duration ?? '?'} s · ${m.isAdmin ? 'mode administrateur' : 'mode limité'}`;
+document.getElementById('foot').textContent = 'Rapport généré localement en lecture seule : aucune modification n\'a été faite sur le poste et aucune donnée n\'a été envoyée.';
+
+if (BRAND && (BRAND.shop || BRAND.client)) {
+  const coord = [BRAND.address, BRAND.phone, BRAND.email].filter(Boolean).join('\n');
+  let h = `<div class="bhead"><div><div class="shop">${LOGO}${esc(BRAND.shop || '')}</div><div class="coord">${esc(coord)}</div></div>
+    <div class="rt"><b>Rapport de diagnostic informatique</b><br>${BRAND.client ? 'Client : ' + esc(BRAND.client) + '<br>' : ''}${BRAND.tech ? 'Technicien : ' + esc(BRAND.tech) + '<br>' : ''}Le ${new Date().toLocaleDateString('fr-FR')}</div></div>`;
+  if (BRAND.notes) h += `<div class="notes" style="margin-top:14px"><h2>Observations du technicien</h2>${esc(BRAND.notes)}</div>`;
+  const acts = (BRAND.actions || []);
+  if (acts.length) h += `<div class="notes" style="margin-top:14px"><h2>Interventions réalisées</h2><ul class="done">${acts.map(a => `<li>${esc(a.title)} — ${a.ok ? 'terminé' : 'non abouti'} (${new Date(a.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})})</li>`).join('')}</ul></div>`;
+  document.getElementById('brand').innerHTML = h;
+  document.querySelector('.eyebrow').textContent = 'Poste analysé';
+}
+rules(D); renderProblems(); renderHardware(); renderSoftware(); renderOk();
+
+document.querySelector('.tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  ['pb','hw','sw','ok'].forEach(k => document.getElementById('p-' + k).hidden = k !== t.dataset.t); });
+document.getElementById('chips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.f; drawList(); });
+document.getElementById('list').addEventListener('click', e => { const b = e.target.closest('.copy'); if (!b) return;
+  const done = () => { b.textContent = 'Copié'; setTimeout(() => b.textContent = 'Copier', 1500); };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents(b.previousElementSibling); const s = getSelection(); s.removeAllRanges(); s.addRange(r); try { document.execCommand('copy'); done(); } catch(_) {} };
+  if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.cmd).then(done, fallback); else fallback(); });
+</script>
+</body>
+</html>

@@ -263,6 +263,7 @@ button{font-family:inherit;}
 .kv{display:flex; flex-direction:column; padding-top:6px;}
 .kv-row{display:flex; justify-content:space-between; gap:14px; font-size:13.5px; padding:8px 0; border-bottom:1px solid var(--border);}
 .kv-row:last-child{border-bottom:none;}
+.kv.pc2 .kv-row{align-items:flex-start;} .kv.pc2 .k{flex:1; min-width:0;} .kv.pc2 .v{flex:none;}
 .kv-row .k{color:var(--ink-2); flex:none;}
 .kv-row .v{font-weight:600; text-align:right; font-family:var(--font-mono); font-size:12.5px; overflow-wrap:anywhere;}
 
@@ -555,6 +556,23 @@ footer{margin-top:30px; text-align:center; color:var(--muted); font-size:12px;}
   body > *:not(#printView){display:none !important;}
   #printView{display:block !important; position:static; width:auto; visibility:visible;}
 }
+
+/* Planète Computers colours: inside the PC2 Diag application (data-brand set by the app) */
+:root[data-brand="planete"]{
+  --bg:#F3F4F6; --accent:#2A3FF5; --accent-ink:#ffffff; --accent-soft:#e2e5fe; --accent-2:#1fa595;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-brand="planete"]:not([data-theme="light"]){
+    --bg:#0b1022; --surface:#141D3A; --surface-2:#1a2547; --surface-3:#223057;
+    --accent:#63D7CA; --accent-ink:#141D3A; --accent-soft:#183c49; --accent-2:#8b97ff;
+  }
+}
+:root[data-brand="planete"][data-theme="dark"]{
+  --bg:#0b1022; --surface:#141D3A; --surface-2:#1a2547; --surface-3:#223057;
+  --accent:#63D7CA; --accent-ink:#141D3A; --accent-soft:#183c49; --accent-2:#8b97ff;
+}
+.brand .pc-logo{width:26px; height:26px; color:var(--accent); flex:none;}
+.brand small{display:block; font-weight:500; font-size:11px; color:var(--muted);}
 </style>
 </head>
 <body>
@@ -846,8 +864,8 @@ function diskSmartStatus(d){
 function diskStatus(d){
   const h = d.healthPct==null ? null : (d.healthPct<50?'crit':(d.healthPct<80?'warn':'good'));
   const s = diskSmartStatus(d);
-  if (h==='crit' || s==='crit') return 'crit';
-  if (h==='warn' || s==='warn') return 'warn';
+  if (h==='crit' || s==='crit' || d.winHealth==='crit') return 'crit';
+  if (h==='warn' || s==='warn' || d.winHealth==='warn') return 'warn';
   return h;
 }
 function smartSummary(d){
@@ -1263,7 +1281,8 @@ function renderDiskBlock(d){
   const div = document.createElement('div');
   div.className = 'disk';
   const status = diskStatus(d);
-  const chip = d.healthPct!=null ? chipHtml(status, 'Santé '+d.healthPct+'%') : (diskSmartStatus(d) ? chipHtml(status, 'SMART') : '');
+  const chip = d.healthPct!=null ? chipHtml(status, 'Santé '+d.healthPct+'%') : (diskSmartStatus(d) ? chipHtml(status, 'SMART')
+    : (d.winHealthLabel ? chipHtml(d.winHealth || 'good', 'Windows : ' + (d.winHealth ? esc(d.winHealthLabel) : 'sain')) : ''));
   div.innerHTML = `<div class="disk-head"><span class="name">${d.model||'Disque'}</span>${chip}</div>` +
     `<div class="disk-meta">` +
       (d.capacityGo?`<span>Capacité<br><b>${fmt0(d.capacityGo)} Go</b></span>`:'') +
@@ -1343,6 +1362,10 @@ function techRecommendations(r){
   (r.checks||[]).filter(c => c.result==='ko').forEach(c => {
     out.push({level:'warn', text:`Test manuel KO : ${c.label} — diagnostic / réparation à prévoir.`});
   });
+  r.disks.filter(d => d.winHealth).forEach(d => out.push({level:d.winHealth, text:`Windows signale le disque ${d.model} comme « ${d.winHealthLabel} » : sauvegarder les données et le tester.`}));
+  const app = r.sources && r.sources.app;
+  if (app) Object.entries(app.health).forEach(([sec, items]) => items.filter(i => i.lvl==='crit' || i.lvl==='warn')
+    .forEach(i => out.push({level:i.lvl, text:`${APP_SECTIONS[sec][0]} : ${i.text}`})));
   if (!out.length) out.push({level:'good', text:'Aucune anomalie détectée sur les éléments analysés. Poursuivre la surveillance habituelle.'});
   return out;
 }
@@ -1608,6 +1631,154 @@ const JSON_FORMAT_VERSION = 1;
 
 // `why`, `steps`, `cmd` and `tip` feed the "how to collect the files" guide shown on a new diagnostic.
 registerParser({
+  id:'app', label:'Analyse PC2 Diag', hint:'Application PC2 Diag (.json) — remplace les trois fichiers', accept:'.json',
+  optional:true,
+  why:'Tout en un : matériel, disques, batterie, Windows 11, stabilité, sécurité, mises à jour et logiciels, relevés par l’application Windows PC2 Diag.',
+  steps:[
+    'Lancer <b>PC2Diag.exe</b> depuis la clé USB de l’atelier (rien n’est installé sur le PC du client) et accepter les droits administrateur.',
+    'L’analyse démarre seule. Ensuite, soit <b>Envoyer au site</b> directement depuis l’application, soit déposer ici le fichier <code>Analyse_….json</code> du dossier <code>PC2Diag-rapports</code>.',
+  ],
+  tip:'Les relevés HWiNFO et le rapport batterie restent utilisables en plus ou à la place, par exemple quand l’application n’est pas sur la clé.',
+  detect: (text) => { const t = text.replace(/^\uFEFF/, '').trimStart(); if (t[0] !== '{') return false; try { const d = JSON.parse(t); return !!(d && d.meta && d.meta.computer && (d.disks || d.mem || d.cpu)); } catch(e){ return false; } },
+  parse: parsePc2Diag,
+});
+
+/* ---------------- PC2 Diag (application Windows) ----------------
+   The app's scan (collect.ps1) is turned into the same shapes as the HWiNFO
+   system report (aida) and the battery report, so every module, the
+   viability score and the Windows 11 check work unchanged. What only the app
+   collects (stability, security, updates, volumes…) gets its own modules. */
+const appArr = v => v == null ? [] : (Array.isArray(v) ? v : [v]);
+const appHas = v => v !== null && v !== undefined && v !== '';
+function appDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[3]}/${m[1]}` : null; }
+function appFrDate(iso){ const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/); return m ? `${m[3]}/${m[2]}/${m[1]}` + (m[4] && m[4]+m[5] !== '0000' ? ` ${m[4]}:${m[5]}` : '') : ''; }
+
+function parsePc2Diag(text){
+  let d;
+  try { d = JSON.parse(text.replace(/^\uFEFF/, '')); } catch(e){ return null; }
+  if (!d || !d.meta) return null;
+  const m = d.meta || {}, cpu = d.cpu || {}, mem = d.mem || {}, sec = d.security || {};
+  const facts = {};
+  const set = (k, v) => { if (appHas(v)) facts[k] = String(v); };
+  set('Computer Name:', m.computer);
+  set('Computer Brand Name:', [m.manufacturer, m.family || m.model].filter(Boolean).join(' '));
+  set('Operating System:', [m.os, m.displayVersion, m.build ? `(build ${m.build}${appHas(m.ubr) ? '.' + m.ubr : ''})` : ''].filter(Boolean).join(' '));
+  set('CPU Brand Name:', cpu.name);
+  set('Number Of Processor Cores:', cpu.cores);
+  set('Number Of Logical Processors:', cpu.threads);
+  set('Total Memory Size:', appHas(mem.totalGB) ? `${mem.totalGB} GBytes` : null);
+  set('BIOS Version:', m.bios);
+  set('BIOS Release Date:', appDate(m.biosDate));
+  set('System Manufacturer:', m.manufacturer);
+  if (sec.tpm){
+    const v = sec.tpm.specVersion ? String(sec.tpm.specVersion).split(',')[0].trim() : null;
+    set('Trusted Platform Module (TPM) Chip:', sec.tpm.present ? ('Present' + (v ? `, version ${v}` : '')) : 'Not Present');
+  }
+  const uefi = /uefi/i.test(m.firmware || '') || sec.secureBoot === true || sec.secureBoot === false;
+  if (uefi) set('UEFI Boot:', 'Enabled');   // Legacy boot: left unknown, the BIOS may still offer UEFI
+  if (sec.secureBoot === true) set('Secure Boot:', 'Enabled');
+  else if (sec.secureBoot === false) set('Secure Boot:', 'Disabled');
+  const system = {};
+  if (appHas(m.model)) system['Product Name:'] = String(m.model);
+  if (appHas(m.productName)) system['Product Version:'] = String(m.productName);
+  if (appHas(m.serial)) system['Serial Number:'] = String(m.serial);
+  if (m.manufacturer) system['System Manufacturer:'] = String(m.manufacturer);
+
+  const disks = appArr(d.disks).filter(x => !/^USB$/i.test(x.bus || '')).map(x => {
+    const health = String(x.health || '');
+    const predicted = appArr(d.smartPredict).length > 0;
+    return {
+      model: x.name || null, capacityGo: appHas(x.sizeGB) ? +x.sizeGB : null,
+      interfaceStr: x.bus || null, isSSD: /SSD/i.test(x.media || '') || /NVMe/i.test(x.bus || ''),
+      healthPct: appHas(x.wear) ? Math.max(0, 100 - x.wear) : null,
+      powerOnHours: appHas(x.hours) ? +x.hours : null, powerCycles: appHas(x.starts) ? +x.starts : null, unsafeShutdowns: null,
+      mediaErrors: null, tempC: appHas(x.temp) && x.temp > 0 ? +x.temp : null, totalWriteTB: null, totalReadTB: null,
+      reallocated: null, pending: null,
+      uncorrectable: (appHas(x.readErr) || appHas(x.writeErr)) ? (+x.readErr || 0) + (+x.writeErr || 0) : null,
+      winHealth: /unhealthy/i.test(health) || (predicted && /predict|fail/i.test(x.op || '')) ? 'crit' : (health && !/healthy/i.test(health) ? 'warn' : null),
+      winHealthLabel: health || null,
+    };
+  });
+  const gpus = appArr(d.gpu).map(g => ({ name: g.name || null, type: 'GPU', memory: appHas(g.vramGB) && g.vramGB > 0 ? `${g.vramGB} Go` : null }));
+  const memModules = appArr(mem.modules).map(x => [appHas(x.sizeGB) ? x.sizeGB + ' Go' : '', x.maker, x.part, (x.configured || x.speed) ? (x.configured || x.speed) + ' MT/s' : ''].filter(Boolean).join(' '));
+
+  const b = d.battery || {};
+  const battery = b.present && b.design > 0 && b.full > 0
+    ? { designWh: b.design / 1000, fullWh: b.full / 1000, cycles: appHas(b.cycles) ? +b.cycles : null, name: b.name || null, manufacturer: null,
+        chargePct: appHas(b.charge) ? +b.charge : null, from: b.source === 'powercfg' ? 'Rapport batterie Windows (PC2 Diag)' : 'PC2 Diag' }
+    : null;
+
+  return { raw: d, aida: { facts, disks, gpus, memModules, system }, battery, health: appHealth(d), actions: appArr((d.pc2diag || {}).actions) };
+}
+
+// What only the app sees, grouped by theme; each item is {lvl, text}.
+function appHealth(d){
+  const out = {};
+  const add = (sec, lvl, text) => (out[sec] = out[sec] || []).push({lvl, text});
+  const e = d.events || {};
+  const bs = appArr(e.bsod);
+  if (bs.length) add('stability', bs.length >= 3 ? 'crit' : 'warn', `${bs.length} écran(s) bleu(s) sur 30 jours (dernier le ${appFrDate(bs[0].date)}${bs[0].code ? ', code ' + bs[0].code : ''})`);
+  if (e.kernelPower41 > 0) add('stability', e.kernelPower41 >= 3 ? 'warn' : 'info', `${e.kernelPower41} arrêt(s) brutal(aux) sur 30 jours (Kernel-Power 41)`);
+  if (e.whea > 0) add('stability', e.whea >= 10 ? 'crit' : 'warn', `${e.whea} erreur(s) matérielle(s) WHEA (processeur, mémoire ou PCIe)`);
+  const de = (e.disk || 0) + (e.ntfs || 0) + (e.storReset || 0);
+  if (de > 0) add('stability', de >= 5 ? 'crit' : 'warn', `${de} erreur(s) disque ou NTFS dans le journal`);
+  if (e.memDiag && e.memDiag.id === 1101) add('stability', 'crit', `Le dernier test mémoire Windows a trouvé des erreurs (${appFrDate(e.memDiag.date)})`);
+  if (appHas(d.reliability) && d.reliability < 3) add('stability', 'warn', `Indice de fiabilité Windows : ${d.reliability}/10`);
+  if (e.appCrashTotal >= 5) add('stability', 'info', `${e.appCrashTotal} plantages d’applications (${appArr(e.appCrashes).slice(0, 3).map(a => a.app + ' ×' + a.count).join(', ')})`);
+  if (!out.stability) add('stability', 'good', 'Aucun écran bleu, arrêt brutal ni erreur matérielle sur 30 jours');
+
+  const s = d.security || {}, df = s.defender || {};
+  const av = appArr(s.av);
+  const avOn = av.some(a => a.enabled) || df.rtp === true;
+  if (av.length || s.defender) add('security', avOn ? 'good' : 'crit', avOn ? 'Antivirus actif : ' + (av.filter(a => a.enabled).map(a => a.name).join(', ') || 'Microsoft Defender') : 'Aucun antivirus actif');
+  if (df.rtp && df.sigAge > 7) add('security', 'warn', `Définitions antivirus vieilles de ${df.sigAge} jours`);
+  const fwOff = appArr(s.firewall).filter(f => !f.enabled);
+  if (fwOff.length) add('security', 'warn', 'Pare-feu désactivé : ' + fwOff.map(f => f.profile).join(', '));
+  if (s.uac === 0) add('security', 'warn', 'Contrôle de compte d’utilisateur (UAC) désactivé');
+  if (s.smb1 === true) add('security', 'warn', 'Protocole SMBv1 activé (obsolète, exploité par WannaCry)');
+  if (s.rdp) add('security', 'info', 'Bureau à distance activé');
+  const c = appArr(d.volumes).find(v => v.letter === 'C:');
+  if (c && appHas(c.bitlocker)) add('security', 'info', /on|1/i.test(String(c.bitlocker)) ? 'Disque système chiffré (BitLocker)' : 'Disque système non chiffré (BitLocker)');
+
+  const u = d.updates || {};
+  const last = u.lastSuccess || u.lastHotfix;
+  if (last){ const days = (Date.now() - new Date(last)) / 864e5; add('updates', days > 60 ? 'warn' : 'good', `Dernière mise à jour Windows le ${appFrDate(last)}${u.lastTitle ? ' (' + u.lastTitle + ')' : ''}`); }
+  if (u.rebootPending) add('updates', 'info', 'Redémarrage en attente pour finir des mises à jour');
+  if (appArr(u.failed).length) add('updates', 'warn', `${appArr(u.failed).length} mise(s) à jour en échec récemment`);
+  if (/disabled/i.test(u.wuService || '')) add('updates', 'crit', 'Service Windows Update désactivé');
+  if (appHas(d.dism)) add('updates', /healthy/i.test(d.dism) ? 'good' : 'crit', /healthy/i.test(d.dism) ? 'Image Windows saine (DISM)' : `Image Windows endommagée (DISM : ${d.dism})`);
+
+  appArr(d.volumes).forEach(v => {
+    if (!appHas(v.freePct)) return;
+    const lvl = v.freePct < 10 || v.freeGB < 10 ? 'crit' : (v.freePct < 20 ? 'warn' : 'good');
+    add('volumes', lvl, `${v.letter}${v.label ? ' « ' + v.label + ' »' : ''} : ${v.freeGB} Go libres sur ${v.sizeGB} Go (${v.freePct} %)` + (v.dirty ? ' — système de fichiers à vérifier (chkdsk)' : ''));
+    if (v.dirty) add('volumes', 'warn', `${v.letter} marqué comme incohérent : chkdsk /f à prévoir`);
+  });
+  if (d.junkGB >= 5) add('volumes', 'info', `${d.junkGB} Go de fichiers temporaires récupérables`);
+
+  appArr(d.devices).forEach(x => add('devices', x.code === 22 ? 'info' : 'warn', `${x.name} — code ${x.code}${x.code === 28 ? ' (pilote absent)' : x.code === 22 ? ' (désactivé)' : ''}`));
+  appArr(d.gpu).filter(g => /basic display|de base/i.test(g.name || '')).forEach(g => add('devices', 'warn', `Carte graphique sans pilote : ${g.name}`));
+  if (!out.devices) add('devices', 'good', 'Aucun périphérique en erreur');
+
+  const n = d.network || {};
+  if (n.internet === false) add('network', 'crit', 'Pas d’accès à Internet');
+  else if (n.internet === true) add('network', 'good', 'Accès à Internet OK');
+  if (n.dns === false) add('network', 'warn', 'La résolution DNS échoue');
+  if (appArr(n.apipa).length) add('network', 'warn', 'Adresse IP automatique (169.254) sur ' + appArr(n.apipa).join(', ') + ' : pas de DHCP');
+  appArr(n.adapters).forEach(a => add('network', 'info', `${a.name} : ${a.desc}${a.status ? ' · ' + a.status : ''}${a.speed ? ' · ' + a.speed : ''}`));
+
+  const st = appArr(d.startup);
+  if (st.length > 12) add('software', 'info', `${st.length} programmes lancés au démarrage`);
+  const svc = appArr(d.services);
+  if (svc.length) add('software', 'info', `${svc.length} service(s) automatique(s) arrêté(s) : ${svc.slice(0, 4).map(x => x.display || x.name).join(', ')}`);
+  add('software', 'info', `${appArr(d.software).length} logiciel(s) installé(s)`);
+  if (m_uptime(d) > 14) add('software', 'info', `Allumé depuis ${Math.floor(m_uptime(d))} jours sans redémarrage`);
+  return out;
+}
+function m_uptime(d){ return (d.meta || {}).uptimeDays || 0; }
+function appWorst(items){ return worstOf((items || []).map(i => i.lvl === 'info' ? null : i.lvl)) || ((items || []).length ? 'info' : null); }
+
+registerParser({
   id:'aida', label:'Rapport système', hint:'HWiNFO « Save Report » (.csv)', accept:'.csv',
   why:'Inventaire matériel : processeur, mémoire, disques et SMART, BIOS, cartes graphiques.',
   steps:[
@@ -1710,11 +1881,11 @@ function saveChecks(){
 /* ---------------- Report assembly ---------------- */
 
 function computeBattery(r){
-  const rep = r.sources.battery;
+  const rep = r.sources.battery || (r.sources.app && r.sources.app.battery);
   const st = r.hw ? r.hw.stats : {};
   let b = null;
   if (rep){
-    b = { source:'Rapport batterie Windows', name: rep.name, manufacturer: rep.manufacturer, designWh: rep.designWh, fullWh: rep.fullWh, cycles: rep.cycles,
+    b = { source: rep.from || 'Rapport batterie Windows', name: rep.name, manufacturer: rep.manufacturer, designWh: rep.designWh, fullWh: rep.fullWh, cycles: rep.cycles,
           wearPct: Math.max(0, 100*(1 - rep.fullWh/rep.designWh)) };
   } else if (st.battWear && st.battWear.max!=null){
     b = { source:'Relevé HWiNFO', wearPct: st.battWear.max };
@@ -1722,6 +1893,7 @@ function computeBattery(r){
   if (!b && !st.battCharge) return null;
   b = b || { source:'Relevé HWiNFO', wearPct:null };
   if (st.battCharge) b.chargePct = st.battCharge.avg;
+  else if (rep && rep.chargePct!=null) b.chargePct = rep.chargePct;
   if (st.battCapWh) b.remainingWh = st.battCapWh.avg;
   b.status = b.wearPct==null ? null : (b.wearPct>=40 ? 'crit' : (b.wearPct>=25 ? 'warn' : 'good'));
   return b;
@@ -1829,7 +2001,8 @@ function win11Text(w, mode){
 
 function buildFullReport(){
   const S = state.sources;
-  const r = buildReport(S.aida || null, S.hwinfo || null);
+  const app = S.app || null;   // PC2 Diag scan: stands in for the HWiNFO system report when there is none
+  const r = buildReport(S.aida || (app ? app.aida : null), S.hwinfo || null);
   r.sources = S;
   const key = r.machineName || (r.hw ? 'releve-' + r.hw.dateStart : 'poste');
   if (state.checksKey !== key) loadChecksFor(key);
@@ -1841,6 +2014,7 @@ function buildFullReport(){
   const extra = [];
   if (r.battery && r.battery.status) extra.push(r.battery.status);
   if (r.checks.some(c => c.result==='ko')) extra.push('warn');
+  if (app) Object.values(app.health).forEach(items => { const w = appWorst(items); if (w==='crit' || w==='warn') extra.push(w); });
   if (extra.includes('crit')) r.overall = 'crit';
   else if (extra.includes('warn') && r.overall!=='crit') r.overall = 'warn';
   else if (extra.length && r.overall==='info') r.overall = 'good';
@@ -1854,6 +2028,7 @@ function buildFullReport(){
    5. RENDER HELPERS
    ========================================================================= */
 
+if (window.DIAG_APP) document.documentElement.setAttribute('data-brand', 'planete');   // before the chart colours are read
 const COL_ACCENT = getComputedColor('--accent');
 const COL_ACCENT2 = getComputedColor('--accent-2');
 function getComputedColor(varName){
@@ -2117,7 +2292,7 @@ registerModule({
       kvRow('Capacité actuelle (pleine charge)', b.fullWh ? fmt(b.fullWh,1)+' Wh' : null) +
       kvRow('Modèle', (b.name || b.manufacturer) ? esc([b.name, b.manufacturer].filter(Boolean).join(' · ')) : null) +
       kvRow('Cycles de charge', b.cycles!=null ? b.cycles : (b.designWh ? 'non communiqué par la batterie' : null)) +
-      kvRow('Charge moyenne pendant le relevé', b.chargePct!=null ? fmt0(b.chargePct)+' %' : null) +
+      kvRow(r.hw && r.hw.stats.battCharge ? 'Charge moyenne pendant le relevé' : 'Charge actuelle', b.chargePct!=null ? fmt0(b.chargePct)+' %' : null) +
       kvRow('Source', esc(b.source)) + `</div>` +
       (b.designWh ? '' : `<p class="empty-note">Astuce : déposez aussi le rapport Windows (<span class="mono">powercfg /batteryreport</span>) pour la capacité d’origine et le nombre de cycles.</p>`);
   },
@@ -2234,6 +2409,41 @@ const shortCheck = (c) => c.label.replace(/\s*\(.*\)$/, '');            // "Écr
 const lcFirst = (s) => s.charAt(0).toLowerCase() + s.slice(1);          // keeps "USB" in capitals
 
 // "En détail": one tile per part of the PC, in plain language.
+
+/* ---------------- Modules fed by the PC2 Diag application ---------------- */
+const APP_SECTIONS = {
+  stability: ['Stabilité (30 jours)', 56],
+  security: ['Sécurité', 57],
+  updates: ['Mises à jour Windows', 58],
+  volumes: ['Espace disque', 42],
+  devices: ['Périphériques et pilotes', 59],
+  network: ['Réseau', 62],
+  software: ['Logiciels et démarrage', 64],
+};
+const APP_LVL_LABEL = {good:'OK', warn:'À surveiller', crit:'Critique', info:'Info'};
+function appItemsHtml(items){
+  return `<div class="kv pc2">` + items.map(i => `<div class="kv-row"><span class="k">${esc(i.text)}</span><span class="v">${chipHtml(i.lvl, APP_LVL_LABEL[i.lvl])}</span></div>`).join('') + `</div>`;
+}
+Object.entries(APP_SECTIONS).forEach(([sec, [title, order]]) => registerModule({
+  id:'pc2-' + sec, title, order, views:['tech'], span:'half',
+  available: r => !!(r.sources && r.sources.app && (r.sources.app.health[sec] || []).length),
+  status: r => appWorst(r.sources.app.health[sec]),
+  summary: r => { const it = r.sources.app.health[sec]; const bad = it.filter(i => i.lvl === 'crit' || i.lvl === 'warn'); return bad.length ? bad[0].text + (bad.length > 1 ? ` (+${bad.length - 1})` : '') : it[0].text; },
+  render: (r, mode, body) => { body.innerHTML = appItemsHtml(r.sources.app.health[sec]); },
+  json: r => r.sources && r.sources.app ? r.sources.app.health[sec] || null : null,
+}));
+registerModule({
+  id:'pc2-repairs', title:'Réparations faites avec PC2 Diag', order:66, views:['tech'], span:'half',
+  available: r => !!(r.sources && r.sources.app && r.sources.app.actions.length),
+  status: r => r.sources.app.actions.some(a => !a.ok) ? 'warn' : 'good',
+  summary: r => r.sources.app.actions.map(a => a.title).join(', '),
+  render(r, mode, body){
+    body.innerHTML = `<div class="kv pc2">` + r.sources.app.actions.map(a => `<div class="kv-row"><span class="k">${esc(a.title || a.id)}${a.at ? ` <small style="color:var(--muted)">${esc(appFrDate(new Date(a.at).toISOString()))}</small>` : ''}</span><span class="v">${chipHtml(a.ok ? 'good' : 'warn', a.ok ? 'Terminée' : 'Échec ou annulée')}</span></div>`).join('') + `</div>`;
+  },
+  json: r => r.sources && r.sources.app ? r.sources.app.actions : null,
+});
+
+
 function clientTiles(r){
   const T = [];
   const add = (id, title, lvl, txt) => T.push({id, title, lvl, txt});
@@ -2285,6 +2495,30 @@ function clientTiles(r){
     else add('win', 'Sécurité (Windows)', 'crit', oldOs ? 'Votre version de Windows ne reçoit plus de mises à jour de sécurité, et cet ordinateur ne peut pas passer à Windows 11.'
                                                      : 'Cet ordinateur ne peut pas passer à Windows 11 : les mises à jour de sécurité de Windows 10 s’arrêtent.');
   }
+  const app = r.sources && r.sources.app;
+  if (app){
+    const H = app.health;
+    const stab = appWorst(H.stability);
+    if (stab){
+      const lvl = stab==='info' ? 'good' : stab;
+      add('stab', 'Stabilité', lvl, {good:'Aucun écran bleu ni plantage grave ces 30 derniers jours.',
+        warn:'Quelques plantages ou arrêts brutaux ces 30 derniers jours : à surveiller.',
+        crit:'Plantages répétés (écrans bleus ou erreurs matérielles) : une intervention est nécessaire.'}[lvl]);
+    }
+    const sec = H.security || [];
+    if (sec.length){
+      const avOff = sec.some(i => i.lvl==='crit'), lvl = avOff ? 'crit' : (appWorst(sec)==='warn' ? 'warn' : 'good');
+      add('prot', 'Protection', lvl, {good:'Antivirus actif et réglages de sécurité corrects.',
+        warn:'Antivirus actif, mais certains réglages de sécurité sont à corriger.',
+        crit:'Aucun antivirus actif : l’ordinateur n’est pas protégé contre les virus.'}[lvl]);
+    }
+    const full = (H.volumes || []).filter(i => i.lvl==='crit' || i.lvl==='warn');
+    if (full.length){
+      const lvl = full.some(i => i.lvl==='crit') ? 'crit' : 'warn';
+      add('space', 'Espace libre', lvl, lvl==='crit' ? 'Le disque est presque plein : Windows ralentit et les mises à jour peuvent échouer.'
+                                                    : 'L’espace libre sur le disque commence à manquer.');
+    }
+  }
   const tested = r.checks.filter(c => c.result==='ok' || c.result==='ko');
   if (tested.length){
     const ko = tested.filter(c => c.result==='ko');
@@ -2320,6 +2554,14 @@ function clientAdvice(r){
   const ko = r.checks.filter(c => c.result==='ko');
   if (ko.length) add('reco', ko.length===1 ? `Réparer : ${shortCheck(ko[0])}` : 'Réparer les éléments défectueux',
     ko.length===1 ? 'Défaut constaté lors de nos tests en atelier.' : `Défauts constatés lors de nos tests : ${ko.map(c => lcFirst(shortCheck(c))).join(', ')}.`);
+  const app = r.sources && r.sources.app;
+  if (app){
+    const H = app.health;
+    if ((H.security || []).some(i => i.lvl==='crit')) add('urgent', 'Installer ou réactiver un antivirus', 'Sans antivirus actif, l’ordinateur est exposé aux virus et aux arnaques en ligne.');
+    if ((H.volumes || []).some(i => i.lvl==='crit')) add('reco', 'Libérer de l’espace sur le disque', 'Le disque est presque plein : Windows ralentit et les mises à jour peuvent échouer.');
+    if (appWorst(H.stability)==='crit') add('reco', 'Rechercher la cause des plantages', 'Des écrans bleus ou des erreurs matérielles répétés ont été relevés : un diagnostic approfondi est conseillé.');
+    if ((H.updates || []).some(i => i.lvl==='crit')) add('reco', 'Réparer Windows Update', 'Les mises à jour de sécurité ne s’installent plus correctement.');
+  }
   if (w && !w.installed){
     if (w.status==='ok') add('option', 'Passer à Windows 11', 'Votre ordinateur est compatible : la mise à jour est gratuite.');
     else if (w.status==='fix') add('reco', 'Passer à Windows 11 après un réglage', 'Un simple réglage en atelier permet d’installer Windows 11 gratuitement et de continuer à recevoir les mises à jour de sécurité.');
@@ -2632,7 +2874,7 @@ async function doExport(kind){
 function renderGuide(){
   const g = document.getElementById('guide');
   g.innerHTML = `<div class="guide-head"><div><h2 id="guideTitle">Récupérer les fichiers du poste</h2>` +
-    `<p>Trois exports à faire sur le PC du client, à copier sur une clé USB puis à déposer ci-dessus. Un seul fichier suffit pour commencer.</p></div></div>` +
+    `<p>Le plus simple : l’analyse de l’application PC2 Diag, qui suffit seule. Sans l’application, faire les exports HWiNFO et le rapport batterie sur le PC du client, les copier sur une clé USB puis les déposer ci-dessus. Un seul fichier suffit pour commencer.</p></div></div>` +
     `<div class="guide-cards">` + PARSERS.map((p, i) =>
       `<article class="gcard"><div class="gcard-top"><span class="num">${i+1}</span><h3>${p.label}</h3>` +
       `<span class="tag">${state.sources[p.id] ? chipHtml('good','Chargé') : (p.optional ? chipHtml('info','Optionnel') : '')}</span></div>` +
@@ -3121,9 +3363,89 @@ function initQuickMode(){
   if (TICKET.preload) loadTicketPreload(TICKET.preload);
 }
 
+/* =========================================================================
+   10. APP MODE — the page is embedded in the PC2 Diag Windows application,
+       which defines window.DIAG_APP and drives it through diagAppLoad() and
+       diagAppExport(). Sending to the site is done by the application, in the
+       same format as « Envoyer au ticket ».
+   ========================================================================= */
+
+const DIAG_APP = window.DIAG_APP || null;
+const PLANETE_LOGO = '<svg class="pc-logo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg>';
+
+function bytesToB64(buf){
+  const u = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+// Loads a PC2 Diag scan (text of Analyse_….json). Files dropped for another PC are cleared.
+window.diagAppLoad = function(text, fileName){
+  const parsed = parsePc2Diag(text);
+  if (!parsed) return false;
+  state.sources = { app: parsed };
+  state.rawFiles = { app: new File([text], fileName || 'pc2diag.json', {type:'application/json'}) };
+  state.isExample = false; state.guideOpen = false; state.checksKey = null;
+  setError(null);
+  document.getElementById('banner').hidden = true;
+  showReport();
+  return true;
+};
+
+// Repairs run from the application, shown in their own section and kept in the scan file sent to the site.
+window.diagAppSetActions = function(actions){
+  const app = state.sources.app;
+  if (!app) return false;
+  const list = Array.isArray(actions) ? actions : [];
+  if (JSON.stringify(list) === JSON.stringify(app.actions)) return true;
+  app.actions = list;
+  app.raw.pc2diag = { ...(app.raw.pc2diag || {}), actions: list };
+  const name = state.rawFiles.app && state.rawFiles.app.name || 'pc2diag.json';
+  state.rawFiles.app = new File([JSON.stringify(app.raw)], name, {type:'application/json'});
+  showReport();
+  return true;
+};
+
+// Everything « Envoyer au ticket » sends, as plain data (files in base64).
+window.diagAppExport = async function(){
+  const r = window.__report;
+  if (!r || state.isExample) return null;
+  const files = [];
+  for (const [source, file] of Object.entries(state.rawFiles)){
+    if (!file || !state.sources[source]) continue;
+    files.push({ source, name: file.name || source, b64: bytesToB64(await file.arrayBuffer()) });
+  }
+  return { report: reportToJson(r), inventory: ticketInventory(r), state: { checks: state.checks, notes: state.notes, inv: state.inv }, files };
+};
+
+function initAppMode(){
+  if (!DIAG_APP) return;
+  document.documentElement.setAttribute('data-brand', 'planete');
+  document.querySelector('.brand').innerHTML = PLANETE_LOGO + `<span>${esc(DIAG_APP.shop || 'Planète Computers')}<small>Diagnostic PC2 Diag</small></span>`;
+  ['btnReset', 'btnExample'].forEach(id => { document.getElementById(id).hidden = true; });
+  const send = document.getElementById('btnSendTicket');
+  send.textContent = 'Envoyer au site';
+  send.hidden = false;
+  send.addEventListener('click', () => { try { window.parent.postMessage({ diagAtelier: 'send' }, '*'); } catch(e){} });
+  document.querySelector('footer').textContent = 'PC2 Diag — analyse faite sur ce PC ; HWiNFO et le rapport batterie peuvent être ajoutés. L’envoi au site se fait avec « Envoyer au site ».';
+  // the customer sheet header defaults to the shop set in the application
+  try {
+    const shop = loadShop();
+    if (!shop.name && DIAG_APP.shop){
+      localStorage.setItem('diagatelier-shop', JSON.stringify({ ...shop, name: DIAG_APP.shop, phone: shop.phone || DIAG_APP.phone || '', extra: shop.extra || [DIAG_APP.address, DIAG_APP.email].filter(Boolean).join(' · ') }));
+    }
+  } catch(e){}
+  if (window.parent && window.parent !== window){
+    document.querySelector('.brand').hidden = true;   // the application window already shows it
+    try { window.parent.postMessage({ diagAtelier: 'ready' }, '*'); } catch(e){}
+  }
+}
+
 wire();
 showReport();
 initTicketMode();
+initAppMode();
 </script>
 </body>
 </html>
