@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use App\Models\DeviceEvent;
+use App\Models\DiagAppToken;
 use App\Models\Diagnostic;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
@@ -69,6 +70,10 @@ class DiagnosticController extends Controller
     {
         $this->ensureBelongsToTicket($ticket, $diagnostic);
         $diagnostic->loadMissing('technician:id,first_name,last_name');
+
+        if ($this->isAppReport($diagnostic)) {
+            return $this->renderAppReport($diagnostic, route('tickets.show', $ticket, false), "Ticket #{$ticket->id}");
+        }
 
         $files = collect($diagnostic->files ?? [])->map(fn (array $file) => [
             'source' => $file['source'],
@@ -226,10 +231,29 @@ class DiagnosticController extends Controller
                 'client' => $ticket->user ? trim(($ticket->user->first_name ?? '').' '.($ticket->user->last_name ?? '')) : null,
             ]);
 
+        $user = Auth::user();
+        $appTokens = DiagAppToken::query()
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get()
+            ->map(fn (DiagAppToken $token) => [
+                'id' => $token->id,
+                'name' => $token->name,
+                'last_used_at' => $token->last_used_at?->toIso8601String(),
+                'last_machine' => $token->last_machine,
+                'created_at' => $token->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('Diagnostics/Index', [
             'diagnostics' => $diagnostics,
             'tickets' => $tickets,
             'toolUrl' => route('diag.tool', [], false),
+            'app' => [
+                'server' => url('/'),
+                'tokens' => $appTokens,
+                'newToken' => session('diag_app_token'),
+                'downloadUrl' => is_file(public_path('downloads/PC2Diag.exe')) ? asset('downloads/PC2Diag.exe') : null,
+            ],
         ]);
     }
 
@@ -245,6 +269,10 @@ class DiagnosticController extends Controller
         }
 
         $diagnostic->loadMissing('technician:id,first_name,last_name');
+
+        if ($this->isAppReport($diagnostic)) {
+            return $this->renderAppReport($diagnostic, route('diag.index', [], false), 'Diag rapide');
+        }
 
         $files = collect($diagnostic->files ?? [])->map(fn (array $file) => [
             'source' => $file['source'],
@@ -329,6 +357,26 @@ class DiagnosticController extends Controller
         return back()->with('success', 'Diagnostic supprimé.');
     }
 
+    protected function isAppReport(Diagnostic $diagnostic): bool
+    {
+        return ($diagnostic->report['format'] ?? null) === 'diag-app';
+    }
+
+    /**
+     * A diagnostic sent by the PC2 Diag Windows application, shown as a page
+     * of its findings and the details it collected.
+     */
+    protected function renderAppReport(Diagnostic $diagnostic, string $backUrl, string $backLabel): Response
+    {
+        return response()->view('diagnostics.app-report', [
+            'diagnostic' => $diagnostic,
+            'report' => $diagnostic->report,
+            'technician' => $this->technicianName($diagnostic),
+            'backUrl' => $backUrl,
+            'backLabel' => $backLabel,
+        ], 200, ['Cache-Control' => 'no-store']);
+    }
+
     private function renderQuickTool(?array $preload = null): Response
     {
         return $this->renderDiag([
@@ -400,7 +448,7 @@ class DiagnosticController extends Controller
      * Puts a saved diagnostic on its ticket: the inventory sheet fills the
      * ticket's device, and the device history and ticket timeline log it.
      */
-    private function recordOnTicket(Ticket $ticket, Diagnostic $diagnostic, array $inventory): array
+    protected function recordOnTicket(Ticket $ticket, Diagnostic $diagnostic, array $inventory): array
     {
         $user = Auth::user();
 
@@ -534,7 +582,7 @@ class DiagnosticController extends Controller
      *
      * @return array<string, string|int>
      */
-    private function normalizeInventory(mixed $raw): array
+    protected function normalizeInventory(mixed $raw): array
     {
         if (! is_array($raw)) {
             return [];
@@ -711,14 +759,14 @@ class DiagnosticController extends Controller
         return $parts ? implode(' - ', $parts) : null;
     }
 
-    private function technicianName(Diagnostic $diagnostic): ?string
+    protected function technicianName(Diagnostic $diagnostic): ?string
     {
         $technician = $diagnostic->technician;
 
         return $technician ? trim(($technician->first_name ?? '').' '.($technician->last_name ?? '')) : null;
     }
 
-    private function shortString(mixed $value, int $max): ?string
+    protected function shortString(mixed $value, int $max): ?string
     {
         if (! is_scalar($value)) {
             return null;

@@ -2232,9 +2232,14 @@ export default function Show({ ticket, categories, agents, commandes, userDevice
                       <Stethoscope className="h-4 w-4" />
                       Diagnostic
                     </CardTitle>
-                    <Button asChild size="sm">
-                      <a href={diagHref}>{diagnostics.length > 0 ? 'Nouveau diag' : 'Lancer le diag'}</a>
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button asChild size="sm" variant="outline" title="Lancer l'application PC2 Diag sur ce poste, liée à ce ticket">
+                        <a href={`pc2diag://diag?server=${encodeURIComponent(window.location.origin)}&ticket=${ticket.id}`}>Application</a>
+                      </Button>
+                      <Button asChild size="sm">
+                        <a href={diagHref}>{diagnostics.length > 0 ? 'Nouveau diag' : 'Lancer le diag'}</a>
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2 pt-0">
