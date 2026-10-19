@@ -1,6 +1,6 @@
 # PC2 Diag : collecte des informations du poste, écrites en JSON dans $Out.
-# Chaque étape affiche « ##STEP|n|total|libellé » pour la barre de progression.
-param([Parameter(Mandatory = $true)][string]$Out)
+# Chaque étape écrit « n|total|libellé » dans $Progress pour la barre de progression.
+param([Parameter(Mandatory = $true)][string]$Out, [string]$Progress)
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -15,7 +15,9 @@ $total = 13
 
 function Step($label) {
   $script:step++
-  Write-Output ("##STEP|{0}|{1}|{2}" -f $script:step, $total, $label)
+  $line = "{0}|{1}|{2}" -f $script:step, $total, $label
+  if ($Progress) { try { [IO.File]::WriteAllText($Progress, $line, (New-Object Text.UTF8Encoding($false))) } catch {} }
+  Write-Output ("##STEP|" + $line)
 }
 function Try-Get($name, [scriptblock]$sb, $default = $null) {
   try { & $sb } catch { $script:errs += [ordered]@{ check = $name; msg = $_.Exception.Message }; $default }

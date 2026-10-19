@@ -3,7 +3,7 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -202,37 +202,61 @@ func (a *app) scan() (map[string]any, error) {
 		return nil, err
 	}
 
+	progress := filepath.Join(dir, "progress.txt")
 	ps := filepath.Join(os.Getenv("SystemRoot"), `System32\WindowsPowerShell\v1.0\powershell.exe`)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out)
+	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	cmd.Stderr = nil
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	a.log("Analyse lancée (administrateur : %v)", isAdmin())
 	if err := cmd.Start(); err != nil {
+		a.log("PowerShell introuvable ou bloqué : %v", err)
 		return nil, fmt.Errorf("impossible de lancer PowerShell : %w", err)
 	}
-	sc := bufio.NewScanner(stdout)
-	for sc.Scan() {
-		line := strings.ToValidUTF8(strings.TrimSpace(sc.Text()), "?")
-		if m := stepRe.FindStringSubmatch(line); m != nil {
-			n, _ := strconv.Atoi(m[1])
-			total, _ := strconv.Atoi(m[2])
-			a.emit(map[string]any{"type": "step", "n": n, "total": total, "label": m[3]})
+
+	// L'avancement passe par un fichier : la sortie de PowerShell sans console
+	// peut rester en mémoire tampon jusqu'à la fin.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	started, last := time.Now(), ""
+	var waitErr error
+	for running := true; running; {
+		select {
+		case waitErr = <-done:
+			running = false
+		case <-time.After(500 * time.Millisecond):
 		}
+		ev := map[string]any{"type": "tick", "elapsed": int(time.Since(started).Seconds())}
+		if b, err := os.ReadFile(progress); err == nil {
+			line := strings.TrimSpace(strings.TrimPrefix(string(b), "\ufeff"))
+			if m := stepRe.FindStringSubmatch("##STEP|" + line); m != nil {
+				n, _ := strconv.Atoi(m[1])
+				total, _ := strconv.Atoi(m[2])
+				ev["n"], ev["total"], ev["label"] = n, total, strings.ToValidUTF8(m[3], "?")
+				if line != last {
+					last = line
+					a.log("Étape %s", line)
+				}
+			}
+		}
+		a.emit(ev)
 	}
-	waitErr := cmd.Wait()
+	if output.Len() > 0 {
+		a.log("Sortie PowerShell :\n%s", strings.ToValidUTF8(output.String(), "?"))
+	}
 
 	raw, err := os.ReadFile(out)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, errors.New("l'analyse a dépassé 15 minutes et a été arrêtée")
 		}
-		return nil, fmt.Errorf("la collecte n'a rien produit (%v)", waitErr)
+		a.log("Aucun résultat (%v)", waitErr)
+		return nil, fmt.Errorf("la collecte n'a rien produit (%v). Détails dans PC2Diag-journal.txt à côté de l'exe", waitErr)
 	}
+	a.log("Collecte terminée en %s", time.Since(started).Round(time.Second))
 	var data map[string]any
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, fmt.Errorf("résultat de collecte illisible : %w", err)
@@ -251,6 +275,15 @@ func (a *app) scan() (map[string]any, error) {
 
 // saveReport keeps a local copy of the last report, to resend it later if
 // the site was unreachable.
+func (a *app) log(format string, args ...any) {
+	f, err := os.OpenFile(filepath.Join(exeDir(), "PC2Diag-journal.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s  %s\r\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+}
+
 func (a *app) saveReport() (string, error) {
 	a.mu.Lock()
 	r, inv := a.report, a.inv

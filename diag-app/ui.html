@@ -109,6 +109,13 @@ dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:0}dt{c
   </section>
 </main>
 <script>
+// Filet de sécurité : toute erreur JavaScript s'affiche au lieu de laisser des boutons inertes
+window.onerror = function (msg) {
+  var el = document.getElementById('scanErr');
+  if (el) el.textContent = 'Erreur interne de l\u2019application : ' + msg;
+};
+</script>
+<script>
 let seq = 0; const pending = {};
 window.__goDone = (id, err, res) => { const p = pending[id]; if (!p) return; delete pending[id]; err ? p.rej(new Error(err)) : p.res(res); };
 function call(method, params) {
@@ -182,7 +189,7 @@ async function selectTicket(id) {
 
 async function scan() {
   $('scanErr').textContent = ''; $('sendRes').innerHTML = ''; $('sendErr').textContent = '';
-  $('scanBtn').disabled = true; show('progress', true); $('barFill').style.width = '2%'; $('stepLabel').textContent = 'Préparation…';
+  $('scanBtn').disabled = true; show('progress', true); $('barFill').style.width = '2%'; $('stepLabel').textContent = 'Démarrage de la collecte…';
   try {
     const r = await call('scan');
     $('barFill').style.width = '100%'; $('stepLabel').textContent = 'Analyse terminée.';
@@ -203,7 +210,7 @@ async function send() {
     if (r.conflicts?.length) lines.push('Valeurs différentes non remplacées : ' + r.conflicts.map((c) => c.label).join(', ') + ' (à valider sur le site).');
     (r.warnings || []).forEach((w) => lines.push(w));
     $('sendRes').innerHTML = `<div class="ok-msg">${lines.map(esc).join('<br>')}<br><button class="link" onclick='openUrl(${JSON.stringify(r.report_url)})'>Ouvrir le rapport sur le site</button>${r.ticket_url ? ` · <button class="link" onclick='openUrl(${JSON.stringify(r.ticket_url)})'>Ouvrir le ticket</button>` : ''}</div>`;
-  } catch (e) { $('sendErr').textContent = e.message + ' Une copie du rapport est gardée à côté de l'exe (dossier PC2Diag-rapports).'; }
+  } catch (e) { $('sendErr').textContent = e.message + " Une copie du rapport est gardée à côté de l'exe (dossier PC2Diag-rapports)."; }
   $('sendBtn').disabled = false;
 }
 async function saveLocal() {
@@ -213,7 +220,10 @@ async function saveLocal() {
 function openUrl(url) { call('open', { url }).catch((e) => { $('sendErr').textContent = e.message; }); }
 
 window.onGoEvent = (ev) => {
-  if (ev.type === 'step') { $('barFill').style.width = Math.round((ev.n - 0.5) / ev.total * 100) + '%'; $('stepLabel').textContent = `Étape ${ev.n}/${ev.total} : ${ev.label}`; }
+  if (ev.type === 'tick') {
+    if (ev.n) $('barFill').style.width = Math.round((ev.n - 0.5) / ev.total * 100) + '%';
+    $('stepLabel').textContent = (ev.n ? `Étape ${ev.n}/${ev.total} : ${ev.label}` : 'Démarrage de la collecte…') + ` (${ev.elapsed} s, compter 1 à 3 minutes)`;
+  }
   if (ev.type === 'state') render(ev.state);
 };
 call('state').then(render);
