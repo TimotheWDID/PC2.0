@@ -780,6 +780,15 @@ function smartRaw(kv, id){
   return m ? parseInt(m[1]) : 0;
 }
 
+// USB / removable drive: controller, bus or interface naming USB, a model ending in "USB Device", or a removable flag.
+function isUsbDrive(kv){
+  for (const [k,v] of Object.entries(kv)){
+    if (/contr[oô]leur|controller|interface|bus|mod[eè]le|model/i.test(k) && /\bUSB\b/i.test(v)) return true;
+    if (/amovible|removable/i.test(k) && /^(oui|yes|pr[ée]sent|present)/i.test(v.trim())) return true;
+  }
+  return false;
+}
+
 function extractDisk(kv){
   const rotKey = pickKey(kv, 'Taux de rotation des médias:', 'Media Rotation Rate:');
   const ctrl = pick(kv, 'Contrôleur de disque:', 'Drive Controller:') || '';
@@ -883,7 +892,8 @@ function parseAida64(text){
       if (m){ const k=m[1].replace(/""/g,'"'); const v=m[2].replace(/""/g,'"'); if (!(k in facts)) facts[k]=v; kv[k]=v; }
     }
     // capacity required: skips optical drives (DVD-RW…) listed in the same section
-    if (pick(kv, 'Modèle de lecteur:', 'Drive Model:') && pick(kv, 'Capacité du lecteur:', 'Drive Capacity:')) disks.push(extractDisk(kv));
+    // USB drives skipped: the workshop key that launches the tools is not the client's storage
+    if (pick(kv, 'Modèle de lecteur:', 'Drive Model:') && pick(kv, 'Capacité du lecteur:', 'Drive Capacity:') && !isUsbDrive(kv)) disks.push(extractDisk(kv));
     if (pick(kv, 'Jeu de puces graphiques:', 'Video Chipset:')) gpus.push(extractGpu(kv));
     if (!system && pick(kv, 'Fabricant du système:', 'System Manufacturer:')) system = kv;
   }
