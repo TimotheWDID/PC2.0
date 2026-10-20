@@ -569,6 +569,11 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		var id int
 		arg(0, &id)
 		return diskDir(id), nil
+	case "goDiskTree":
+		var id, depth int
+		arg(0, &id)
+		arg(1, &depth)
+		return diskTree(id, depth), nil
 	case "goDiskReveal":
 		var p string
 		arg(0, &p)

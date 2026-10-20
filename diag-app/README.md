@@ -40,7 +40,9 @@ site à l'identique.
   Atelier (dans l'exe et sur le site) l'affiche en courbes. Un relevé HWiNFO
   ajouté à la main dans le Diag atelier reste prioritaire.
 - **Espace disque**, façon TreeSize : choisir un lecteur (ou un dossier), puis
-  descendre dans les dossiers du plus gros au plus petit, avec la part de
+  explorer la **carte** (chaque dossier est un rectangle dont la surface est
+  proportionnelle à sa taille, sur trois niveaux, un clic pour y entrer) ou la
+  liste des dossiers du plus gros au plus petit, avec la part de
   chacun, le nombre de fichiers et la date de dernière modification. Onglets
   « Plus gros fichiers » (les 200 plus gros) et « Types de fichiers » (total
   par extension), ouverture dans l'Explorateur et export CSV dans
@@ -156,7 +158,7 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `battery_windows.go` | test de décharge |
 | `gpu_windows.go` | capteurs des cartes graphiques NVIDIA (NVML) et AMD (ADL) |
 | `hwinfo.go`, `hwinfo_windows.go` | lecture des capteurs de HWiNFO (mémoire partagée) |
-| `diskusage.go`, `diskusage_windows.go` | espace disque : parcours des dossiers, lecteurs, export CSV |
+| `diskusage.go`, `diskusage_windows.go` | espace disque : parcours des dossiers, arbre pour la carte, lecteurs, export CSV |
 
 ## Compiler
 

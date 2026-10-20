@@ -171,6 +171,19 @@ func diskDir(id int) map[string]any {
 	return s.dir(id)
 }
 
+func diskTree(id, depth int) *duTree {
+	du.Lock()
+	s := du.scan
+	du.Unlock()
+	if s == nil {
+		return nil
+	}
+	if depth < 1 || depth > 4 {
+		depth = 3
+	}
+	return s.tree(id, depth)
+}
+
 // diskReveal ouvre l'Explorateur sur un dossier ou un fichier du parcours.
 func diskReveal(p string) bool {
 	du.Lock()

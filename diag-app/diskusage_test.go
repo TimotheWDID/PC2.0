@@ -71,6 +71,27 @@ func TestDiskUsage(t *testing.T) {
 	}
 }
 
+func TestDiskTree(t *testing.T) {
+	root := t.TempDir()
+	for rel, size := range map[string]int{"a/x/1": 4000, "a/2": 1000, "b/3": 3000, "c": 2000, "d/petit": 1} {
+		p := filepath.Join(root, rel)
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		_ = os.WriteFile(p, make([]byte, size), 0o644)
+	}
+	s, _ := duWalk(context.Background(), root)
+	tr := s.tree(s.root.id, 2)
+	if tr.Size != 10001 || tr.Own != 2000 || len(tr.Children) != 2 || tr.Rest != 1 {
+		t.Fatalf("racine : %+v", tr)
+	}
+	a := tr.Children[0]
+	if a.Name != "a" || a.Own != 1000 || len(a.Children) != 1 || a.Children[0].Children != nil {
+		t.Fatalf("niveau 2 : %+v", a)
+	}
+	if s.tree(-1, 2) != nil || s.tree(len(s.nodes), 2) != nil {
+		t.Fatal("id hors limites")
+	}
+}
+
 func TestDiskUsageCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

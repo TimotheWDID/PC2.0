@@ -233,6 +233,15 @@ table.du .mono{text-align:right}
 .du-x{border:0;background:none;cursor:pointer;color:var(--muted);padding:2px 4px;border-radius:4px}
 .du-x:hover{color:var(--accent);background:var(--row)}
 .du-x svg{width:15px;height:15px;vertical-align:middle}
+.du-map{position:relative;height:calc(100vh - 370px);min-height:340px;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tm{position:absolute;box-sizing:border-box;border:1px solid rgba(20,29,58,.28);border-radius:2px;overflow:hidden;cursor:pointer;color:#141D3A}
+.tm span{display:block;padding:1px 5px;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
+.tm span b{font:500 11px var(--f-mono);opacity:.75}
+.tm:hover{outline:2px solid var(--accent);outline-offset:-2px;z-index:1}
+.tm.leaf span{white-space:normal;word-break:break-word}
+.tm.grey{background:repeating-linear-gradient(45deg,#e4e7ee 0 5px,#d9dde6 5px 10px);color:#5b6475}
+.tm.grey:not([data-du-dir]){cursor:default}
+.tm.grey:not([data-du-dir]):hover{outline:0}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -271,7 +280,7 @@ table.du .mono{text-align:right}
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
    'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart',
-   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV'].forEach(n => { window[n] = (...a) => call(n, a); });
+   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
 </script>
@@ -649,6 +658,7 @@ function afterRender(){
   if (view === 'sensors') { renderSensorTable(); drawSensors(); }
   if (view === 'software') { const q = $('#swq'); q && q.addEventListener('input', () => drawSoftware(q.value)); drawSoftware(''); }
   if (view === 'battery-test' && BT.running) drawBattChart();
+  if (view === 'disk-usage' && DU.tab === 'map') duDrawMap();
 }
 
 V.summary = () => {
@@ -750,7 +760,7 @@ V.passed = () => head('Contrôles réussis', `${OK.length} vérifications sans a
 
 // ----- espace disque, façon TreeSize : le programme parcourt un lecteur ou un dossier,
 // puis on descend dans l'arbre des dossiers, du plus gros au plus petit.
-const DU = {drives: null, running: false, root: '', prog: null, result: null, dir: null, tab: 'dirs', err: '', path: ''};
+const DU = {drives: null, running: false, root: '', prog: null, result: null, dir: null, tab: 'map', err: '', path: '', tree: null};
 const duSize = n => { n = +n || 0; const u = ['o','Ko','Mo','Go','To']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
   return (i === 0 ? n : n >= 100 ? Math.round(n) : n.toLocaleString('fr-FR', {maximumFractionDigits: 1})) + ' ' + u[i]; };
 const duN = n => (+n || 0).toLocaleString('fr-FR');
@@ -761,13 +771,72 @@ const duJoin = (dir, name) => dir.replace(/\\$/, '') + '\\' + name;
 async function duLoadDrives(){ try { DU.drives = await goDiskDrives() || []; } catch (e) { DU.drives = []; DU.err = String(e); } if (view === 'disk-usage') render(); }
 async function duStart(root){
   if (DU.running || !root) return;
-  DU.err = ''; DU.result = null; DU.dir = null; DU.prog = null; DU.tab = 'dirs'; DU.root = root;
+  DU.err = ''; DU.result = null; DU.dir = null; DU.prog = null; DU.tab = 'map'; DU.tree = null; DU.root = root;
   let ok = false; try { ok = await goDiskScan(root); } catch (e) { DU.err = String(e); }
   if (!ok && !DU.err) DU.err = 'Impossible de lancer l\'analyse de « ' + root + ' » : donnez un lecteur (C:) ou un chemin complet (C:\\Users).';
   DU.running = ok; if (ok) status('Espace disque : analyse de ' + root + '…');
   renderTree(); render();
 }
-async function duGo(id){ try { const d = await goDiskDir(id); if (d) { DU.dir = d; DU.tab = 'dirs'; render(); } } catch (e) { status(String(e)); } }
+async function duGo(id){ try { const d = await goDiskDir(id); if (d) { DU.dir = d; if (DU.tab !== 'map') DU.tab = 'dirs'; render(); } } catch (e) { status(String(e)); } }
+const duCrumbs = d => d.crumbs.map(c => `<button data-du-dir="${c.id}">${esc(c.name)}</button>`).join('<span>›</span>');
+// carte des dossiers (treemap « squarified ») : surface proportionnelle à la taille
+function duSquarify(items, x, y, w, h){
+  const out = [], total = items.reduce((a, b) => a + b.v, 0);
+  if (!total || w <= 0 || h <= 0) return out;
+  const rest = items.map(it => ({it, a: it.v * w * h / total}));
+  while (rest.length) {
+    const short = Math.min(w, h); let row = [], best = Infinity;
+    while (rest.length) {
+      const cand = row.concat(rest[0]), sum = cand.reduce((a, b) => a + b.a, 0);
+      const mx = Math.max(...cand.map(c => c.a)), mn = Math.min(...cand.map(c => c.a));
+      const worst = Math.max(short * short * mx / (sum * sum), (sum * sum) / (short * short * mn));
+      if (worst > best) break;
+      row = cand; best = worst; rest.shift();
+    }
+    const sum = row.reduce((a, b) => a + b.a, 0);
+    if (w >= h) { const rw = sum / h; let cy = y; row.forEach(r => { const rh = r.a / rw; out.push({it: r.it, x, y: cy, w: rw, h: rh}); cy += rh; }); x += rw; w -= rw; }
+    else { const rh = sum / w; let cx = x; row.forEach(r => { const rw = r.a / rh; out.push({it: r.it, x: cx, y, w: rw, h: rh}); cx += rw; }); y += rh; h -= rh; }
+  }
+  return out;
+}
+function duMapHTML(t, W, H, path){
+  const total = t.size || 1, html = [];
+  const kids = n => { const a = arr(n.children).map(c => ({v: c.size, n: c}));
+    if (n.own) a.push({v: n.own, own: true}); if (n.rest) a.push({v: n.rest, rest: true});
+    return a.filter(i => i.v > 0).sort((a, b) => b.v - a.v); };
+  const pct = v => (100 * v / total).toLocaleString('fr-FR', {maximumFractionDigits: 1}) + ' %';
+  const draw = (n, x, y, w, h, depth, hue, p) => {
+    duSquarify(kids(n), x, y, w, h).forEach((r, i) => {
+      const it = r.it, hu = depth === 0 ? (215 + i * 47) % 360 : hue;
+      const box = `left:${r.x.toFixed(1)}px;top:${r.y.toFixed(1)}px;width:${Math.max(0, r.w - 1).toFixed(1)}px;height:${Math.max(0, r.h - 1).toFixed(1)}px`;
+      const lbl = r.w > 46 && r.h > 16;
+      if (it.own || it.rest) {
+        const name = it.own ? 'Fichiers de ' + (n.name || p) : 'Petits dossiers de ' + (n.name || p);
+        html.push(`<div class="tm leaf grey"${depth ? ` data-du-dir="${n.id}"` : ''} style="${box}" title="${esc(name)} : ${duSize(it.v)} (${pct(it.v)})">${lbl && r.h > 30 ? `<span>${it.own ? 'fichiers' : 'autres'}</span>` : ''}</div>`);
+        return;
+      }
+      const c = it.n, cp = p.replace(/[\\/]$/, '') + '\\' + c.name;
+      const col = `hsl(${hu} ${depth === 0 ? 62 : 55}% ${Math.min(90, 70 + depth * 7)}%)`;
+      const tip = `${cp}\n${duSize(c.size)} (${pct(c.size)})`;
+      const hdr = r.h > 38 && r.w > 60 && arr(c.children).length ? 17 : 0;
+      html.push(`<div class="tm${hdr ? '' : ' leaf'}" data-du-dir="${c.id}" style="${box};background:${col}" title="${esc(tip)}">${lbl ? `<span>${esc(c.name)} <b>${duSize(c.size)}</b></span>` : ''}</div>`);
+      if (hdr) draw(c, r.x + 2, r.y + hdr, r.w - 5, r.h - hdr - 3, depth + 1, hu, cp);
+    });
+  };
+  draw(t, 0, 0, W, H, 0, 0, path);
+  return html.join('');
+}
+async function duDrawMap(){
+  const el = $('#du-map'); if (!el || !DU.dir) return;
+  const id = DU.dir.dir.id;
+  if (!DU.tree || DU.tree.id !== id) {
+    el.innerHTML = '<div class="empty" style="border:0">Préparation de la carte…</div>';
+    try { DU.tree = await goDiskTree(id, 3); } catch (e) { DU.tree = null; el.innerHTML = `<div class="banner">${esc(String(e))}</div>`; return; }
+    if (!DU.tree || DU.tree.id !== (DU.dir && DU.dir.dir.id)) return;
+  }
+  const m = $('#du-map'); if (!m) return;
+  m.innerHTML = DU.tree.size ? duMapHTML(DU.tree, m.clientWidth, m.clientHeight, DU.dir.path) : '<div class="empty" style="border:0">Dossier vide.</div>';
+}
 V['disk-usage'] = () => {
   if (DU.drives === null) duLoadDrives();
   const right = DU.result && !DU.running ? `<div style="display:flex;gap:8px"><button class="btn" id="du-csv">Exporter en CSV</button><button class="btn" id="du-new">Analyser un autre lecteur</button></div>` : '';
@@ -798,16 +867,20 @@ V['disk-usage'] = () => {
   if (r.cloud) notes.push(`${duSize(r.cloud)} de fichiers « en ligne uniquement » (OneDrive…) ne sont pas sur le disque et ne sont pas comptés.`);
   out += `<div class="card"><div class="du-nums" style="margin-top:0"><span><b>${duSize(r.size)}</b>dans ${esc(r.root)}</span><span><b>${duN(r.files)}</b>fichiers</span><span><b>${duN(r.dirs)}</b>dossiers</span><span><b>${r.seconds < 1 ? '< 1' : Math.round(r.seconds)} s</b>d'analyse</span></div>
     ${notes.map(n => `<div class="sub" style="color:var(--muted);font-size:12.5px">${esc(n)}</div>`).join('')}</div>`;
-  out += `<div class="seg du-tabs" style="align-self:flex-start">${[['dirs','Dossiers'],['files','Plus gros fichiers'],['exts','Types de fichiers']].map(([k, l]) => `<button data-du-tab="${k}" aria-pressed="${DU.tab === k}">${l}</button>`).join('')}</div>`;
+  out += `<div class="seg du-tabs" style="align-self:flex-start">${[['map','Carte'],['dirs','Dossiers'],['files','Plus gros fichiers'],['exts','Types de fichiers']].map(([k, l]) => `<button data-du-tab="${k}" aria-pressed="${DU.tab === k}">${l}</button>`).join('')}</div>`;
   if (DU.tab === 'files') {
     out += `<table class="list du"><thead><tr><th>Fichier</th><th>Taille</th><th>Modifié</th><th></th></tr></thead><tbody>${arr(r.top).map(f =>
       `<tr><td class="n mono" style="text-align:left">${esc(f.path)}</td><td class="mono">${duSize(f.size)}</td><td class="mono">${duDate(f.mod)}</td><td>${duOpen(f.path)}</td></tr>`).join('') || '<tr><td colspan="4">Aucun fichier.</td></tr>'}</tbody></table>`;
   } else if (DU.tab === 'exts') {
     out += `<table class="list du"><thead><tr><th>Type</th><th>Taille</th><th>Part du total</th><th>Fichiers</th></tr></thead><tbody>${arr(r.exts).map(x =>
       `<tr><td class="n mono" style="text-align:left">${esc(x.ext)}</td><td class="mono">${duSize(x.size)}</td><td>${duPct(x.size, r.size)}</td><td class="mono">${duN(x.count)}</td></tr>`).join('')}</tbody></table>`;
+  } else if (DU.dir && DU.tab === 'map') {
+    const d = DU.dir;
+    out += `<div class="du-bar" style="justify-content:space-between"><div class="du-crumbs">${duCrumbs(d)}</div><span class="sub" style="color:var(--muted)">${duSize(d.dir.size)} · ${duN(d.dir.files)} fichiers ${duOpen(d.path)}</span></div>
+      <div class="du-map" id="du-map"></div><div class="sub" style="color:var(--muted);font-size:12px">Chaque rectangle est un dossier, sa surface est proportionnelle à sa taille. Cliquez un dossier pour l'ouvrir, survolez-le pour voir sa taille. Les zones grises sont les fichiers posés directement dans un dossier.</div>`;
   } else if (DU.dir) {
     const d = DU.dir, tot = d.dir.size;
-    const crumbs = d.crumbs.map((c, i) => `<button data-du-dir="${c.id}">${esc(c.name)}</button>`).join('<span>›</span>');
+    const crumbs = duCrumbs(d);
     const rows = [];
     if (d.crumbs.length > 1) rows.push(`<tr class="dir" data-du-dir="${d.crumbs[d.crumbs.length - 2].id}"><td class="n">.. (dossier parent)</td><td></td><td></td><td></td><td></td><td></td></tr>`);
     const items = d.rows.map(x => ({k: 'd', x})); if (d.own.files) items.push({k: 'own', x: {size: d.own.size, files: d.own.files}}); if (d.rest) items.push({k: 'rest', x: d.rest});
@@ -1874,7 +1947,7 @@ $('#bScan').addEventListener('click', startScan);
   if (info.resumed) status('Reprise automatique après le redémarrage — nouvelle analyse en cours pour le comparatif avant/après.');
   renderTree(); render(); api.sensors(); startScan();
 })();
-window.addEventListener('resize', () => { if (view === 'sensors') drawSensors(); if (view === 'summary') drawMini(); });
+window.addEventListener('resize', () => { if (view === 'disk-usage' && DU.tab === 'map') duDrawMap(); if (view === 'sensors') drawSensors(); if (view === 'summary') drawMini(); });
 </script>
 </body>
 </html>

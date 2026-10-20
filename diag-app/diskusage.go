@@ -319,6 +319,47 @@ func (s *duScan) dir(id int) map[string]any {
 	return out
 }
 
+// duTree : un dossier et ses sous-dossiers sur quelques niveaux, pour la carte.
+type duTree struct {
+	ID       int       `json:"id"`
+	Name     string    `json:"name"`
+	Size     int64     `json:"size"`
+	Own      int64     `json:"own,omitempty"`  // fichiers directement dans le dossier
+	Rest     int64     `json:"rest,omitempty"` // petits sous-dossiers regroupés
+	Children []*duTree `json:"children,omitempty"`
+}
+
+// tree renvoie id sur depth niveaux. Les sous-dossiers de moins de 0,2 % du
+// dossier de départ (ou au-delà des 60 plus gros) sont regroupés : ils seraient
+// trop petits pour être vus sur la carte.
+func (s *duScan) tree(id, depth int) *duTree {
+	if id < 0 || id >= len(s.nodes) {
+		return nil
+	}
+	n := s.nodes[id]
+	min := n.size / 500
+	var build func(n *duNode, d int) *duTree
+	build = func(n *duNode, d int) *duTree {
+		t := &duTree{ID: n.id, Name: n.name, Size: n.size}
+		if d >= depth {
+			return t
+		}
+		t.Own = n.ownSize
+		for i, c := range n.children {
+			if c.skipped || c.size == 0 {
+				continue
+			}
+			if i >= 60 || c.size < min {
+				t.Rest += c.size
+				continue
+			}
+			t.Children = append(t.Children, build(c, d+1))
+		}
+		return t
+	}
+	return build(n, 0)
+}
+
 // contains : le chemin fait partie du dossier analysé (pour « Ouvrir dans l'Explorateur »).
 func (s *duScan) contains(p string) bool {
 	rel, err := filepath.Rel(s.root.path(), filepath.Clean(p))
