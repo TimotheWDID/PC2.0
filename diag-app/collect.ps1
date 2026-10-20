@@ -1,7 +1,9 @@
 ﻿# PC2 Diag : collecte en lecture seule, aucune modification du système.
 # Le résultat est écrit en JSON dans $Out. Chaque étape écrit « n|total|libellé »
 # dans $Progress : sans console, la sortie de PowerShell reste en mémoire tampon.
-param([string]$Out = "$env:TEMP\pc2diag.json", [string]$Progress)
+# $Log reçoit l'heure de début et la durée de chaque vérification : si la
+# collecte reste bloquée, sa dernière ligne dit laquelle ne rend pas la main.
+param([string]$Out = "$env:TEMP\pc2diag.json", [string]$Progress, [string]$Log)
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -9,16 +11,83 @@ $t0 = Get-Date
 $since = (Get-Date).AddDays(-30)
 $R = [ordered]@{}
 $script:errs = @()
+$script:hung = @()
 $script:step = 0
+$script:stepLabel = ''
+$script:stepSw = $null
 $total = 14
+$utf8 = New-Object Text.UTF8Encoding($false)
 
+function Log($msg) {
+  if ($Log) { try { [IO.File]::AppendAllText($Log, ("{0}  {1}`r`n" -f (Get-Date).ToString('HH:mm:ss.fff'), $msg), $utf8) } catch {} }
+}
+function Write-Progress-File($label) {
+  if ($Progress) { try { [IO.File]::WriteAllText($Progress, ("{0}|{1}|{2}" -f $script:step, $total, $label), $utf8) } catch {} }
+}
 function Step($label) {
+  if ($script:stepSw) { Log ("[{0,2}/{1}] terminée en {2:N1} s" -f $script:step, $total, $script:stepSw.Elapsed.TotalSeconds) }
   $script:step++
-  if ($Progress) { try { [IO.File]::WriteAllText($Progress, ("{0}|{1}|{2}" -f $script:step, $total, $label), (New-Object Text.UTF8Encoding($false))) } catch {} }
+  $script:stepLabel = $label
+  $script:stepSw = [Diagnostics.Stopwatch]::StartNew()
+  Log ("[{0,2}/{1}] {2}" -f $script:step, $total, $label)
+  Write-Progress-File $label
   Write-Output ("[{0,2}/{1}] {2}" -f $script:step, $total, $label)
 }
+# Chaque vérification est notée avant de démarrer, dans le journal et dans le
+# libellé affiché : un blocage montre ainsi son nom à l'écran.
 function Try-Get($name, [scriptblock]$sb, $default = $null) {
-  try { & $sb } catch { $script:errs += [pscustomobject]@{ check = $name; msg = $_.Exception.Message }; $default }
+  Log "      $name..."
+  Write-Progress-File "$script:stepLabel ($name)"
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  try { $r = & $sb; Log ("      $name : {0} ms" -f $sw.ElapsedMilliseconds); $r }
+  catch {
+    Log ("      $name : ERREUR après {0} ms : {1}" -f $sw.ElapsedMilliseconds, $_.Exception.Message)
+    $script:errs += [pscustomobject]@{ check = $name; msg = $_.Exception.Message }; $default
+  }
+}
+# Exécute $sb dans un runspace à part et l'abandonne au bout de $sec secondes :
+# un appel WMI ou un pilote de disque qui ne répond plus ne bloque plus la collecte.
+# $sb ne voit pas les variables ni les fonctions de ce script, d'où $argList.
+function Invoke-Timed($name, $sec, [scriptblock]$sb, $argList = @()) {
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript($sb.ToString())
+  foreach ($a in $argList) { [void]$ps.AddArgument($a) }
+  $h = $ps.BeginInvoke()
+  if (-not $h.AsyncWaitHandle.WaitOne($sec * 1000)) {
+    $script:hung += $name
+    try { [void]$ps.BeginStop($null, $null) } catch {}
+    throw "pas de réponse au bout de $sec s, vérification abandonnée"
+  }
+  try { $ps.EndInvoke($h) } finally { $ps.Dispose() }
+}
+# Lance un exécutable et le tue s'il n'a pas rendu la main au bout de $sec secondes.
+function Run-Exe($exe, $argStr, $sec) {
+  $psi = New-Object Diagnostics.ProcessStartInfo $exe, $argStr
+  $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+  $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+  $p = [Diagnostics.Process]::Start($psi)
+  $o = $p.StandardOutput.ReadToEndAsync(); $null = $p.StandardError.ReadToEndAsync()
+  if (-not $p.WaitForExit($sec * 1000)) { try { $p.Kill() } catch {}; throw "$exe $argStr : pas de réponse au bout de $sec s, arrêté" }
+  $o.Result
+}
+# Taille des fichiers sous $paths, sans suivre les jonctions et en s'arrêtant
+# au bout de $sec secondes : un dossier Temp de plusieurs centaines de milliers
+# de fichiers prenait plusieurs minutes avec Get-ChildItem -Recurse.
+function Dir-Size($paths, $sec) {
+  $sw = [Diagnostics.Stopwatch]::StartNew(); $sum = [long]0; $files = 0; $partial = $false
+  $stack = New-Object 'System.Collections.Generic.Stack[string]'
+  foreach ($p in $paths) { if ($p -and [IO.Directory]::Exists($p)) { $stack.Push($p) } }
+  while ($stack.Count -gt 0) {
+    if ($sw.Elapsed.TotalSeconds -gt $sec) { $partial = $true; break }
+    $d = New-Object IO.DirectoryInfo $stack.Pop()
+    try {
+      foreach ($e in $d.EnumerateFileSystemInfos()) {
+        if ($e -is [IO.DirectoryInfo]) { if (-not ($e.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $stack.Push($e.FullName) } }
+        else { $sum += $e.Length; $files++; if (($files % 5000) -eq 0 -and $sw.Elapsed.TotalSeconds -gt $sec) { $partial = $true; break } }
+      }
+    } catch {}
+  }
+  [pscustomobject]@{ bytes = $sum; files = $files; partial = $partial; seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1) }
 }
 function D($d) { if ($d) { try { ([datetime]$d).ToString('yyyy-MM-ddTHH:mm:ss') } catch { $null } } else { $null } }
 function GB($b) { if ($b) { [math]::Round([double]$b / 1GB, 1) } else { 0 } }
@@ -112,15 +181,32 @@ $R.disks = @(Try-Get 'physicaldisk' { Get-PhysicalDisk | ForEach-Object {
 $R.smartPredict = @(Try-Get 'smartpredict' { Get-CimInstance -Namespace root\wmi MSStorageDriver_FailurePredictStatus | Where-Object { $_.PredictFailure } | ForEach-Object { $_.InstanceName } } @())
 
 Step "Volumes, espace libre, BitLocker"
+# Get-BitLockerVolume interroge tous les volumes (lecteurs de cartes, clés USB
+# en panne compris) et peut ne jamais répondre : lecture directe de la classe
+# WMI, limitée dans le temps.
 $bl = @{}
-Try-Get 'bitlocker' { Get-BitLockerVolume | ForEach-Object { $bl[$_.MountPoint.TrimEnd('\')] = [string]$_.ProtectionStatus } } | Out-Null
-$R.volumes = @(Try-Get 'volumes' { Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {
-  $dirty = $null
-  if ($isAdmin) { try { $q = (& fsutil dirty query $_.DeviceID 2>$null) -join ' '; if ($q) { $dirty = ($q -notmatch 'NOT|PAS|n.est pas') -and ($q -match 'Dirty|d.fectueux|endommag|sale|incorrect') } } catch {} }
-  [ordered]@{ letter = $_.DeviceID; label = $_.VolumeName; fs = $_.FileSystem; sizeGB = (GB $_.Size); freeGB = (GB $_.FreeSpace)
-    freePct = $(if ($_.Size) { [math]::Round($_.FreeSpace / $_.Size * 100, 0) } else { $null }); dirty = $dirty; bitlocker = $bl[$_.DeviceID] } } } @())
+Try-Get 'bitlocker' {
+  Invoke-Timed 'bitlocker' 20 {
+    $ErrorActionPreference = 'Stop'
+    Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume | Where-Object { $_.DriveLetter } |
+      ForEach-Object { '{0}|{1}' -f $_.DriveLetter, $(switch ([int]$_.ProtectionStatus) { 0 { 'Off' } 1 { 'On' } default { 'Unknown' } }) }
+  } | ForEach-Object { $k, $v = "$_" -split '\|', 2; $bl[$k.TrimEnd('\')] = $v }
+} | Out-Null
+$ld = @(Try-Get 'volumes' { Invoke-Timed 'volumes' 30 { $ErrorActionPreference = 'Stop'; Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' } } @())
+$R.volumes = @($ld | ForEach-Object {
+  $v = $_; $dirty = $null
+  if ($isAdmin) {
+    $q = Try-Get "fsutil $($v.DeviceID)" { Run-Exe 'fsutil.exe' "dirty query $($v.DeviceID)" 15 }
+    if ($q) { $dirty = ($q -notmatch 'NOT|PAS|n.est pas') -and ($q -match 'Dirty|d.fectueux|endommag|sale|incorrect') }
+  }
+  [ordered]@{ letter = $v.DeviceID; label = $v.VolumeName; fs = $v.FileSystem; sizeGB = (GB $v.Size); freeGB = (GB $v.FreeSpace)
+    freePct = $(if ($v.Size) { [math]::Round($v.FreeSpace / $v.Size * 100, 0) } else { $null }); dirty = $dirty; bitlocker = $bl[$v.DeviceID] } })
 $tempPaths = @($env:TEMP, "$env:windir\Temp", "$env:windir\SoftwareDistribution\Download")
-$R.junkGB = (Try-Get 'temp' { GB (($tempPaths | ForEach-Object { Get-ChildItem $_ -Recurse -Force -File -ErrorAction SilentlyContinue } | Measure-Object Length -Sum).Sum) } 0)
+$junk = Try-Get 'temp' { Dir-Size $tempPaths 30 }
+if ($junk) {
+  Log ("      temp : {0} fichiers, {1} Go{2}" -f $junk.files, (GB $junk.bytes), $(if ($junk.partial) { ', comptage interrompu après 30 s' } else { '' }))
+  $R.junkGB = (GB $junk.bytes); $R.junkPartial = $junk.partial
+} else { $R.junkGB = 0 }
 
 # ---------------------------------------------------------------- Batterie
 Step "Batterie"
@@ -279,6 +365,12 @@ Step "Finalisation"
 $R.power = Try-Get 'powerplan' { (& powercfg /getactivescheme) -replace '^.*\(|\).*$', '' }
 $R.errors = $script:errs
 $R.meta.duration = [math]::Round(((Get-Date) - $t0).TotalSeconds, 0)
+$R.meta.hung = @($script:hung)
 $json = $R | ConvertTo-Json -Depth 6 -Compress
-[IO.File]::WriteAllText($Out, $json, (New-Object Text.UTF8Encoding($false)))
+[IO.File]::WriteAllText($Out, $json, $utf8)
+Log ("[{0,2}/{1}] terminée en {2:N1} s" -f $script:step, $total, $script:stepSw.Elapsed.TotalSeconds)
+Log "Collecte terminée en $($R.meta.duration) s, $($script:errs.Count) vérification(s) en erreur$(if ($script:hung) { ', abandonnée(s) faute de réponse : ' + ($script:hung -join ', ') })."
 Write-Output "Collecte terminée en $($R.meta.duration) s."
+# Une vérification abandonnée garde son fil d'exécution bloqué, qui empêcherait
+# PowerShell de se terminer.
+if ($script:hung) { [Environment]::Exit(0) }

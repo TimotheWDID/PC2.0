@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -79,5 +81,24 @@ func TestSendAtelier(t *testing.T) {
 	}
 	if _, err := c.Send(0, AtelierExport{}); err == nil {
 		t.Fatal("un rapport vide doit être refusé")
+	}
+}
+
+func TestPruneFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"PC2Diag-collecte_2026-01-03.txt", "PC2Diag-collecte_2026-01-01.txt", "PC2Diag-collecte_2026-01-02.txt", "Analyse_2026-01-01.json"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pruneFiles(dir, "PC2Diag-collecte_", 2)
+	entries, _ := os.ReadDir(dir)
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	want := "Analyse_2026-01-01.json PC2Diag-collecte_2026-01-02.txt PC2Diag-collecte_2026-01-03.txt"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("restants = %v, attendu %s", got, want)
 	}
 }

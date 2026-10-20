@@ -286,14 +286,19 @@ func (a *app) collect() (map[string]any, error) {
 		return nil, err
 	}
 
+	// Journal détaillé de la collecte, à côté des rapports : il reste lisible
+	// même si l'analyse ne se termine jamais ou si l'application est fermée.
+	logFile := filepath.Join(reportsDir(), "PC2Diag-collecte_"+time.Now().Format(scanStamp)+".txt")
+	pruneFiles(reportsDir(), "PC2Diag-collecte_", 9)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress)
+	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress, "-Log", logFile)
 	hide(cmd)
 	cmd.WaitDelay = 5 * time.Second
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
-	a.log("Analyse lancée (administrateur : %v)", isAdmin())
+	a.log("Analyse lancée (administrateur : %v), détail dans %s", isAdmin(), filepath.Base(logFile))
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("impossible de lancer PowerShell : %w", err)
 	}
@@ -302,7 +307,9 @@ func (a *app) collect() (map[string]any, error) {
 	// PowerShell peut rester en mémoire tampon jusqu'à la fin.
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	last := ""
+	last, label := "", ""
+	step, total := 0, 0
+	stepStart, lastChange, lastWarn := time.Now(), time.Now(), time.Duration(0)
 	var waitErr error
 	for running := true; running; {
 		select {
@@ -310,16 +317,33 @@ func (a *app) collect() (map[string]any, error) {
 			running = false
 		case <-time.After(400 * time.Millisecond):
 		}
-		b, err := os.ReadFile(progress)
-		if err != nil {
-			continue
+		changed := false
+		if b, err := os.ReadFile(progress); err == nil {
+			line := strings.TrimSpace(strings.TrimPrefix(string(b), "\ufeff"))
+			if m := stepRe.FindStringSubmatch(line); m != nil && line != last {
+				last, changed = line, true
+				lastChange, lastWarn = time.Now(), 0
+				n, _ := strconv.Atoi(m[1])
+				total, _ = strconv.Atoi(m[2])
+				label = strings.ToValidUTF8(m[3], "?")
+				if n != step {
+					if step > 0 {
+						a.log("Étape %d/%d terminée en %s", step, total, time.Since(stepStart).Round(100*time.Millisecond))
+					}
+					step, stepStart = n, time.Now()
+					a.log("Étape %d/%d : %s", n, total, label)
+				}
+			}
 		}
-		line := strings.TrimSpace(strings.TrimPrefix(string(b), "\ufeff"))
-		if m := stepRe.FindStringSubmatch(line); m != nil && line != last {
-			last = line
-			n, _ := strconv.Atoi(m[1])
-			total, _ := strconv.Atoi(m[2])
-			a.emitGo("scanProgress", map[string]any{"step": n, "total": total, "label": strings.ToValidUTF8(m[3], "?")})
+		// Rien ne bouge : on le note chaque minute, et l'interface le signale.
+		stall := time.Since(lastChange)
+		if running && step > 0 && stall >= time.Minute && stall-lastWarn >= time.Minute {
+			lastWarn = stall.Truncate(time.Minute)
+			a.log("Étape %d/%d sans réponse depuis %s : %s", step, total, lastWarn, label)
+			changed = true
+		}
+		if changed {
+			a.emitGo("scanProgress", map[string]any{"step": step, "total": total, "label": label, "stalled": int(lastWarn.Seconds()), "log": logFile})
 		}
 	}
 	raw, err := os.ReadFile(out)
@@ -328,13 +352,17 @@ func (a *app) collect() (map[string]any, error) {
 			a.log("Sortie PowerShell :\n%s", strings.ToValidUTF8(output.String(), "?"))
 		}
 		if ctx.Err() != nil {
-			return nil, errors.New("l'analyse a dépassé 15 minutes et a été arrêtée")
+			a.log("Analyse arrêtée au bout de 15 minutes, bloquée à l'étape %d/%d : %s", step, total, label)
+			return nil, fmt.Errorf("l'analyse a dépassé 15 minutes et a été arrêtée, bloquée à l'étape %d/%d (%s)", step, total, label)
 		}
 		return nil, fmt.Errorf("la collecte n'a pas produit de résultat (PowerShell bloqué par une stratégie ou un antivirus ?) : %v", waitErr)
 	}
 	var data map[string]any
 	if err := json.Unmarshal(bytes.TrimPrefix(raw, []byte("\xEF\xBB\xBF")), &data); err != nil {
 		return nil, fmt.Errorf("résultat de collecte illisible : %w", err)
+	}
+	if hung, _ := asMap(data["meta"])["hung"].([]any); len(hung) > 0 {
+		a.log("Vérifications abandonnées faute de réponse : %v (voir %s)", hung, filepath.Base(logFile))
 	}
 	return data, nil
 }

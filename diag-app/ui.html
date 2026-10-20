@@ -350,7 +350,7 @@ function rules(D){
       else if (has(v.bitlocker) && m.edition && !/core|home/i.test(m.edition)) add('info','Sécurité','Disque système non chiffré (BitLocker désactivé)',w,'En cas de vol du portable, les données sont lisibles. Activer BitLocker et conserver la clé de récupération (compte Microsoft ou impression).');
     }
   });
-  if (D.junkGB >= 5) add('info','Stockage',`${D.junkGB} Go de fichiers temporaires`,'%TEMP%, C:\\Windows\\Temp, cache Windows Update','Espace récupérable sans risque.','cleanmgr /sageset:1 & cleanmgr /sagerun:1');
+  if (D.junkGB >= 5) add('info','Stockage',`${D.junkPartial ? 'Au moins ' : ''}${D.junkGB} Go de fichiers temporaires`,'%TEMP%, C:\\Windows\\Temp, cache Windows Update','Espace récupérable sans risque.','cleanmgr /sageset:1 & cleanmgr /sagerun:1');
 
   // ---- Batterie
   const b = D.battery || {};
@@ -661,12 +661,18 @@ function afterRender(){
   if (view === 'disk-usage' && DU.tab === 'map') duDrawMap();
 }
 
+// Une vérification qui ne répond plus : on le dit et on donne accès au journal.
+function scanSlow() {
+  if (!scanState || !scanState.stalled) return '';
+  return `<span style="color:var(--warn)">Aucune progression depuis ${Math.round(scanState.stalled / 60)} min.</span> La vérification indiquée entre parenthèses ne rend pas la main ; le journal de collecte note l'heure et la durée de chacune. <button class="btn" data-scanlog>Ouvrir le journal de collecte</button>`;
+}
+$('#content').addEventListener('click', e => { if (e.target.closest('[data-scanlog]') && scanState && scanState.log) api.open(scanState.log); });
 V.summary = () => {
   let top = '';
   if (scanState && scanState.running) {
     const p = Math.round(100 * (scanState.step || 0) / (scanState.total || 14));
-    top = `<div class="card scanning"><div class="lbl"><span>${esc(scanState.label || 'Préparation…')}</span><span class="mono">${scanState.step || 0}/${scanState.total || 14}</span></div><div class="progress"><i style="width:${p}%"></i></div><div class="sub" style="color:var(--muted);font-size:12px">Analyse en lecture seule : rien n'est modifié. Durée habituelle 30 à 90 secondes.</div></div>`;
-  } else if (scanState && scanState.error) top = `<div class="banner">${esc(scanState.error)}</div>`;
+    top = `<div class="card scanning"><div class="lbl"><span>${esc(scanState.label || 'Préparation…')}</span><span class="mono">${scanState.step || 0}/${scanState.total || 14}</span></div><div class="progress"><i style="width:${p}%"></i></div><div class="sub" style="color:var(--muted);font-size:12px">Analyse en lecture seule : rien n'est modifié. Durée habituelle 30 à 90 secondes.</div><div class="sub scanslow" style="font-size:12px">${scanSlow()}</div></div>`;
+  } else if (scanState && scanState.error) top = `<div class="banner">${esc(scanState.error)}${scanState.log ? ' <button class="btn" data-scanlog>Ouvrir le journal de collecte</button>' : ''}</div>`;
   if (!D) return head('Résumé', esc(info.computer || '')) + `<div class="stack">${top || '<div class="empty">Cliquez sur « Analyser » pour lancer le diagnostic.</div>'}${miniBlock()}</div>`;
   const m = D.meta || {}, c = {crit:0, warn:0, info:0}; F.forEach(f => c[f.sev]++);
   const score = Math.max(5, 100 - c.crit * 15 - c.warn * 5 - c.info * 1);
@@ -729,7 +735,7 @@ V.disk = (i, n) => { const d = arr(D.disks)[+i]; if (!d) return '';
   return section(d.name, `${d.media} ${d.bus} · ${d.sizeGB} Go`, n, props([['Identification', [['Modèle', esc(d.name)], ['N° de série', `<span class="mono">${esc(d.serial)}</span>`], ['Firmware', `<span class="mono">${esc(d.firmware)}</span>`], ['Type', esc(d.media)], ['Interface', esc(d.bus)], ['Capacité', d.sizeGB + ' Go']]],
     ['Santé (SMART)', [['État Windows', healthTxt(d)], ['État opérationnel', esc(d.op)], ['Usure', has(d.wear) ? d.wear + ' %' + meter(d.wear, 70, 90) : 'non communiquée'], ['Température', d.temp ? d.temp + ' °C' : ''], ['Température max relevée', d.tempMax ? d.tempMax + ' °C' : ''], ['Heures de fonctionnement', has(d.hours) ? d.hours + ' h (' + Math.round(d.hours / 24) + ' j)' : ''], ['Erreurs de lecture non corrigées', has(d.readErr) ? d.readErr : ''], ['Erreurs d\'écriture non corrigées', has(d.writeErr) ? d.writeErr : ''], ['Démarrages', has(d.starts) ? d.starts : '']]]])
     + (/USB/i.test(d.bus) ? '<div class="banner">Disque relié en USB : beaucoup de boîtiers ne transmettent pas les valeurs SMART, l\'état peut être incomplet.</div>' : '')); };
-V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', D.junkGB + ' Go']]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
+V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', (D.junkPartial ? 'au moins ' : '') + D.junkGB + ' Go' + (D.junkPartial ? ' (comptage arrêté au bout de 30 s)' : '')]]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
 V.battery = (_, n) => { const b = D.battery || {};
   return section('Batterie', esc(b.name), n, props([['Batterie', [['Modèle', esc(b.name)], ['Charge', `<span id="pv-bat">${S.bat ? S.bat.v : b.charge} %</span>`], ['Capacité d\'origine', b.design ? (b.design / 1000).toFixed(1) + ' Wh' : ''], ['Capacité actuelle', b.full ? (b.full / 1000).toFixed(1) + ' Wh' : ''], ['Usure', has(b.wearPct) ? b.wearPct + ' %' + meter(b.wearPct, 20, 40) : ''], ['Cycles', b.cycles]]]])); };
 V.network = (_, n) => { const x = D.network || {};
@@ -1849,9 +1855,9 @@ $('#content').addEventListener('keydown', e => { if (e.target.id === 's-q' && e.
 function status(t){ $('#stMsg').textContent = t; }
 window.onGo = (kind, p) => {
   if (kind === 'site') { SITE.state = p; if (view === 'site') render(); }
-  if (kind === 'scanProgress') { scanState = {running:true, ...p}; status(`Analyse ${p.step}/${p.total} — ${p.label}`); if (view === 'summary') { const lb = document.querySelector('.scanning .lbl'); if (lb) { lb.innerHTML = `<span>${esc(p.label)}</span><span class="mono">${p.step}/${p.total}</span>`; document.querySelector('.scanning .progress i').style.width = Math.round(100 * p.step / p.total) + '%'; } else render(); } }
+  if (kind === 'scanProgress') { scanState = {running:true, ...p}; status(`Analyse ${p.step}/${p.total} — ${p.label}`); if (view === 'summary') { const lb = document.querySelector('.scanning .lbl'); if (lb) { lb.innerHTML = `<span>${esc(p.label)}</span><span class="mono">${p.step}/${p.total}</span>`; document.querySelector('.scanning .progress i').style.width = Math.round(100 * p.step / p.total) + '%'; const sl = document.querySelector('.scanning .scanslow'); if (sl) sl.innerHTML = scanSlow(); } else render(); } }
   if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; if (ATL.ready || view === 'atelier') atelierSync(); scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); }
-  if (kind === 'scanError') { scanState = {error: p}; $('#bScan').disabled = false; status('Échec de l\'analyse'); render(); }
+  if (kind === 'scanError') { scanState = {error: p, log: scanState && scanState.log}; $('#bScan').disabled = false; status('Échec de l\'analyse'); render(); }
   if (kind === 'sensors') onSensors(p);
   if (kind === 'duProgress') duOnProgress(p);
   if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
