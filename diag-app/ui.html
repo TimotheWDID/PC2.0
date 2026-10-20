@@ -205,6 +205,34 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
 .status{display:flex;align-items:center;gap:18px;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden}
 .status b{font:600 12px var(--f-mono);color:var(--fg)}
 .status .msg{flex:1;overflow:hidden;text-overflow:ellipsis}
+/* espace disque */
+.du-drives{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.du-drive{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel);display:grid;gap:5px}
+.du-drive b{font-size:13.5px}
+.du-drive .meter{width:100%;margin:0;height:8px}
+.du-drive span{font-size:12px;color:var(--muted)}
+.du-drive .btn{justify-self:start}
+.du-path{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.du-cur{font:12px var(--f-mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.du-nums{display:flex;gap:22px;flex-wrap:wrap;margin:8px 0 6px;font-size:12.5px;color:var(--muted)}
+.du-nums b{font:600 15px var(--f-mono);color:var(--fg);display:block}
+.du-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.du-tabs button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.du-crumbs{display:flex;flex-wrap:wrap;gap:2px;align-items:center;font:12.5px var(--f-mono)}
+.du-crumbs button{border:0;background:none;padding:2px 4px;border-radius:4px;cursor:pointer;color:var(--accent)}
+.du-crumbs button:hover{background:var(--row)}
+.du-crumbs button:last-child{color:var(--fg);font-weight:600;cursor:default;background:none}
+table.du td{vertical-align:middle;white-space:nowrap}
+table.du td.n{white-space:normal;overflow-wrap:anywhere;width:100%}
+table.du tr.dir td.n{cursor:pointer;color:var(--accent);font-weight:600}
+table.du tr.dir:hover td{background:var(--row)}
+table.du tr.mute td{color:var(--muted);font-style:italic}
+table.du .pct{display:inline-block;width:110px;height:8px;background:var(--row);border:1px solid var(--line);border-radius:3px;overflow:hidden;vertical-align:middle;margin-right:6px}
+table.du .pct i{display:block;height:100%;background:var(--accent)}
+table.du .mono{text-align:right}
+.du-x{border:0;background:none;cursor:pointer;color:var(--muted);padding:2px 4px;border-radius:4px}
+.du-x:hover{color:var(--accent);background:var(--row)}
+.du-x svg{width:15px;height:15px;vertical-align:middle}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -242,7 +270,8 @@ table.list td{padding:4px 10px;border-bottom:1px solid var(--line);vertical-alig
   window.__goDone = (id, err, res) => { const p = pend[id]; if (!p) return; delete pend[id]; if (err) p.rej(err); else p.res(res); };
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
-   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart'].forEach(n => { window[n] = (...a) => call(n, a); });
+   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart',
+   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
 </script>
@@ -470,6 +499,7 @@ const I = {
   board:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h4v4H7zM15 7h2M15 11h2M7 15h10"/>',
   gpu:'<rect x="2" y="6" width="20" height="11" rx="1"/><circle cx="15" cy="11.5" r="3"/><path d="M5 17v3M6 9h4"/>',
   mon:'<rect x="2" y="3" width="20" height="13" rx="1"/><path d="M8 21h8M12 16v5"/>',
+  pie:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
   disk:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',
   vol:'<path d="M4 6h16v12H4z"/><path d="M4 10h16M8 14h4"/>',
   bat:'<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2M5 10v4M8 10v4"/>',
@@ -500,6 +530,7 @@ function nodes(){
   add('problems','Problèmes','alert',0,['*']);
   add('sensors','Capteurs en direct','pulse',0);
   add('tests','Tests manuels','check',0);
+  add('disk-usage','Espace disque','pie',0);
   add('repair','Réparations','wrench',0);
   add('battery-test','Test de batterie','bat',0);
   add('report','Rapport client','doc',0);
@@ -548,6 +579,7 @@ function renderTree(){
     else if (n.id === 'passed' && D) badge = `<span class="cnt ok">${OK.length}</span>`;
     else if (D && (n.cats.length || n.match) && n.id !== 'report') { const w = worst(fs); badge = `<span class="dot ${w || 'ok'}" title="${w ? fs.length + ' constat(s)' : 'OK'}"></span>`; }
     if (n.id === 'repair' && run.id) badge = '<span class="spin" title="Réparation en cours"></span>';
+    if (n.id === 'disk-usage' && DU.running) badge = '<span class="spin" title="Analyse en cours"></span>';
     return `<div class="node${view === n.id ? ' sel' : ''}" style="--d:${n.d}" data-id="${esc(n.id)}" tabindex="0" role="treeitem">${ico(n.icon)}<span class="lbl">${esc(n.label)}</span>${badge}</div>`;
   }).join('');  markToolbar();
 }
@@ -603,7 +635,7 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','atelier','sensors','tests','repair','report','site','battery-test'].includes(view)) view = 'summary';
+  if (!D && !['summary','atelier','sensors','tests','disk-usage','repair','report','site','battery-test'].includes(view)) view = 'summary';
   const at = view === 'atelier';
   $('#atelier').hidden = !at; c.hidden = at;
   if (at) { c.innerHTML = ''; atelierSync(); return; }
@@ -687,7 +719,7 @@ V.disk = (i, n) => { const d = arr(D.disks)[+i]; if (!d) return '';
   return section(d.name, `${d.media} ${d.bus} · ${d.sizeGB} Go`, n, props([['Identification', [['Modèle', esc(d.name)], ['N° de série', `<span class="mono">${esc(d.serial)}</span>`], ['Firmware', `<span class="mono">${esc(d.firmware)}</span>`], ['Type', esc(d.media)], ['Interface', esc(d.bus)], ['Capacité', d.sizeGB + ' Go']]],
     ['Santé (SMART)', [['État Windows', healthTxt(d)], ['État opérationnel', esc(d.op)], ['Usure', has(d.wear) ? d.wear + ' %' + meter(d.wear, 70, 90) : 'non communiquée'], ['Température', d.temp ? d.temp + ' °C' : ''], ['Température max relevée', d.tempMax ? d.tempMax + ' °C' : ''], ['Heures de fonctionnement', has(d.hours) ? d.hours + ' h (' + Math.round(d.hours / 24) + ' j)' : ''], ['Erreurs de lecture non corrigées', has(d.readErr) ? d.readErr : ''], ['Erreurs d\'écriture non corrigées', has(d.writeErr) ? d.writeErr : ''], ['Démarrages', has(d.starts) ? d.starts : '']]]])
     + (/USB/i.test(d.bus) ? '<div class="banner">Disque relié en USB : beaucoup de boîtiers ne transmettent pas les valeurs SMART, l\'état peut être incomplet.</div>' : '')); };
-V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', D.junkGB + ' Go']]]])));
+V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', D.junkGB + ' Go']]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
 V.battery = (_, n) => { const b = D.battery || {};
   return section('Batterie', esc(b.name), n, props([['Batterie', [['Modèle', esc(b.name)], ['Charge', `<span id="pv-bat">${S.bat ? S.bat.v : b.charge} %</span>`], ['Capacité d\'origine', b.design ? (b.design / 1000).toFixed(1) + ' Wh' : ''], ['Capacité actuelle', b.full ? (b.full / 1000).toFixed(1) + ' Wh' : ''], ['Usure', has(b.wearPct) ? b.wearPct + ' %' + meter(b.wearPct, 20, 40) : ''], ['Cycles', b.cycles]]]])); };
 V.network = (_, n) => { const x = D.network || {};
@@ -715,6 +747,101 @@ V.software = (_, n) => section('Logiciels installés', `${arr(D.software).length
 function drawSoftware(q){ q = (q || '').toLowerCase(); const b = $('#swb'); if (!b) return;
   b.innerHTML = arr(D.software).filter(x => !q || ((x.name || '') + ' ' + (x.publisher || '')).toLowerCase().includes(q)).map(x => `<tr><td>${esc(x.name)}</td><td class="mono">${esc(x.version)}</td><td>${esc(x.publisher)}</td><td class="mono">${x.date && /^\d{8}$/.test(x.date) ? x.date.slice(6,8) + '/' + x.date.slice(4,6) + '/' + x.date.slice(0,4) : ''}</td></tr>`).join(''); }
 V.passed = () => head('Contrôles réussis', `${OK.length} vérifications sans anomalie`) + props([...new Set(OK.map(o => o.cat))].map(c => [c, OK.filter(o => o.cat === c).map(o => [o.text, st('ok','OK')])]));
+
+// ----- espace disque, façon TreeSize : le programme parcourt un lecteur ou un dossier,
+// puis on descend dans l'arbre des dossiers, du plus gros au plus petit.
+const DU = {drives: null, running: false, root: '', prog: null, result: null, dir: null, tab: 'dirs', err: '', path: ''};
+const duSize = n => { n = +n || 0; const u = ['o','Ko','Mo','Go','To']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n >= 100 ? Math.round(n) : n.toLocaleString('fr-FR', {maximumFractionDigits: 1})) + ' ' + u[i]; };
+const duN = n => (+n || 0).toLocaleString('fr-FR');
+const duDate = d => d ? d.split('-').reverse().join('/') : '';
+const duPct = (v, t) => { const p = t > 0 ? 100 * v / t : 0; return `<span class="pct"><i style="width:${Math.min(100, p).toFixed(1)}%"></i></span>${p >= 0.1 ? p.toLocaleString('fr-FR', {maximumFractionDigits: 1}) : p > 0 ? '< 0,1' : '0'} %`; };
+const duOpen = p => `<button class="du-x" data-du-reveal="${esc(p)}" title="Ouvrir dans l'Explorateur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>`;
+const duJoin = (dir, name) => dir.replace(/\\$/, '') + '\\' + name;
+async function duLoadDrives(){ try { DU.drives = await goDiskDrives() || []; } catch (e) { DU.drives = []; DU.err = String(e); } if (view === 'disk-usage') render(); }
+async function duStart(root){
+  if (DU.running || !root) return;
+  DU.err = ''; DU.result = null; DU.dir = null; DU.prog = null; DU.tab = 'dirs'; DU.root = root;
+  let ok = false; try { ok = await goDiskScan(root); } catch (e) { DU.err = String(e); }
+  if (!ok && !DU.err) DU.err = 'Impossible de lancer l\'analyse de « ' + root + ' » : donnez un lecteur (C:) ou un chemin complet (C:\\Users).';
+  DU.running = ok; if (ok) status('Espace disque : analyse de ' + root + '…');
+  renderTree(); render();
+}
+async function duGo(id){ try { const d = await goDiskDir(id); if (d) { DU.dir = d; DU.tab = 'dirs'; render(); } } catch (e) { status(String(e)); } }
+V['disk-usage'] = () => {
+  if (DU.drives === null) duLoadDrives();
+  const right = DU.result && !DU.running ? `<div style="display:flex;gap:8px"><button class="btn" id="du-csv">Exporter en CSV</button><button class="btn" id="du-new">Analyser un autre lecteur</button></div>` : '';
+  let out = head('Espace disque', 'Ce qui occupe le disque, dossier par dossier, comme TreeSize. Rien n\'est supprimé : l\'outil ne fait que lire.', right) + '<div class="stack">';
+  if (DU.err) out += `<div class="banner">${esc(DU.err)}</div>`;
+  if (DU.running) {
+    const p = DU.prog || {}, dr = arr(DU.drives).find(d => d.root.toLowerCase() === DU.root.toLowerCase().replace(/:$/, ':\\'));
+    const used = dr ? dr.total - dr.free : 0, pc = used > 0 ? Math.min(99, Math.round(100 * (p.bytes || 0) / used)) : null;
+    out += `<div class="card"><div class="du-bar" style="justify-content:space-between"><b>Analyse de ${esc(DU.root)}…</b><button class="btn danger" id="du-stop">Arrêter</button></div>
+      <div class="du-nums"><span><b id="du-pb">${duSize(p.bytes)}</b>lus</span><span><b id="du-pf">${duN(p.files)}</b>fichiers</span><span><b id="du-pd">${duN(p.dirs)}</b>dossiers</span><span><b id="du-ps">${p.seconds || 0} s</b>écoulées</span></div>
+      ${pc !== null ? `<div class="progress"><i id="du-pp" style="width:${pc}%"></i></div>` : ''}<div class="du-cur" id="du-pc" style="margin-top:6px">${esc(p.current || '')}</div></div>`;
+    return out + '</div>';
+  }
+  if (!DU.result) {
+    if (!info.admin) out += `<div class="banner">Sans droits administrateur, certains dossiers (autres comptes, dossiers système) ne pourront pas être lus et ne seront pas comptés.</div>`;
+    if (DU.drives === null) out += '<div class="empty">Recherche des lecteurs…</div>';
+    else out += `<div class="du-drives">${DU.drives.map(d => { const used = d.total - d.free, pu = d.total ? 100 * used / d.total : 0;
+      return `<div class="du-drive"><b>${esc(d.root.slice(0, 2))} ${d.label ? '« ' + esc(d.label) + ' »' : ''}</b><span>${esc(d.kind)}${d.fs ? ' · ' + esc(d.fs) : ''}${d.current ? ' · clé du diag' : ''}</span>
+        ${meter(pu, 85, 95)}<span>${duSize(d.free)} libres sur ${duSize(d.total)} (${Math.round(100 - pu)} %)</span>
+        <button class="btn${d.current ? '' : ' go'}" data-du-scan="${esc(d.root)}">Analyser</button></div>`; }).join('') || '<div class="empty">Aucun lecteur trouvé.</div>'}</div>`;
+    out += `<div class="du-path"><input class="search" id="du-path" type="text" placeholder="Ou un dossier précis, par ex. C:\\Users" value="${esc(DU.path)}" aria-label="Dossier à analyser"><button class="btn" id="du-path-go">Analyser ce dossier</button></div>`;
+    return out + '</div>';
+  }
+  const r = DU.result;
+  const notes = [];
+  if (r.canceled) notes.push('Analyse arrêtée avant la fin : les tailles sont incomplètes.');
+  if (r.denied) notes.push(`${duN(r.denied)} dossier(s) inaccessible(s), non comptés${info.admin ? '' : ' : relancez l\'application en administrateur pour les lire'}.`);
+  if (r.cloud) notes.push(`${duSize(r.cloud)} de fichiers « en ligne uniquement » (OneDrive…) ne sont pas sur le disque et ne sont pas comptés.`);
+  out += `<div class="card"><div class="du-nums" style="margin-top:0"><span><b>${duSize(r.size)}</b>dans ${esc(r.root)}</span><span><b>${duN(r.files)}</b>fichiers</span><span><b>${duN(r.dirs)}</b>dossiers</span><span><b>${r.seconds < 1 ? '< 1' : Math.round(r.seconds)} s</b>d'analyse</span></div>
+    ${notes.map(n => `<div class="sub" style="color:var(--muted);font-size:12.5px">${esc(n)}</div>`).join('')}</div>`;
+  out += `<div class="seg du-tabs" style="align-self:flex-start">${[['dirs','Dossiers'],['files','Plus gros fichiers'],['exts','Types de fichiers']].map(([k, l]) => `<button data-du-tab="${k}" aria-pressed="${DU.tab === k}">${l}</button>`).join('')}</div>`;
+  if (DU.tab === 'files') {
+    out += `<table class="list du"><thead><tr><th>Fichier</th><th>Taille</th><th>Modifié</th><th></th></tr></thead><tbody>${arr(r.top).map(f =>
+      `<tr><td class="n mono" style="text-align:left">${esc(f.path)}</td><td class="mono">${duSize(f.size)}</td><td class="mono">${duDate(f.mod)}</td><td>${duOpen(f.path)}</td></tr>`).join('') || '<tr><td colspan="4">Aucun fichier.</td></tr>'}</tbody></table>`;
+  } else if (DU.tab === 'exts') {
+    out += `<table class="list du"><thead><tr><th>Type</th><th>Taille</th><th>Part du total</th><th>Fichiers</th></tr></thead><tbody>${arr(r.exts).map(x =>
+      `<tr><td class="n mono" style="text-align:left">${esc(x.ext)}</td><td class="mono">${duSize(x.size)}</td><td>${duPct(x.size, r.size)}</td><td class="mono">${duN(x.count)}</td></tr>`).join('')}</tbody></table>`;
+  } else if (DU.dir) {
+    const d = DU.dir, tot = d.dir.size;
+    const crumbs = d.crumbs.map((c, i) => `<button data-du-dir="${c.id}">${esc(c.name)}</button>`).join('<span>›</span>');
+    const rows = [];
+    if (d.crumbs.length > 1) rows.push(`<tr class="dir" data-du-dir="${d.crumbs[d.crumbs.length - 2].id}"><td class="n">.. (dossier parent)</td><td></td><td></td><td></td><td></td><td></td></tr>`);
+    const items = d.rows.map(x => ({k: 'd', x})); if (d.own.files) items.push({k: 'own', x: {size: d.own.size, files: d.own.files}}); if (d.rest) items.push({k: 'rest', x: d.rest});
+    items.sort((a, b) => b.x.size - a.x.size).forEach(({k, x}) => {
+      if (k === 'own') rows.push(`<tr class="mute"><td class="n">[${duN(x.files)} fichier(s) de ce dossier]</td><td class="mono">${duSize(x.size)}</td><td>${duPct(x.size, tot)}</td><td class="mono">${duN(x.files)}</td><td></td><td></td></tr>`);
+      else if (k === 'rest') rows.push(`<tr class="mute"><td class="n">[${duN(x.dirs)} autres dossiers plus petits]</td><td class="mono">${duSize(x.size)}</td><td>${duPct(x.size, tot)}</td><td class="mono">${duN(x.files)}</td><td></td><td></td></tr>`);
+      else if (x.skipped) rows.push(`<tr class="mute"><td class="n">${esc(x.name)} (lien, non suivi)</td><td></td><td></td><td></td><td></td><td></td></tr>`);
+      else rows.push(`<tr class="${x.dirs || x.files ? 'dir' : ''}" data-du-dir="${x.id}"><td class="n">${esc(x.name)}${x.denied ? ' <span class="cat" style="font-weight:400;color:var(--warn)">accès refusé</span>' : ''}</td><td class="mono">${duSize(x.size)}</td><td>${duPct(x.size, tot)}</td><td class="mono">${duN(x.files)}</td><td class="mono">${duDate(x.mod)}</td><td>${duOpen(duJoin(d.path, x.name))}</td></tr>`);
+    });
+    out += `<div class="du-bar" style="justify-content:space-between"><div class="du-crumbs">${crumbs}</div><span class="sub" style="color:var(--muted)">${duSize(tot)} · ${duN(d.dir.files)} fichiers ${duOpen(d.path)}</span></div>
+      <table class="list du"><thead><tr><th>Dossier</th><th>Taille</th><th>Part du dossier</th><th>Fichiers</th><th>Modifié</th><th></th></tr></thead><tbody>${rows.join('') || '<tr><td colspan="6">Dossier vide.</td></tr>'}</tbody></table>`;
+  }
+  return out + '</div>';
+};
+function duOnProgress(p){
+  DU.prog = p; status(`Espace disque : ${duN(p.files)} fichiers, ${duSize(p.bytes)}`);
+  if (view !== 'disk-usage') return;
+  if (!$('#du-pb')) { render(); return; }
+  $('#du-pb').textContent = duSize(p.bytes); $('#du-pf').textContent = duN(p.files); $('#du-pd').textContent = duN(p.dirs); $('#du-ps').textContent = p.seconds + ' s'; $('#du-pc').textContent = p.current || '';
+  const dr = arr(DU.drives).find(d => d.root.toLowerCase() === DU.root.toLowerCase().replace(/:$/, ':\\')), pp = $('#du-pp');
+  if (dr && pp) pp.style.width = Math.min(99, Math.round(100 * p.bytes / Math.max(1, dr.total - dr.free))) + '%';
+}
+$('#content').addEventListener('click', async e => {
+  if (view !== 'disk-usage') return;
+  const sc = e.target.closest('[data-du-scan]'); if (sc) { duStart(sc.dataset.duScan); return; }
+  if (e.target.closest('#du-path-go')) { DU.path = ($('#du-path').value || '').trim(); duStart(DU.path); return; }
+  if (e.target.closest('#du-stop')) { goDiskCancel(); status('Arrêt de l\'analyse…'); return; }
+  if (e.target.closest('#du-new')) { DU.result = null; DU.dir = null; DU.err = ''; DU.drives = null; render(); return; }
+  if (e.target.closest('#du-csv')) { try { const f = await goDiskCSV(); if (f) { status('Exporté : ' + f); api.open(f); } } catch (err) { status(String(err)); } return; }
+  const rv = e.target.closest('[data-du-reveal]'); if (rv) { goDiskReveal(rv.dataset.duReveal); return; }
+  const tb = e.target.closest('[data-du-tab]'); if (tb) { DU.tab = tb.dataset.duTab; render(); return; }
+  const dd = e.target.closest('[data-du-dir]'); if (dd && !dd.matches('.du-crumbs button:last-child')) { duGo(+dd.dataset.duDir); $('#content').scrollTop = 0; }
+});
+$('#content').addEventListener('keydown', e => { if (e.target.id === 'du-path' && e.key === 'Enter') { DU.path = e.target.value.trim(); duStart(DU.path); } });
 
 // ----- tests manuels : la liste et les résultats du Diag atelier (envoyés avec le rapport),
 // avec pour chaque test une aide pour le faire sur place (écran, clavier, son, webcam…).
@@ -1653,6 +1780,9 @@ window.onGo = (kind, p) => {
   if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; if (ATL.ready || view === 'atelier') atelierSync(); scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); }
   if (kind === 'scanError') { scanState = {error: p}; $('#bScan').disabled = false; status('Échec de l\'analyse'); render(); }
   if (kind === 'sensors') onSensors(p);
+  if (kind === 'duProgress') duOnProgress(p);
+  if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
+  if (kind === 'duError') { DU.running = false; DU.err = p; status(p); renderTree(); if (view === 'disk-usage') render(); }
   if (kind === 'battPoint') { BT.now = p; BT.points.push(p); if (view === 'battery-test') { render(); drawBattChart(); } }
   if (kind === 'battTick') { BT.elapsed = p.elapsed; BT.target = p.target; status(`Test de batterie : ${Math.floor(p.elapsed/60)}:${String(p.elapsed%60).padStart(2,'0')} / ${BT.dur}:00`); if (view === 'battery-test' && !$('#btChart')) render(); else { const bar = document.querySelector('#content .progress i'); if (bar) bar.style.width = Math.min(100, Math.round(100 * p.elapsed / (p.target || 1))) + '%'; } }
   if (kind === 'battError') { BT.running = false; BT.error = p; status(p); renderTree(); if (view === 'battery-test') render(); }
