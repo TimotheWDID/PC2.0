@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\DiagAppToken;
 use App\Models\Diagnostic;
 use App\Models\Ticket;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,14 +12,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 /**
- * API of the PC2 Diag Windows application: it looks up tickets and sends
- * the diagnostic it ran, onto a ticket or as a quick diag. The pairing keys
- * are managed from the Diag rapide page.
+ * API of the PC2 Diag Windows application: pairing check and the diagnostic
+ * it ran, sent onto a ticket or as a quick diag (the tickets themselves are
+ * in DiagAppTicketController). The pairing keys are managed from the Diag
+ * rapide page.
  */
 class DiagAppController extends DiagnosticController
 {
-    private const OPEN_STATUSES = ['open', 'in_progress', 'pending'];
-
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -31,43 +29,6 @@ class DiagAppController extends DiagnosticController
             'url' => url('/'),
             'key_name' => $request->attributes->get('diag_app_token')?->name,
         ]);
-    }
-
-    /**
-     * Open tickets, searched by number, title or client name.
-     */
-    public function tickets(Request $request): JsonResponse
-    {
-        $search = trim((string) $request->query('q', ''));
-        $number = preg_match('/^#?(\d+)$/', $search, $match) ? (int) $match[1] : null;
-
-        $tickets = Ticket::query()
-            ->with(['user:id,first_name,last_name', 'device'])
-            ->when($number, fn (Builder $query) => $query->whereKey($number))
-            ->when(! $number, fn (Builder $query) => $query->whereIn('status', self::OPEN_STATUSES))
-            ->when(! $number && $search !== '', function (Builder $query) use ($search) {
-                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
-                $query->where(function (Builder $query) use ($like) {
-                    $query->where('title', 'like', $like)
-                        ->orWhereHas('user', fn (Builder $user) => $user
-                            ->where('first_name', 'like', $like)
-                            ->orWhere('last_name', 'like', $like)
-                            ->orWhere('email', 'like', $like));
-                });
-            })
-            ->latest()
-            ->limit(30)
-            ->get()
-            ->map(fn (Ticket $ticket) => $this->ticketPayload($ticket));
-
-        return response()->json(['tickets' => $tickets]);
-    }
-
-    public function ticket(Ticket $ticket): JsonResponse
-    {
-        $ticket->loadMissing(['user:id,first_name,last_name', 'device']);
-
-        return response()->json(['ticket' => $this->ticketPayload($ticket)]);
     }
 
     /**
@@ -186,17 +147,5 @@ class DiagAppController extends DiagnosticController
         $token->delete();
 
         return back()->with('success', 'Clé révoquée : l\'application associée ne peut plus envoyer de diag.');
-    }
-
-    private function ticketPayload(Ticket $ticket): array
-    {
-        return [
-            'id' => $ticket->id,
-            'title' => $ticket->title,
-            'status' => $ticket->status,
-            'client' => $ticket->user ? trim(($ticket->user->first_name ?? '').' '.($ticket->user->last_name ?? '')) : null,
-            'device' => $ticket->device?->display_name,
-            'url' => route('tickets.show', $ticket),
-        ];
     }
 }
