@@ -557,6 +557,29 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		var c string
 		arg(0, &c)
 		return a.batteryCtl(c), nil
+	case "goDiskDrives":
+		return duDrives(), nil
+	case "goDiskScan":
+		var root string
+		arg(0, &root)
+		return a.startDiskScan(root), nil
+	case "goDiskCancel":
+		return cancelDiskScan(), nil
+	case "goDiskDir":
+		var id int
+		arg(0, &id)
+		return diskDir(id), nil
+	case "goDiskTree":
+		var id, depth int
+		arg(0, &id)
+		arg(1, &depth)
+		return diskTree(id, depth), nil
+	case "goDiskReveal":
+		var p string
+		arg(0, &p)
+		return diskReveal(p), nil
+	case "goDiskCSV":
+		return diskCSV()
 
 	case "goSiteState":
 		return a.siteState(), nil
