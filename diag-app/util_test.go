@@ -102,3 +102,20 @@ func TestPruneFiles(t *testing.T) {
 		t.Fatalf("restants = %v, attendu %s", got, want)
 	}
 }
+
+func TestTicketFilePath(t *testing.T) {
+	cases := []struct{ path, name, want string }{
+		{"/tickets/12/files/3/download", "Devis client.pdf", filepath.Join("R", "Tickets", "12", "Devis client.pdf")},
+		{"/tickets/12/messages/4/attachments/5", `..\..\Windows\evil.PDF`, filepath.Join("R", "Tickets", "12", "Windows_evil.pdf")},
+		{"/tickets/7/diagnostics/2/client-report", "", filepath.Join("R", "Tickets", "7", "fichier")},
+		{"/todos", "a:b?.txt", filepath.Join("R", "Tickets", "divers", "a_b.txt")},
+	}
+	for _, c := range cases {
+		if got := ticketFilePath("R", c.path, c.name); got != c.want {
+			t.Errorf("ticketFilePath(%q, %q) = %q, attendu %q", c.path, c.name, got, c.want)
+		}
+	}
+	if !runnableExt("setup.EXE") || !runnableExt("x.ps1") || runnableExt("photo.jpg") || runnableExt("rapport.html") {
+		t.Error("runnableExt")
+	}
+}

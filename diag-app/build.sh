@@ -3,7 +3,7 @@
 # Nécessite Go 1.24 ou plus récent : https://go.dev/dl/
 set -e
 cd "$(dirname "$0")"
-VERSION="${1:-1.4.1}"
+VERSION="${1:-1.5.0}"
 # le diagnostic détaillé est le Diag Atelier du site, intégré à l'exe
 cp ../resources/diag/diag-atelier.html atelier.html
 mkdir -p dist

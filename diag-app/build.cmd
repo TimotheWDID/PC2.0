@@ -1,7 +1,7 @@
 @echo off
 rem Compile PC2Diag.exe sous Windows. Necessite Go 1.24+ : https://go.dev/dl/
 cd /d "%~dp0"
-if "%1"=="" (set VERSION=1.4.1) else (set VERSION=%1)
+if "%1"=="" (set VERSION=1.5.0) else (set VERSION=%1)
 rem le diagnostic detaille est le Diag Atelier du site, integre a l'exe
 copy /y ..\resources\diag\diag-atelier.html atelier.html >nul
 if not exist dist mkdir dist

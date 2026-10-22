@@ -242,6 +242,65 @@ table.du .mono{text-align:right}
 .tm.grey{background:repeating-linear-gradient(45deg,#e4e7ee 0 5px,#d9dde6 5px 10px);color:#5b6475}
 .tm.grey:not([data-du-dir]){cursor:default}
 .tm.grey:not([data-du-dir]):hover{outline:0}
+/* tickets */
+.tk-st{display:inline-block;font:600 11px var(--f-ui);border-radius:999px;padding:1px 8px;white-space:nowrap;border:1px solid transparent}
+.tk-st.open{background:#2a3ff5;color:#fff} .tk-st.in_progress{background:#63d7ca;color:#141d3a} .tk-st.pending{background:#b3b6bf;color:#141d3a}
+.tk-st.resolved{background:#141d3a;color:#fff;border-color:var(--line)} .tk-st.closed{background:#f3f4f6;color:#141d3a;border-color:#b3b6bf}
+.tk-pr{font-size:12px;white-space:nowrap} .tk-pr.high{color:var(--crit);font-weight:600} .tk-pr.low{color:var(--muted)}
+.tk-sub{color:var(--muted);font-size:12px}
+.tk-tbl td{vertical-align:middle}
+.tk-row{cursor:pointer} .tk-row:hover td{background:var(--row)}
+.tk-link{cursor:pointer} .tk-link:hover b{color:var(--accent)}
+.tk-ctl{display:flex;gap:18px 26px;flex-wrap:wrap;align-items:flex-end}
+.tk-ctl > div{display:grid;gap:4px}
+.tk-k{font:600 10.5px var(--f-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.seg.tk-seg button{padding:4px 10px;font-size:12px}
+.seg.tk-seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.seg.tk-seg button.open[aria-pressed="true"]{background:#2a3ff5;color:#fff} .seg.tk-seg button.in_progress[aria-pressed="true"]{background:#63d7ca;color:#141d3a}
+.seg.tk-seg button.pending[aria-pressed="true"]{background:#b3b6bf;color:#141d3a} .seg.tk-seg button.resolved[aria-pressed="true"]{background:#141d3a;color:#fff}
+.seg.tk-seg button.closed[aria-pressed="true"]{background:#e5e7eb;color:#141d3a} .seg.tk-seg button.high[aria-pressed="true"]{background:var(--crit);color:#fff}
+.seg.tk-seg button:disabled{opacity:.6;cursor:default}
+.tk-tabs{align-self:flex-start;flex-wrap:wrap}
+.tk-tabs button{padding:5px 12px;font-size:12.5px}
+.tk-n{font:600 10.5px var(--f-mono);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:3px;color:var(--muted)}
+.tk-ok{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:8px 12px;font-size:12.5px}
+.tk-h{margin:0 0 8px;font:600 14px var(--f-disp);display:flex;align-items:center;gap:8px}
+.tk-pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.tk-note{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:4px 8px}
+.tk-at{color:var(--accent)}
+.tk-todo{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:7px;padding:7px 10px;margin-top:6px;background:var(--row)}
+.tk-tl{display:grid;gap:8px}
+.tk-ev{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:9px 12px;display:grid;gap:5px}
+.tk-ev.cmd{border-left-color:#e6892e}
+.tk-ev.removed{opacity:.6;border-left-color:var(--faint)} .tk-ev.removed b{text-decoration:line-through}
+.tk-evh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tk-evh .spacer{flex:1}
+.tk-type{font:600 10.5px var(--f-ui);letter-spacing:.05em;text-transform:uppercase;color:var(--accent);border:1px solid var(--line);border-radius:4px;padding:0 6px;white-space:nowrap}
+.tk-checks{margin:0;padding-left:4px;list-style:none;font-size:12.5px;color:var(--muted)} .tk-checks li.ok{color:var(--ok)}
+.tk-acts{display:grid;gap:3px}
+.tk-act{display:flex;gap:7px;align-items:baseline;font-size:13px;cursor:pointer}
+.tk-act.done span{text-decoration:line-through;color:var(--muted)}
+.tk-act small{color:var(--faint);font-size:11px}
+.tk-form{border-color:var(--accent)}
+.tk-arow{display:flex;gap:8px;align-items:center;margin-top:5px}
+.tk-arow input:not([type]){flex:1;font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.tk-sel{font:inherit;font-size:12.5px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 7px}
+.tk-thread{display:grid;gap:8px}
+.tk-msg{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;display:grid;gap:5px;max-width:880px}
+.tk-msg.tech{margin-left:60px;border-color:var(--accent)} .tk-msg.client{margin-right:60px}
+.tk-msg.internal{margin-left:60px;background:var(--warn-bg);border-color:var(--warn)}
+.tk-msgh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap} .tk-msgh .spacer{flex:1}
+.tk-kind{font:600 10.5px var(--f-ui);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tk-msg.internal .tk-kind{color:var(--warn)} .tk-msg.tech .tk-kind{color:var(--accent)}
+.tk-files{display:flex;gap:6px;flex-wrap:wrap}
+.tk-files small,.tk-chipf small{color:var(--muted);font-weight:400}
+.tk-compose{display:grid;gap:8px;border-color:var(--accent)}
+.tk-compose.internal{border-color:var(--warn);background:var(--warn-bg)}
+.tk-compose textarea{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-height:100px;resize:vertical}
+.tk-compose .spacer{flex:1}
+.tk-chipf{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 10px;font-size:12px;background:var(--panel)}
+.tk-vis{font-size:11.5px;border-radius:4px;padding:0 6px;background:var(--row);color:var(--muted)} .tk-vis.ext{background:var(--info-bg);color:var(--info)}
+.du-x.danger,.btn.danger{color:var(--crit);border-color:var(--crit)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -251,6 +310,7 @@ table.du .mono{text-align:right}
   <div class="brand"><svg class="pclogo" aria-hidden="true" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M242.79 99.377C244.852 69.2945 247.203 39.6022 249.235 10C249.533 10 249.542 10.03 249.84 10C252.17 39.6622 254.5 69.3245 256.86 99.317C283.059 101.359 307.345 108.984 329.929 121.834C359.502 138.677 381.369 162.604 396.066 193.498C413.392 230.005 414.378 267.323 400.039 304.371C385.82 341.118 360.219 368.169 324.074 384.711C313.558 389.515 302.984 394.078 291.632 396.15C280.34 398.221 268.929 399.452 256.95 401.103C254.56 430.555 252.17 460.278 249.751 490C249.542 490 249.362 490 249.153 490C246.763 460.518 244.403 431.036 242.014 401.193C232.785 400.212 231.618 400.053 226.331 399.122C184.957 391.946 151.111 371.441 124.674 339.557C85.6906 292.602 78.342 239.702 104.182 184.461C125.331 139.247 162.881 113.067 211.544 102.89C221.82 100.728 232.275 100.758 242.79 99.4071V99.377ZM256.711 398.216C261.461 398.996 266.658 397.891 271.229 397.05C282.551 394.949 293.275 391.016 303.91 386.452C351.048 366.157 391.854 318.661 387.612 255.734C384.297 206.738 343.67 158.251 294.291 145.942C289.959 144.861 285.538 145.131 281.117 146.512C265.045 151.556 256.532 163.475 256.502 181.609C256.472 251.261 256.472 320.913 256.502 390.565C256.502 393.147 256.502 395.367 256.711 398.216ZM242.193 101.659C218.743 103.16 198.34 110.726 179.012 121.714C134.891 146.783 105.645 197.581 112.516 249.52C118.7 296.085 155.234 339.317 200.162 352.137C223.224 358.712 242.193 344.271 242.193 320.133C242.193 250.24 242.193 180.378 242.193 110.485C242.193 107.603 242.193 104.721 242.193 101.629V101.659Z" fill="currentColor"/></svg><span>Planete-Computers 2.0<small>PC2 Diag</small></span></div>
   <button class="tb primary" id="bScan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Analyser</button>
   <button class="tb" data-go="atelier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Diag atelier</button>
+  <button class="tb" data-go="tickets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>Tickets</button>
   <button class="tb" data-go="site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>Envoyer au site</button>
   <div class="spacer"></div>
   <div class="who"><span id="pcName">—</span><span class="pill" id="adminPill">Administrateur</span></div>
@@ -279,7 +339,7 @@ table.du .mono{text-align:right}
   window.__goDone = (id, err, res) => { const p = pend[id]; if (!p) return; delete pend[id]; if (err) p.rej(err); else p.res(res); };
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
-   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart',
+   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart','goSiteAPI','goSiteUpload','goSiteOpenFile',
    'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
@@ -524,6 +584,7 @@ const I = {
   rocket:'<path d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2M14 4c3-1 6-1 6-1s0 3-1 6l-6 6-5-5z"/><circle cx="15" cy="9" r="1.5"/>',
   apps:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  ticket:'<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12"/>',
   doc:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'
 };
 const ico = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[k]||I.doc}</svg>`;
@@ -545,6 +606,9 @@ function nodes(){
   add('report','Rapport client','doc',0);
   add('inventory','Rapport d\'inventaire','apps',0);
   add('site','Envoyer au site','send',0);
+  N.push({sect:'Atelier'});
+  add('tickets','Tickets','ticket',0);
+  if (TK.cur) add('ticket:' + TK.cur, '#' + TK.cur + (TK.d ? ' ' + TK.d.ticket.title : ''), 'doc', 1);
   if (!D) return N;
   N.push({sect:'Matériel'});
   add('system','Système', 'pc',0);
@@ -600,7 +664,7 @@ $('#tree').addEventListener('keydown', e => {
 });
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 // les boutons de la barre d'outils prennent la couleur de la vue ouverte, comme l'arborescence
-function markToolbar(){ document.querySelectorAll('[data-go]').forEach(b => { const on = b.dataset.go === view; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
+function markToolbar(){ document.querySelectorAll('[data-go]').forEach(b => { const on = b.dataset.go === view.split(':')[0] || (b.dataset.go === 'tickets' && view.startsWith('ticket:')); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
 
 function go(id){ view = id; renderTree(); render(); const s = document.querySelector('.node.sel'); s && s.focus({preventScroll:false}); $('#content').scrollTop = 0; }
 
@@ -644,7 +708,7 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','atelier','sensors','tests','disk-usage','repair','report','site','battery-test'].includes(view)) view = 'summary';
+  if (!D && !['summary','atelier','sensors','tests','disk-usage','repair','report','site','battery-test','tickets','ticket'].includes(view.split(':')[0])) view = 'summary';
   const at = view === 'atelier';
   $('#atelier').hidden = !at; c.hidden = at;
   if (at) { c.innerHTML = ''; atelierSync(); return; }
@@ -1813,7 +1877,7 @@ V.site = () => {
       if (r.filled && r.filled.length) lines.push('Fiche appareil complétée : ' + r.filled.map(f => INVL[f] || f).join(', ') + '.');
       if (r.conflicts && r.conflicts.length) lines.push('Valeurs différentes non remplacées : ' + r.conflicts.map(x => x.label || x.field).join(', ') + ' (à valider sur le site).');
       (r.warnings || []).forEach(w => lines.push(w));
-      res = `<div class="card" style="border-left:4px solid var(--ok)">${lines.map(esc).join('<br>')}<div class="acts" style="display:flex;gap:8px;margin-top:10px">${r.report_url ? `<button class="btn go" data-surl="${esc(r.report_url)}">Ouvrir le rapport sur le site</button>` : ''}${r.ticket_url ? `<button class="btn" data-surl="${esc(r.ticket_url)}">Ouvrir le ticket</button>` : ''}</div></div>`;
+      res = `<div class="card" style="border-left:4px solid var(--ok)">${lines.map(esc).join('<br>')}<div class="acts" style="display:flex;gap:8px;margin-top:10px">${r.report_url ? `<button class="btn go" data-surl="${esc(r.report_url)}">Ouvrir le rapport sur le site</button>` : ''}${r.ticket ? `<button class="btn" data-tkopen="${r.ticket.id}">Voir le ticket dans l'application</button>` : ''}${r.ticket_url ? `<button class="btn" data-surl="${esc(r.ticket_url)}">Ouvrir le ticket sur le site</button>` : ''}</div></div>`;
     }
     send = `<div class="card"><h3 style="margin:0 0 8px">Rapport à envoyer</h3>
       <label style="color:var(--muted);font-size:12.5px;display:block;margin-bottom:8px">Analyse à envoyer ${pick}</label>
@@ -1850,6 +1914,401 @@ $('#content').addEventListener('click', async e => {
 $('#content').addEventListener('change', e => { if (e.target.id === 's-file') { SITE.file = e.target.value; SITE.result = null; render(); }
   if (e.target.id === 's-log') SLOG.send = e.target.checked; });
 $('#content').addEventListener('keydown', e => { if (e.target.id === 's-q' && e.key === 'Enter') { SITE.q = e.target.value.trim(); siteSearch(); } });
+
+// ===================== tickets du site =====================
+// Les tickets du site dans l'application : liste, fiche complète (client,
+// appareil, suivi technicien, échanges avec le client et notes internes,
+// fichiers, diagnostics) et les mêmes actions que sur la page du ticket.
+const TK = {scope:'mine', q:'', list:null, todos:null, loading:false, err:'',
+  cur:0, d:null, dLoading:false, dErr:'', tab:'fiche', busy:false, flash:'', flashErr:'', confirm:'',
+  draft:{text:'', internal:false, channel:null, tpl:'', files:[]}, ev:null, showRemoved:false, removing:0, removeReason:'',
+  up:{vis:'internal', files:[]}, mail:null, dev:null, showPwd:false};
+const TST = {open:'Ouvert', in_progress:'En cours', pending:'En attente', resolved:'Résolu', closed:'Fermé'};
+const TPR = {low:'Basse', medium:'Moyenne', high:'Haute'};
+const TSCOPES = [['mine','Mes tickets'],['unassigned','Non attribués'],['open','Tous les ouverts'],['closed','Terminés'],['all','Tout'],['todo','À faire']];
+const TEV = {ticket_created_by_technician:'Création', ticket_creation_customer_notified:'Notification client', ticket_updated:'Modification', status_changed:'Statut', priority_changed:'Priorité',
+  assignee_changed:'Attribution', internal_note_added:'Note interne', public_reply_added:'Réponse au client', commande_linked:'Commande', commande_created_direct:'Commande créée',
+  commande_updated_direct:'Commande modifiée', commande_status_changed_direct:'Statut commande', device_event_added:'Intervention appareil', diagnostic_added:'Diagnostic',
+  diagnostic_shared:'Diagnostic partagé', diagnostic_unshared:'Diagnostic masqué', files_added:'Fichiers', file_removed:'Fichier supprimé', files_sent:'Fichiers envoyés',
+  task_completed:'Action réalisée', task_reopened:'Action rouverte'};
+const TDEV = {maintenance:'Maintenance', diagnostic:'Diagnostic', battery_replaced:'Batterie remplacée', screen_replaced:'Écran remplacé', storage_upgraded:'Stockage amélioré', note:'Note technique'};
+const TSRC = {ticket:'Ticket', chat:'Échange', diagnostic:'Diagnostic'};
+const TDTYPE = {computer:'Ordinateur', laptop:'Ordinateur portable', desktop:'Ordinateur fixe', phone:'Téléphone', tablet:'Tablette', other:'Autre'};
+const tkapi = {
+  call: (m, path, body) => goSiteAPI(m, path, body === undefined ? null : body),
+  upload: (path, fields, files) => goSiteUpload(path, fields, files),
+  open: path => goSiteOpenFile(path)
+};
+const tkPaired = () => !!(SITE.state && SITE.state.paired);
+const tkMe = () => (SITE.state && SITE.state.me) || {};
+const tkSize = n => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
+const tkBadge = s => `<span class="tk-st ${esc(s)}">${esc(TST[s] || s)}</span>`;
+const tkPrio = p => `<span class="tk-pr ${esc(p)}">${esc(TPR[p] || p || '—')}</span>`;
+const tkText = t => esc(t).replace(/@([\p{L}\p{N}]+)/gu, '<b class="tk-at">@$1</b>');
+const tkPath = id => '/tickets/' + id;
+// datetime-local (heure du PC) -> heure UTC sans fuseau, comme la page du ticket
+const tkUTC = v => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString().slice(0, 19).replace('T', ' '); };
+const tkEvLabel = t => { const tpl = TK.d && TK.d.options.event_types.find(x => x.eventType === t); return (tpl && tpl.label && tpl.label !== t ? tpl.label : TEV[t]) || t; };
+
+async function tkList(){
+  if (!tkPaired()) return;
+  TK.loading = true; TK.err = ''; if (view === 'tickets') render();
+  try {
+    if (TK.scope === 'todo') TK.todos = ((await tkapi.call('GET', '/todos')) || {}).todos || [];
+    else TK.list = ((await tkapi.call('GET', '/tickets?scope=' + TK.scope + '&q=' + encodeURIComponent(TK.q))) || {}).tickets || [];
+  } catch (err) { TK.err = String(err); }
+  TK.loading = false; if (view === 'tickets') render();
+}
+async function tkLoad(id, silent){
+  if (!silent) { TK.dLoading = true; TK.dErr = ''; }
+  try { const d = await tkapi.call('GET', tkPath(id)); if (TK.cur === id) { TK.d = d; TK.dErr = ''; } }
+  catch (err) { if (TK.cur === id) TK.dErr = String(err); }
+  TK.dLoading = false;
+  if (view === 'ticket:' + id) { const y = $('#content').scrollTop; render(); $('#content').scrollTop = y; }
+  renderTree();
+}
+function tkOpen(id){
+  id = +id;
+  if (TK.cur !== id) { TK.cur = id; TK.d = null; TK.tab = 'fiche'; TK.flash = TK.flashErr = ''; TK.ev = TK.dev = TK.mail = null; TK.confirm = ''; TK.showPwd = false;
+    TK.draft = {text:'', internal:false, channel:null, tpl:'', files:[]}; TK.up = {vis:'internal', files:[]}; tkLoad(id); }
+  go('ticket:' + id);
+}
+// Une action sur le ticket : message dans la fiche, puis la fiche est relue.
+async function tkDo(work, ok){
+  if (TK.busy) return false;
+  TK.busy = true; TK.flash = ''; TK.flashErr = ''; render();
+  let done = false;
+  try { const r = await work; TK.flash = ok || (r && r.message) || 'Enregistré.'; status('Ticket #' + TK.cur + ' : ' + TK.flash); done = true; }
+  catch (err) { TK.flashErr = String(err); }
+  TK.busy = false; TK.confirm = '';
+  await tkLoad(TK.cur, true);
+  return done;
+}
+function tkReadFiles(input){
+  return Promise.all([...input.files].map(f => new Promise((res, rej) => { const r = new FileReader();
+    r.onload = () => res({name: f.name, size: f.size, b64: String(r.result).split(',')[1] || ''}); r.onerror = () => rej('Lecture impossible : ' + f.name); r.readAsDataURL(f); })));
+}
+function tkPairMsg(title){
+  return head(title, 'Les tickets viennent du site PC2.0.') + `<div class="card"><div class="empty" style="border:0">L'application n'est pas encore associée au site. <button class="btn go" data-nav="site">Associer l'application</button></div></div>`;
+}
+
+V.tickets = () => {
+  if (!tkPaired()) return tkPairMsg('Tickets');
+  const todo = TK.scope === 'todo';
+  if (!TK.loading && !TK.err && (todo ? TK.todos === null : TK.list === null)) setTimeout(tkList, 0);
+  const chips = `<div class="chips">${TSCOPES.map(([k, l]) => `<button class="chip" data-tkscope="${k}" aria-pressed="${TK.scope === k}">${l}</button>`).join('')}</div>`;
+  const search = todo ? '' : `<div style="display:flex;gap:8px;flex-wrap:wrap"><input class="search" id="tk-q" type="search" style="flex:1;min-width:240px;margin:0" placeholder="N° de ticket, client, téléphone, titre ou n° de série" value="${esc(TK.q)}"><button class="btn" id="tk-search">Rechercher</button></div>`;
+  let body;
+  if (TK.loading) body = '<div class="empty">Chargement…</div>';
+  else if (TK.err) body = `<div class="banner">${esc(TK.err)} <button class="btn" id="tk-reload">Réessayer</button></div>`;
+  else if (todo) body = !TK.todos ? '' : !TK.todos.length ? '<div class="empty">Aucune action en attente sur les tickets ouverts.</div>'
+    : '<div style="overflow:auto"><table class="list tk-tbl"><thead><tr><th>Action à faire</th><th>Ticket</th><th>Ajoutée</th><th></th></tr></thead><tbody>' + TK.todos.map(r =>
+      `<tr><td><b>${esc(r.action.label)}</b><div class="tk-sub">${esc(r.event.summary)}</div></td><td class="tk-link" data-tkopen="${r.ticket.id}"><b>#${r.ticket.id}</b> ${esc(r.ticket.title)}<div class="tk-sub">${tkBadge(r.ticket.status)} ${r.ticket.assignee_name ? esc(r.ticket.assignee_name) : 'Non attribué'}</div></td><td class="tk-sub">${fdt(r.event.happened_at)}<br>${esc(r.event.technician_name || '')}</td><td style="white-space:nowrap"><button class="btn go" data-tktodo="${r.ticket.id}:${r.event.id}:${r.action.index}">Fait</button></td></tr>`).join('') + '</tbody></table></div>';
+  else body = !TK.list ? '' : !TK.list.length ? '<div class="empty">Aucun ticket ne correspond.</div>'
+    : '<div style="overflow:auto"><table class="list tk-tbl"><thead><tr><th>Ticket</th><th>Client</th><th>Appareil</th><th>Statut</th><th>Priorité</th><th>Technicien</th><th>Mis à jour</th></tr></thead><tbody>' + TK.list.map(t =>
+      `<tr class="tk-row" data-tkopen="${t.id}"><td><b>#${t.id}</b> ${esc(t.title)}${t.pending_actions ? ` <span class="cnt warn" title="Actions à faire">${t.pending_actions}</span>` : ''}</td><td>${esc(t.client || '—')}</td><td>${esc(t.device || '—')}</td><td>${tkBadge(t.status)}</td><td>${tkPrio(t.priority)}</td><td>${t.assignee ? esc(t.assignee.name) + (t.mine ? ' <span class="tk-sub">(vous)</span>' : '') : '<span class="tk-sub">Non attribué</span>'}</td><td class="tk-sub">${fdt(t.updated_at)}</td></tr>`).join('') + '</tbody></table></div>';
+  const n = todo ? (TK.todos || []).length : (TK.list || []).length;
+  return head('Tickets', `Les tickets du site PC2.0${TK.loading ? '' : ' · ' + n + (todo ? ' action(s)' : ' ticket(s)')}`, '<div style="display:flex;gap:8px"><button class="btn" id="tk-reload">Actualiser</button></div>') +
+    `<div class="stack">${chips}${search}${body}</div>`;
+};
+
+V.ticket = id => {
+  id = +id;
+  if (!tkPaired()) return tkPairMsg('Ticket #' + id);
+  if (TK.cur !== id) { TK.cur = id; TK.d = null; setTimeout(() => tkLoad(id), 0); }
+  const d = TK.d;
+  if (!d) return head('Ticket #' + id) + (TK.dErr ? `<div class="banner">${esc(TK.dErr)} <button class="btn" id="tk-dreload">Réessayer</button> <button class="btn" data-nav="tickets">Retour à la liste</button></div>` : '<div class="empty">Chargement du ticket…</div>');
+  const t = d.ticket;
+  const sub = [t.client ? esc(t.client) : '', t.device ? esc(t.device) : '', 'créé le ' + fdt(t.created_at), 'mis à jour le ' + fdt(t.updated_at)].filter(Boolean).join(' · ');
+  const right = `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-nav="tickets">Liste</button><button class="btn" id="tk-dreload"${TK.dLoading ? ' disabled' : ''}>${TK.dLoading ? 'Actualisation…' : 'Actualiser'}</button><button class="btn" data-surl="${esc(t.url)}">Ouvrir sur le site</button><button class="btn go" id="tk-sendscan">Envoyer l'analyse ici</button></div>`;
+  const me = tkMe();
+  const ctl = `<div class="card tk-ctl">
+    <div><span class="tk-k">Statut</span><div class="seg tk-seg">${Object.keys(TST).map(s => `<button data-tkstatus="${s}" aria-pressed="${t.status === s}" class="${s}"${TK.busy ? ' disabled' : ''}>${TST[s]}</button>`).join('')}</div></div>
+    <div><span class="tk-k">Priorité</span><div class="seg tk-seg">${Object.keys(TPR).map(p => `<button data-tkprio="${p}" aria-pressed="${t.priority === p}" class="${p}"${TK.busy ? ' disabled' : ''}>${TPR[p]}</button>`).join('')}</div></div>
+    <div><span class="tk-k">Technicien</span><div>${t.assignee ? `<b>${esc(t.assignee.name)}</b>${t.mine ? ' (vous)' : ''}` : '<span style="color:var(--muted)">Non attribué</span>'} ${!t.assignee ? `<button class="btn go" id="tk-assign"${TK.busy ? ' disabled' : ''}>Me l'attribuer</button>` : ''}</div></div>
+  </div>`;
+  const active = d.timeline.filter(e => !e.is_removed);
+  const tabs = [['fiche','Fiche'],['suivi','Suivi technicien', active.length],['chat','Échanges et notes', d.messages.length],['files','Fichiers', d.files.length],['diags','Diagnostics', d.diagnostics.length],['device','Appareil']];
+  const tabbar = `<div class="seg du-tabs tk-tabs">${tabs.map(([k, l, n]) => `<button data-tktab="${k}" aria-pressed="${TK.tab === k}">${l}${n ? ` <span class="tk-n">${n}</span>` : ''}</button>`).join('')}</div>`;
+  const flash = TK.flashErr ? `<div class="banner tk-flash">${esc(TK.flashErr)}</div>` : TK.flash ? `<div class="tk-ok tk-flash">${esc(TK.flash)}</div>` : '';
+  const fn = {fiche: tkFiche, suivi: tkSuivi, chat: tkChat, files: tkFiles, diags: tkDiags, device: tkDevice}[TK.tab] || tkFiche;
+  return head(`#${t.id} · ${t.title}`, sub, right) + `<div class="stack">${t.is_locked ? '<div class="banner">Ce ticket est verrouillé sur le site.</div>' : ''}${ctl}${tabbar}${flash}${fn(d, me)}</div>`;
+};
+
+function tkTodosOf(d){
+  const out = [];
+  d.timeline.forEach(e => { if (e.is_removed) return; ((e.details || {}).actions || []).forEach((a, i) => { if (a && a.label && !a.done) out.push({e, a, i}); }); });
+  return out;
+}
+function tkFiche(d){
+  const t = d.ticket, c = t.customer || {};
+  const todos = tkTodosOf(d);
+  const todoCard = todos.length ? `<div class="card"><h3 class="tk-h">À faire <span class="cnt warn">${todos.length}</span></h3>${todos.map(({e, a, i}) =>
+    `<div class="tk-todo"><div><b>${esc(a.label)}</b><div class="tk-sub">${esc(e.summary)} · ${esc((e.technician || {}).name || '')} · ${fdt(e.happened_at)}</div></div><button class="btn go" data-tkact="${e.id}:${i}:1"${TK.busy ? ' disabled' : ''}>Fait</button></div>`).join('')}</div>` : '';
+  const pwd = t.no_device_password ? 'Aucun (le client l\'a indiqué)' : t.device_password
+    ? `<span class="mono">${TK.showPwd ? esc(t.device_password) : '••••••••'}</span> <button class="btn" id="tk-pwd">${TK.showPwd ? 'Masquer' : 'Afficher'}</button> <button class="btn" id="tk-pwdcopy">Copier</button>` : '<span style="color:var(--muted)">Non renseigné</span>';
+  const main = props([['Demande', [
+      ['Description', t.message ? `<div class="tk-pre">${esc(t.message)}</div>` : ''],
+      ['Objets déposés', esc((t.brought_items || []).join(', '))],
+      ['Mot de passe de session', pwd],
+      ['Catégories', esc((t.categories || []).join(', '))],
+      ['N° de facture', esc(t.invoice_id)],
+      ['Devis Hiboutik', esc(t.hiboutik_quote_number)]]],
+    ['Client', [
+      ['Nom', esc(c.name)], ['Société', esc(c.company)],
+      ['E-mail', c.email ? `${esc(c.email)}` : ''], ['Téléphone', esc(c.phone)], ['Adresse', esc(c.address)],
+      ['Prévenu par', esc({Email:'E-mail', SMS:'SMS', None:'Ne pas prévenir'}[t.notify_by] || t.notify_by)],
+      ['Note interne sur le client', c.internal_note ? `<div class="tk-pre tk-note">${esc(c.internal_note)}</div>` : '']]]]);
+  const cmd = d.commandes.length ? `<div class="card"><h3 class="tk-h">Commandes</h3><table class="list"><thead><tr><th>Commande</th><th>Fournisseur</th><th>N°</th><th>Statut</th><th>Date</th></tr></thead><tbody>${d.commandes.map(x =>
+    `<tr><td>${esc(x.nom)}</td><td>${esc(x.fournisseur || '—')}</td><td class="mono">${esc(x.command_number || '—')}</td><td>${esc(x.statut || '—')}</td><td class="tk-sub">${fdate(x.created_at)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const dv = d.devis.length ? `<div class="card"><h3 class="tk-h">Devis</h3><table class="list"><thead><tr><th>Devis</th><th>Statut</th><th>Hiboutik</th><th>Date</th><th></th></tr></thead><tbody>${d.devis.map(x =>
+    `<tr><td>${esc(x.title || 'Devis #' + x.id)}</td><td>${esc(x.status)}</td><td class="mono">${esc(x.hiboutik_id || '—')}</td><td class="tk-sub">${fdate(x.created_at)}</td><td><button class="btn" data-surl="${esc(x.url)}">Ouvrir</button></td></tr>`).join('')}</tbody></table></div>` : '';
+  return todoCard + main + cmd + dv;
+}
+
+// ----- suivi technicien
+function tkEventForm(d){
+  const f = TK.ev, o = d.options;
+  return `<div class="card tk-form"><h3 class="tk-h">Ajouter au suivi</h3><div class="form">
+    <label>Type d'événement<select data-tkev="event_type">${o.event_types.map(x => `<option value="${esc(x.eventType)}"${x.eventType === f.event_type ? ' selected' : ''}>${x.enabled ? '★ ' : ''}${esc(x.label || x.eventType)}</option>`).join('')}</select></label>
+    <label>Date et heure (si ce n'est pas maintenant)<input type="datetime-local" data-tkev="happened_at" value="${esc(f.happened_at)}"></label>
+    <label class="full">Résumé<input data-tkev="summary" maxlength="500" value="${esc(f.summary)}" placeholder="Ex : Diagnostic réalisé, alimentation HS"></label>
+    <label class="full">Détails<textarea data-tkev="details" maxlength="3000" placeholder="Infos techniques, pièces changées, actions réalisées…">${esc(f.details)}</textarea></label>
+    <div class="full"><div class="tk-k" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Actions à réaliser
+      <span style="display:flex;gap:6px">${o.action_lists.length ? `<select id="tk-evlist" class="tk-sel"><option value="">Charger une liste…</option>${o.action_lists.map(l => `<option value="${esc(l.key)}">${esc(l.label)} (${l.tasks.length})</option>`).join('')}</select>` : ''}<button class="btn" id="tk-evadd">+ Action</button></span></div>
+      ${f.actions.length ? f.actions.map((a, i) => `<div class="tk-arow"><input data-tkevact="${i}" maxlength="160" value="${esc(a.label)}" placeholder="Ex : Remplacer le connecteur de charge"><label class="check"><input type="checkbox" data-tkevdone="${i}"${a.done ? ' checked' : ''}> Fait</label><button class="btn" data-tkevdel="${i}">Retirer</button></div>`).join('') : '<div class="tk-sub">Aucune action.</div>'}</div>
+  </div><div class="ovl-acts"><button class="btn go" id="tk-evsave"${TK.busy ? ' disabled' : ''}>Ajouter au suivi</button><button class="btn" id="tk-evcancel">Annuler</button></div></div>`;
+}
+function tkPrefill(type){
+  const tpl = TK.d.options.event_types.find(x => x.eventType === type);
+  if (!tpl || !tpl.enabled) return;
+  if (tpl.summary) TK.ev.summary = tpl.summary;
+  if (tpl.details) TK.ev.details = tpl.details;
+  TK.ev.actions = [];
+}
+function tkEventDetails(e){
+  const x = e.details || {}, bits = [];
+  if (x.note) bits.push(`<div class="tk-pre">${tkText(x.note)}</div>`);
+  if (x.preview) bits.push(`<div class="tk-pre tk-sub">« ${tkText(x.preview)} »</div>`);
+  if ('before' in x || 'after' in x) { const tr = v => esc(TST[v] || TPR[v] || (v === null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : v)); bits.push(`<div class="tk-sub">${tr(x.before)} → <b>${tr(x.after)}</b></div>`); }
+  if (x.files) bits.push(`<div class="tk-sub">${esc(x.files)}${x.email ? ' → ' + esc(x.email) : ''}</div>`);
+  if (Array.isArray(x.prerequisites) && x.prerequisites.length) bits.push(`<ul class="tk-checks">${x.prerequisites.map(p => `<li class="${p.met ? 'ok' : ''}">${p.met ? '✓' : '○'} ${esc(p.name)}</li>`).join('')}</ul>`);
+  if (Array.isArray(x.actions) && x.actions.length) bits.push(`<div class="tk-acts">${x.actions.map((a, i) => `<label class="tk-act${a.done ? ' done' : ''}"><input type="checkbox" data-tkact="${e.id}:${i}:${a.done ? 0 : 1}"${a.done ? ' checked' : ''}${e.is_removed || TK.busy ? ' disabled' : ''}> <span>${esc(a.label)}</span>${a.done && a.done_by_name ? `<small>${esc(a.done_by_name)}, ${fdt(a.done_at)}</small>` : ''}</label>`).join('')}</div>`);
+  return bits.join('');
+}
+function tkSuivi(d){
+  const list = d.timeline.filter(e => TK.showRemoved || !e.is_removed);
+  const removed = d.timeline.length - d.timeline.filter(e => !e.is_removed).length;
+  const tools = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${TK.ev ? '' : '<button class="btn go" id="tk-evnew">Ajouter au suivi</button>'}${removed ? `<label class="check"><input type="checkbox" id="tk-showrm"${TK.showRemoved ? ' checked' : ''}> Afficher les événements retirés (${removed})</label>` : ''}</div>`;
+  const items = list.length ? `<div class="tk-tl">${list.map(e => {
+    const rm = TK.removing === e.id;
+    return `<div class="tk-ev${e.is_removed ? ' removed' : ''}${e.event_type.startsWith('commande_') ? ' cmd' : ''}">
+      <div class="tk-evh"><span class="tk-type">${esc(tkEvLabel(e.event_type))}</span><b>${esc(e.summary)}</b><span class="tk-sub">${esc((e.technician || {}).name || 'Système')} · ${fdt(e.happened_at)}</span>
+        <span class="spacer"></span>${e.is_removed ? `<button class="btn" data-tkrestore="${e.id}"${TK.busy ? ' disabled' : ''}>Restaurer</button>` : rm ? '' : `<button class="du-x" title="Retirer du suivi" data-tkremove="${e.id}">Retirer</button>`}</div>
+      ${tkEventDetails(e)}
+      ${e.is_removed ? `<div class="tk-sub">Retiré${e.removed_by ? ' par ' + esc(e.removed_by.name) : ''} le ${fdt(e.removed_at)}${e.removed_reason ? ' : ' + esc(e.removed_reason) : ''}</div>` : ''}
+      ${rm ? `<div class="confirm"><input id="tk-rmreason" class="search" style="flex:1;margin:0" maxlength="500" placeholder="Raison (facultatif)" value="${esc(TK.removeReason)}"><button class="btn danger" id="tk-rmok"${TK.busy ? ' disabled' : ''}>Retirer du suivi</button><button class="btn" id="tk-rmcancel">Annuler</button></div>` : ''}
+    </div>`; }).join('')}</div>` : '<div class="empty">Aucun événement dans le suivi pour le moment.</div>';
+  return (TK.ev ? tkEventForm(d) : '') + tools + items;
+}
+
+// ----- échanges avec le client et notes internes
+function tkChat(d, me){
+  const o = d.options, dr = TK.draft, n = o.notification;
+  if (dr.channel === null) dr.channel = n.default;
+  const msgs = d.messages.length ? `<div class="tk-thread">${d.messages.map(m => {
+    const mine = me.id && m.author && m.author.id === me.id, client = m.author && d.ticket.customer && m.author.id === d.ticket.customer.id;
+    const kind = m.is_internal ? 'Note interne' : client ? 'Client' : 'Réponse au client';
+    const dl = m.delivery || {}, sent = dl.status ? ` · ${dl.status === 'sent' ? 'envoyé' : dl.status === 'failed' ? 'échec de l\'envoi' : dl.status === 'skipped' ? 'non envoyé' : 'envoi en cours'}${dl.channel ? ' par ' + esc(dl.channel === 'Email' ? 'e-mail' : dl.channel) : ''}` : '';
+    const mn = m.mention_notification || {};
+    const del = 'msg' + m.id;
+    return `<div class="tk-msg ${m.is_internal ? 'internal' : client ? 'client' : 'tech'}">
+      <div class="tk-msgh"><b>${esc((m.author || {}).name || '?')}</b><span class="tk-kind">${kind}</span><span class="tk-sub">${fdt(m.created_at)}${sent}</span><span class="spacer"></span>
+        ${m.is_internal && mn.exists && !mn.validated ? `<button class="btn" data-tkmention="${m.id}">Valider la mention</button>` : m.is_internal && mn.exists ? '<span class="tk-sub">Mention vue ✓</span>' : ''}
+        ${mine ? `<button class="du-x${TK.confirm === del ? ' danger' : ''}" data-tkmsgdel="${m.id}">${TK.confirm === del ? 'Confirmer la suppression' : 'Supprimer'}</button>` : ''}</div>
+      ${dl.status === 'failed' && dl.error ? `<div class="tk-sub" style="color:var(--crit)">${esc(dl.error)}</div>` : ''}
+      <div class="tk-pre">${tkText(m.content)}</div>
+      ${(m.file_attachments || []).length ? `<div class="tk-files">${m.file_attachments.map(f => `<button class="btn" data-tkfile="${esc(f.download_path)}">📎 ${esc(f.name)} <small>${tkSize(f.size)}</small></button>`).join('')}</div>` : ''}
+    </div>`; }).join('')}</div>` : '<div class="empty">Aucun message sur ce ticket.</div>';
+  const chans = [...n.channels, 'None'];
+  const sms = !dr.internal && dr.channel === 'SMS';
+  const comp = `<div class="card tk-compose ${dr.internal ? 'internal' : ''}">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg tk-seg"><button data-tkkind="0" aria-pressed="${!dr.internal}">Réponse au client</button><button data-tkkind="1" aria-pressed="${dr.internal}">Note interne</button></div>
+      ${dr.internal ? '<span class="tk-sub">Visible des techniciens seulement. Tapez @ suivi du nom pour prévenir un collègue.</span>'
+        : `<label class="tk-sub">Prévenir le client par <select id="tk-chan" class="tk-sel">${chans.map(c => `<option value="${c}"${dr.channel === c ? ' selected' : ''}>${{Email:'E-mail' + (n.email ? ' (' + esc(n.email) + ')' : ''), SMS:'SMS' + (n.phone ? ' (' + esc(n.phone) + ')' : ''), None:'Ne pas prévenir'}[c]}</option>`).join('')}</select></label>
+          ${sms && o.sms_templates.length ? `<select id="tk-tpl" class="tk-sel"><option value="">Modèle de SMS…</option>${o.sms_templates.map((x, i) => `<option value="${i}"${String(i) === dr.tpl ? ' selected' : ''}>${esc(x.title || 'Modèle ' + (i + 1))}</option>`).join('')}</select>` : ''}`}</div>
+    <textarea id="tk-text" maxlength="5000" placeholder="${dr.internal ? 'Note pour l\'équipe…' : 'Message au client…'}">${esc(dr.text)}</textarea>
+    ${dr.internal && o.agents.length ? `<div class="chips">${o.agents.filter(a => a.mention && a.id !== me.id).map(a => `<button class="chip" data-tkat="${esc(a.mention)}">@${esc(a.name)}</button>`).join('')}</div>` : ''}
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label class="btn">Joindre des fichiers<input type="file" id="tk-attach" multiple hidden></label>
+      ${dr.files.map((f, i) => `<span class="tk-chipf">${esc(f.name)} <small>${tkSize(f.size)}</small> <button class="du-x" data-tkunattach="${i}">✕</button></span>`).join('')}
+      <span class="spacer"></span>${sms ? `<span class="tk-sub" id="tk-smslen">${dr.text.length} / ${o.sms_max_length} caractères</span>` : ''}
+      <button class="btn go" id="tk-sendmsg"${TK.busy ? ' disabled' : ''}>${dr.internal ? 'Ajouter la note' : dr.channel === 'None' ? 'Publier sans prévenir' : 'Envoyer au client'}</button></div>
+    <div class="tk-sub">5 fichiers au plus, 6 Mo chacun (images, PDF, Office, texte, zip).</div>
+  </div>`;
+  return msgs + comp;
+}
+
+// ----- fichiers
+function tkFiles(d){
+  const L = d.file_limits || {};
+  const sel = TK.mail ? TK.mail.ids : [];
+  const up = `<div class="card"><h3 class="tk-h">Ajouter des fichiers au ticket</h3><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label class="btn">Choisir des fichiers<input type="file" id="tk-upfiles" multiple hidden></label>
+    ${TK.up.files.map((f, i) => `<span class="tk-chipf">${esc(f.name)} <small>${tkSize(f.size)}</small> <button class="du-x" data-tkunup="${i}">✕</button></span>`).join('')}
+    <select id="tk-upvis" class="tk-sel"><option value="internal"${TK.up.vis === 'internal' ? ' selected' : ''}>Interne (techniciens)</option><option value="external"${TK.up.vis === 'external' ? ' selected' : ''}>Visible par le client</option></select>
+    <button class="btn go" id="tk-upsend"${!TK.up.files.length || TK.busy ? ' disabled' : ''}>Ajouter</button></div>
+    <div class="tk-sub">${L.max_count || 10} fichiers au plus, ${Math.round((L.max_kb || 20480) / 1024)} Mo chacun.</div></div>`;
+  const rows = d.files.length ? `<div style="overflow:auto"><table class="list tk-tbl"><thead><tr><th></th><th>Fichier</th><th>Origine</th><th>Visibilité</th><th>Taille</th><th>Ajouté</th><th></th></tr></thead><tbody>${d.files.map(f => {
+    const k = 'file' + f.id, own = f.source === 'ticket';
+    return `<tr><td>${own ? `<input type="checkbox" data-tkmailpick="${f.id}"${sel.includes(f.id) ? ' checked' : ''}>` : ''}</td><td><b>${esc(f.name)}</b>${f.last_sent_to ? `<div class="tk-sub">Envoyé à ${esc(f.last_sent_to)} le ${fdt(f.last_sent_at)}</div>` : ''}</td><td>${TSRC[f.source] || esc(f.source)}</td>
+      <td>${f.visibility === 'external' ? '<span class="tk-vis ext">Client</span>' : '<span class="tk-vis">Interne</span>'}</td><td class="tk-sub">${tkSize(f.size)}</td><td class="tk-sub">${fdt(f.created_at)}${f.uploaded_by ? '<br>' + esc(f.uploaded_by) : ''}</td>
+      <td style="white-space:nowrap"><button class="btn" data-tkfile="${esc(f.download_path)}">Ouvrir</button>${own ? ` <button class="btn" data-tkvis="${f.id}:${f.visibility === 'external' ? 'internal' : 'external'}"${TK.busy ? ' disabled' : ''}>${f.visibility === 'external' ? 'Rendre interne' : 'Montrer au client'}</button> <button class="btn${TK.confirm === k ? ' danger' : ''}" data-tkfdel="${f.id}"${TK.busy ? ' disabled' : ''}>${TK.confirm === k ? 'Confirmer' : 'Supprimer'}</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Aucun fichier sur ce ticket.</div>';
+  const mail = TK.mail ? `<div class="card"><h3 class="tk-h">Envoyer ${sel.length} fichier(s) au client par e-mail</h3><div class="form">
+      <label>Adresse<input id="tk-mailto" type="email" value="${esc(TK.mail.email)}"></label><div></div>
+      <label class="full">Message (facultatif)<textarea id="tk-mailmsg" maxlength="5000">${esc(TK.mail.message)}</textarea></label></div>
+      <div class="tk-sub">Les fichiers envoyés deviennent visibles par le client sur sa page du ticket.</div>
+      <div class="ovl-acts"><button class="btn go" id="tk-mailsend"${!sel.length || TK.busy ? ' disabled' : ''}>Envoyer</button><button class="btn" id="tk-mailcancel">Annuler</button></div></div>`
+    : d.files.some(f => f.source === 'ticket') ? '<div><button class="btn" id="tk-mailnew">Envoyer des fichiers au client par e-mail</button></div>' : '';
+  return up + rows + mail;
+}
+
+// ----- diagnostics
+function tkDiags(d){
+  const lv = {good:'ok', warn:'warn', crit:'crit'};
+  const rows = d.diagnostics.length ? `<div style="overflow:auto"><table class="list tk-tbl"><thead><tr><th>Date</th><th>Poste</th><th>État</th><th>Viabilité</th><th>Technicien</th><th>Client</th><th></th></tr></thead><tbody>${d.diagnostics.map(x =>
+    `<tr><td class="tk-sub">${fdt(x.created_at)}</td><td>${esc(x.machine_name || '—')}</td><td>${x.overall ? st(lv[x.overall] || 'info', esc(x.overall_label || x.overall)) : '—'}</td><td>${x.viability_score != null ? x.viability_score + '/100' : '—'}${x.viability_label ? `<div class="tk-sub">${esc(x.viability_label)}</div>` : ''}</td><td>${esc(x.technician || '—')}</td>
+      <td><label class="check"><input type="checkbox" data-tkdvis="${x.id}"${x.client_visible ? ' checked' : ''}${TK.busy ? ' disabled' : ''}> Visible</label></td>
+      <td style="white-space:nowrap"><button class="btn" data-surl="${esc(x.report_url)}">Ouvrir sur le site</button> <button class="btn" data-tkfile="${esc(x.client_report_path)}">Fiche client</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun diagnostic sur ce ticket.</div>';
+  return `<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1">L'analyse de ce PC part sur ce ticket avec le Diag atelier : rapport, fiche appareil complétée, tests manuels et relevé des capteurs.</div><button class="btn go" id="tk-sendscan">Envoyer l'analyse ici</button></div>` + rows;
+}
+
+// ----- appareil
+function tkDevice(d){
+  const v = d.ticket.device_info;
+  if (!v) return '<div class="empty">Aucun appareil n\'est lié à ce ticket. L\'envoi d\'une analyse sur le ticket crée sa fiche.</div>';
+  const f = TK.dev;
+  const form = f ? `<div class="card tk-form"><h3 class="tk-h">Ajouter une intervention sur l'appareil</h3><div class="form">
+      <label>Type<select data-tkdev="event_type">${Object.keys(TDEV).map(k => `<option value="${k}"${f.event_type === k ? ' selected' : ''}>${TDEV[k]}</option>`).join('')}</select></label>
+      <label>Date et heure (si ce n'est pas maintenant)<input type="datetime-local" data-tkdev="happened_at" value="${esc(f.happened_at)}"></label>
+      <label class="full">Résumé<input data-tkdev="summary" maxlength="500" value="${esc(f.summary)}" placeholder="Ex : Batterie remplacée par une neuve"></label>
+      <label class="full">Détails<textarea data-tkdev="details" maxlength="3000">${esc(f.details)}</textarea></label></div>
+      <div class="ovl-acts"><button class="btn go" id="tk-devsave"${TK.busy ? ' disabled' : ''}>Ajouter</button><button class="btn" id="tk-devcancel">Annuler</button></div></div>`
+    : '<div><button class="btn go" id="tk-devnew">Ajouter une intervention</button></div>';
+  const evs = d.device_events.length ? `<div class="tk-tl">${d.device_events.map(e => `<div class="tk-ev"><div class="tk-evh"><span class="tk-type">${esc(TDEV[e.event_type] || e.event_type)}</span><b>${esc(e.summary)}</b><span class="tk-sub">${esc(e.technician || '')} · ${fdt(e.happened_at)}${e.ticket_id && e.ticket_id !== d.ticket.id ? ' · ticket #' + e.ticket_id : ''}</span></div>${e.note ? `<div class="tk-pre">${esc(e.note)}</div>` : ''}</div>`).join('')}</div>` : '<div class="empty">Aucune intervention enregistrée sur cet appareil.</div>';
+  return props([['', [['Appareil', esc(v.name)], ['Type', esc(TDTYPE[v.type] || v.type)], ['Marque', esc(v.brand)], ['Modèle', esc(v.model)], ['N° de série', v.serial_number ? `<span class="mono">${esc(v.serial_number)}</span>` : ''], ['N° de suivi', esc(v.asset_tag)], ['Achat', v.purchase_date ? fdate(v.purchase_date) : ''], ['Fin de garantie', v.warranty_end_date ? fdate(v.warranty_end_date) : '']]]]) +
+    `<div><button class="btn" data-surl="${esc(v.url)}">Ouvrir la fiche appareil sur le site</button></div>` + form + `<h3 class="tk-h" style="margin:4px 0 0">Historique de l'appareil</h3>` + evs;
+}
+
+// ----- évènements de l'interface
+const tkBody = o => JSON.parse(JSON.stringify(o));
+$('#content').addEventListener('click', async e => {
+  const t = e.target, P = tkPath(TK.cur);
+  const sc = t.closest('[data-tkscope]'); if (sc) { TK.scope = sc.dataset.tkscope; tkList(); return; }
+  if (t.id === 'tk-search') { TK.q = $('#tk-q').value.trim(); tkList(); return; }
+  if (t.id === 'tk-reload') { tkList(); return; }
+  const op = t.closest('[data-tkopen]'); if (op && (op.tagName === 'BUTTON' || !t.closest('button'))) { tkOpen(op.dataset.tkopen); return; }
+  const td = t.closest('[data-tktodo]');
+  if (td) { const [tid, ev, i] = td.dataset.tktodo.split(':'); td.disabled = true;
+    try { await tkapi.call('PATCH', `${tkPath(tid)}/timeline-events/${ev}/actions`, {action_index: +i, done: true}); status('Action marquée comme réalisée.'); } catch (err) { status(String(err)); }
+    tkList(); return; }
+  if (!view.startsWith('ticket:')) return;
+  if (t.id === 'tk-dreload') { TK.flash = TK.flashErr = ''; TK.dLoading = true; render(); tkLoad(TK.cur); return; }
+  if (t.id === 'tk-sendscan' && TK.d) { const x = TK.d.ticket; SITE.ticket = {id: x.id, title: x.title, client: x.client}; SITE.quick = false; SITE.result = null; go('site'); return; }
+  const tab = t.closest('[data-tktab]'); if (tab) { TK.tab = tab.dataset.tktab; TK.flash = TK.flashErr = ''; TK.confirm = ''; render(); return; }
+  const s1 = t.closest('[data-tkstatus]'); if (s1 && TK.d && s1.dataset.tkstatus !== TK.d.ticket.status) { tkDo(tkapi.call('PATCH', P + '/status', {status: s1.dataset.tkstatus})); return; }
+  const p1 = t.closest('[data-tkprio]'); if (p1 && TK.d && p1.dataset.tkprio !== TK.d.ticket.priority) { tkDo(tkapi.call('PATCH', P + '/priority', {priority: p1.dataset.tkprio})); return; }
+  if (t.id === 'tk-assign') { tkDo(tkapi.call('POST', P + '/assign-me')); return; }
+  if (t.id === 'tk-pwd') { TK.showPwd = !TK.showPwd; render(); return; }
+  if (t.id === 'tk-pwdcopy' && TK.d) { try { await navigator.clipboard.writeText(TK.d.ticket.device_password || ''); status('Mot de passe copié.'); } catch (_) { status('Copie impossible.'); } return; }
+  const ac = t.closest('[data-tkact]');
+  if (ac && !ac.disabled) { e.preventDefault(); const [ev, i, done] = ac.dataset.tkact.split(':'); tkDo(tkapi.call('PATCH', `${P}/timeline-events/${ev}/actions`, {action_index: +i, done: done === '1'})); return; }
+  // suivi
+  if (t.id === 'tk-evnew' && TK.d) { const first = (TK.d.options.event_types.find(x => x.eventType === 'manual_note') || TK.d.options.event_types[0] || {}).eventType;
+    TK.ev = {event_type: first, summary:'', details:'', happened_at:'', actions:[]}; tkPrefill(first); render(); return; }
+  if (t.id === 'tk-evcancel') { TK.ev = null; render(); return; }
+  if (t.id === 'tk-evadd') { TK.ev.actions.push({label:'', done:false}); render(); const ins = document.querySelectorAll('[data-tkevact]'); ins.length && ins[ins.length - 1].focus(); return; }
+  const ed = t.closest('[data-tkevdel]'); if (ed) { TK.ev.actions.splice(+ed.dataset.tkevdel, 1); render(); return; }
+  if (t.id === 'tk-evsave') {
+    const f = TK.ev; if (!f.summary.trim()) { TK.flashErr = 'Indiquez un résumé.'; render(); return; }
+    const ok = await tkDo(tkapi.call('POST', P + '/timeline-events', tkBody({event_type: f.event_type, summary: f.summary.trim(), details: f.details.trim() || null, happened_at: tkUTC(f.happened_at),
+      actions: f.actions.filter(a => a.label.trim()).map(a => ({label: a.label.trim(), done: a.done}))})));
+    if (ok) { TK.ev = null; render(); } return; }
+  if (t.id === 'tk-showrm') { TK.showRemoved = t.checked; render(); return; }
+  const rmv = t.closest('[data-tkremove]'); if (rmv) { TK.removing = +rmv.dataset.tkremove; TK.removeReason = ''; render(); const r = $('#tk-rmreason'); r && r.focus(); return; }
+  if (t.id === 'tk-rmcancel') { TK.removing = 0; render(); return; }
+  if (t.id === 'tk-rmok') { const id = TK.removing; if (await tkDo(tkapi.call('DELETE', `${P}/timeline-events/${id}`, {reason: TK.removeReason.trim() || null}))) { TK.removing = 0; render(); } return; }
+  const rs = t.closest('[data-tkrestore]'); if (rs) { tkDo(tkapi.call('PATCH', `${P}/timeline-events/${rs.dataset.tkrestore}/restore`)); return; }
+  // échanges
+  const kd = t.closest('[data-tkkind]'); if (kd) { TK.draft.internal = kd.dataset.tkkind === '1'; render(); return; }
+  const at = t.closest('[data-tkat]');
+  if (at) { const ta = $('#tk-text'), ins = '@' + at.dataset.tkat + ' '; const p = ta.selectionStart ?? ta.value.length;
+    ta.value = ta.value.slice(0, p) + (p && !/\s$/.test(ta.value.slice(0, p)) ? ' ' : '') + ins + ta.value.slice(p); TK.draft.text = ta.value; ta.focus(); return; }
+  const ua = t.closest('[data-tkunattach]'); if (ua) { TK.draft.files.splice(+ua.dataset.tkunattach, 1); render(); return; }
+  if (t.id === 'tk-sendmsg') {
+    const dr = TK.draft; if (!dr.text.trim()) { TK.flashErr = 'Le message est vide.'; render(); return; }
+    const fields = {content: dr.text, is_internal: dr.internal ? '1' : '0'};
+    if (!dr.internal) { fields.notification_channel = dr.channel || 'None'; const tpl = TK.d.options.sms_templates[+dr.tpl]; if (dr.channel === 'SMS' && dr.tpl !== '' && tpl) fields.sms_template = JSON.stringify(tpl); }
+    const ok = await tkDo(tkapi.upload(P + '/messages', fields, dr.files.map(f => ({field: 'attachments[]', name: f.name, b64: f.b64}))), dr.internal ? 'Note interne ajoutée.' : dr.channel === 'None' ? 'Message publié sur le ticket.' : 'Message envoyé au client.');
+    if (ok) { TK.draft = {text:'', internal: dr.internal, channel: dr.channel, tpl:'', files:[]}; render(); } return; }
+  const md = t.closest('[data-tkmsgdel]');
+  if (md) { const k = 'msg' + md.dataset.tkmsgdel; if (TK.confirm !== k) { TK.confirm = k; render(); return; } tkDo(tkapi.call('DELETE', `${P}/messages/${md.dataset.tkmsgdel}`), 'Message supprimé.'); return; }
+  const mv = t.closest('[data-tkmention]'); if (mv) { tkDo(tkapi.call('POST', `${P}/messages/${mv.dataset.tkmention}/validate-mention`), 'Mention validée.'); return; }
+  // fichiers
+  const fo = t.closest('[data-tkfile]');
+  if (fo) { fo.disabled = true; status('Téléchargement…'); try { const p = await tkapi.open(fo.dataset.tkfile); status('Fichier enregistré : ' + p); } catch (err) { status(String(err)); TK.flashErr = String(err); render(); } fo.disabled = false; return; }
+  const uu = t.closest('[data-tkunup]'); if (uu) { TK.up.files.splice(+uu.dataset.tkunup, 1); render(); return; }
+  if (t.id === 'tk-upsend') { if (await tkDo(tkapi.upload(P + '/files', {visibility: TK.up.vis}, TK.up.files.map(f => ({field: 'files[]', name: f.name, b64: f.b64}))), 'Fichier(s) ajouté(s) au ticket.')) { TK.up.files = []; render(); } return; }
+  const fv = t.closest('[data-tkvis]'); if (fv) { const [id, vis] = fv.dataset.tkvis.split(':'); tkDo(tkapi.call('PATCH', `${P}/files/${id}`, {visibility: vis}), vis === 'external' ? 'Fichier visible par le client.' : 'Fichier réservé aux techniciens.'); return; }
+  const fd = t.closest('[data-tkfdel]');
+  if (fd) { const k = 'file' + fd.dataset.tkfdel; if (TK.confirm !== k) { TK.confirm = k; render(); return; } tkDo(tkapi.call('DELETE', `${P}/files/${fd.dataset.tkfdel}`), 'Fichier supprimé.'); return; }
+  if (t.id === 'tk-mailnew') { TK.mail = {ids: [], email: (TK.d.ticket.customer || {}).email || '', message: ''}; render(); return; }
+  if (t.id === 'tk-mailcancel') { TK.mail = null; render(); return; }
+  const mp = t.closest('[data-tkmailpick]');
+  if (mp) { if (!TK.mail) TK.mail = {ids: [], email: (TK.d.ticket.customer || {}).email || '', message: ''}; const id = +mp.dataset.tkmailpick;
+    TK.mail.ids = mp.checked ? [...new Set([...TK.mail.ids, id])] : TK.mail.ids.filter(x => x !== id); render(); return; }
+  if (t.id === 'tk-mailsend') { const m = TK.mail; if (await tkDo(tkapi.call('POST', P + '/files/send', {file_ids: m.ids, email: m.email.trim(), message: m.message.trim() || null}), 'Fichiers envoyés au client.')) { TK.mail = null; render(); } return; }
+  // diagnostics
+  const dv = t.closest('[data-tkdvis]'); if (dv) { tkDo(tkapi.call('PATCH', `${P}/diagnostics/${dv.dataset.tkdvis}/visibility`, {client_visible: dv.checked}), dv.checked ? 'Diagnostic visible par le client.' : 'Diagnostic masqué au client.'); return; }
+  // appareil
+  if (t.id === 'tk-devnew') { TK.dev = {event_type:'maintenance', summary:'', details:'', happened_at:''}; render(); return; }
+  if (t.id === 'tk-devcancel') { TK.dev = null; render(); return; }
+  if (t.id === 'tk-devsave') { const f = TK.dev; if (!f.summary.trim()) { TK.flashErr = 'Indiquez un résumé.'; render(); return; }
+    if (await tkDo(tkapi.call('POST', P + '/device-events', {event_type: f.event_type, summary: f.summary.trim(), details: f.details.trim() || null, happened_at: tkUTC(f.happened_at)}), 'Intervention ajoutée.')) { TK.dev = null; render(); } return; }
+});
+$('#content').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.tkev && TK.ev) TK.ev[t.dataset.tkev] = t.value;
+  if (t.dataset.tkevact !== undefined && TK.ev) TK.ev.actions[+t.dataset.tkevact].label = t.value;
+  if (t.dataset.tkdev && TK.dev) TK.dev[t.dataset.tkdev] = t.value;
+  if (t.id === 'tk-text') { TK.draft.text = t.value; const n = $('#tk-smslen'); if (n && TK.d) n.textContent = `${t.value.length} / ${TK.d.options.sms_max_length} caractères`; }
+  if (t.id === 'tk-rmreason') TK.removeReason = t.value;
+  if (t.id === 'tk-mailto' && TK.mail) TK.mail.email = t.value;
+  if (t.id === 'tk-mailmsg' && TK.mail) TK.mail.message = t.value;
+});
+$('#content').addEventListener('change', async e => {
+  const t = e.target;
+  if (t.dataset.tkev === 'event_type' && TK.ev) { TK.ev.event_type = t.value; tkPrefill(t.value); render(); }
+  if (t.dataset.tkevdone !== undefined && TK.ev) TK.ev.actions[+t.dataset.tkevdone].done = t.checked;
+  if (t.id === 'tk-evlist' && t.value && TK.ev) { const l = TK.d.options.action_lists.find(x => x.key === t.value); if (l) { TK.ev.actions = l.tasks.map(x => ({label: x, done: false})); render(); } }
+  if (t.dataset.tkdev === 'event_type' && TK.dev) TK.dev.event_type = t.value;
+  if (t.id === 'tk-chan') { TK.draft.channel = t.value; TK.draft.tpl = ''; render(); }
+  if (t.id === 'tk-tpl') { TK.draft.tpl = t.value; const tpl = TK.d.options.sms_templates[+t.value]; if (tpl) TK.draft.text = tpl.content; render(); }
+  if (t.id === 'tk-upvis') TK.up.vis = t.value;
+  if (t.id === 'tk-attach' || t.id === 'tk-upfiles') {
+    try { const files = await tkReadFiles(t); if (t.id === 'tk-attach') TK.draft.files = TK.draft.files.concat(files).slice(0, 5); else TK.up.files = TK.up.files.concat(files); }
+    catch (err) { TK.flashErr = String(err); }
+    render(); }
+});
+$('#content').addEventListener('keydown', e => {
+  if (e.target.id === 'tk-q' && e.key === 'Enter') { TK.q = e.target.value.trim(); tkList(); }
+  if (e.target.id === 'tk-text' && e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); const b = $('#tk-sendmsg'); b && b.click(); }
+});
+// La fiche ouverte se met à jour toute seule chaque minute, sauf pendant une saisie.
+setInterval(() => {
+  if (!view.startsWith('ticket:') || !TK.d || TK.busy || TK.dLoading || TK.ev || TK.dev || TK.mail || TK.removing || TK.draft.text || TK.draft.files.length || TK.up.files.length) return;
+  const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+  tkLoad(TK.cur, true);
+}, 60000);
 
 // ===================== évènements du programme =====================
 function status(t){ $('#stMsg').textContent = t; }

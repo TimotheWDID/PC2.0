@@ -419,6 +419,7 @@ class DiagAppTicketController extends Controller
             'sms_templates' => collect($sms['templates'] ?? [])
                 ->filter(fn ($template) => is_array($template) && trim((string) ($template['content'] ?? '')) !== '')
                 ->map(fn (array $template) => [
+                    'id' => (string) ($template['id'] ?? $template['title'] ?? ''),
                     'title' => (string) ($template['title'] ?? ''),
                     'content' => (string) $template['content'],
                 ])

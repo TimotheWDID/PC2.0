@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -45,6 +46,7 @@ func NormalizeServer(s string) string {
 }
 
 type Me struct {
+	ID      int    `json:"id"`
 	User    string `json:"user"`
 	Site    string `json:"site"`
 	URL     string `json:"url"`
@@ -157,6 +159,116 @@ func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
 	return &res, c.request("POST", "/diagnostics", &buf, w.FormDataContentType(), &res)
 }
 
+// Tickets: the app reads and writes them through /tickets… and /todos only.
+func ticketPath(path string) error {
+	if !strings.HasPrefix(path, "/tickets") && !strings.HasPrefix(path, "/todos") {
+		return fmt.Errorf("chemin refusé : %s", path)
+	}
+	if strings.Contains(path, "..") || strings.Contains(path, "://") {
+		return fmt.Errorf("chemin refusé : %s", path)
+	}
+	return nil
+}
+
+// Call sends a JSON request to a ticket endpoint and returns the answer as is.
+func (c *Client) Call(method, path string, body json.RawMessage) (json.RawMessage, error) {
+	switch method {
+	case "GET", "POST", "PATCH", "DELETE":
+	default:
+		return nil, fmt.Errorf("méthode refusée : %s", method)
+	}
+	if err := ticketPath(path); err != nil {
+		return nil, err
+	}
+	var rd io.Reader
+	ct := ""
+	if len(body) > 0 && string(body) != "null" {
+		rd, ct = bytes.NewReader(body), "application/json"
+	}
+	var out json.RawMessage
+	return out, c.request(method, path, rd, ct, &out)
+}
+
+// UploadFile is a file picked in the interface, base64 encoded.
+type UploadFile struct {
+	Field string `json:"field"`
+	Name  string `json:"name"`
+	B64   string `json:"b64"`
+}
+
+// Upload posts form fields and files (chat attachments, ticket files) as multipart.
+func (c *Client) Upload(path string, fields map[string]string, files []UploadFile) (json.RawMessage, error) {
+	if err := ticketPath(path); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		_ = w.WriteField(k, v)
+	}
+	for _, f := range files {
+		data, err := base64.StdEncoding.DecodeString(f.B64)
+		if err != nil {
+			return nil, fmt.Errorf("fichier %s illisible : %w", f.Name, err)
+		}
+		fw, err := w.CreateFormFile(f.Field, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		_, _ = fw.Write(data)
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	var out json.RawMessage
+	return out, c.request("POST", path, &buf, w.FormDataContentType(), &out)
+}
+
+// Download fetches a ticket file and returns its name (from the site) and content.
+func (c *Client) Download(path string) (string, []byte, error) {
+	if err := ticketPath(path); err != nil {
+		return "", nil, err
+	}
+	if c.Server == "" || c.Token == "" {
+		return "", nil, errors.New("application non associée au site")
+	}
+	req, err := http.NewRequest("GET", c.Server+"/api/diag-app"+path, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	c.headers(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", nil, fmt.Errorf("site injoignable : %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 200<<20))
+	if err != nil {
+		return "", nil, err
+	}
+	if resp.StatusCode >= 300 {
+		return "", nil, apiError(resp.StatusCode, data)
+	}
+	return downloadName(resp.Header.Get("Content-Disposition"), path), data, nil
+}
+
+func downloadName(disposition, path string) string {
+	if _, params, err := mime.ParseMediaType(disposition); err == nil && params["filename"] != "" {
+		return params["filename"]
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return parts[len(parts)-1]
+}
+
+func (c *Client) headers(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "PC2Diag/"+Version)
+	if c.Machine != "" {
+		req.Header.Set("X-Diag-Machine", c.Machine)
+	}
+}
+
 func (c *Client) do(method, path string, body any, out any) error {
 	if body == nil {
 		return c.request(method, path, nil, "", out)
@@ -176,12 +288,7 @@ func (c *Client) request(method, path string, rd io.Reader, contentType string, 
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PC2Diag/"+Version)
-	if c.Machine != "" {
-		req.Header.Set("X-Diag-Machine", c.Machine)
-	}
+	c.headers(req)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -203,6 +310,10 @@ func (c *Client) request(method, path string, rd io.Reader, contentType string, 
 }
 
 func apiError(status int, raw []byte) error {
+	if status == 404 {
+		// Laravel's own text here is English and technical
+		return errors.New("introuvable sur le site (ticket ou fichier supprimé, ou adresse du site incorrecte)")
+	}
 	var e struct {
 		Message string              `json:"message"`
 		Errors  map[string][]string `json:"errors"`
@@ -220,8 +331,8 @@ func apiError(status int, raw []byte) error {
 	switch status {
 	case 401:
 		return errors.New("clé d'accès refusée : associez à nouveau l'application")
-	case 404:
-		return errors.New("adresse du site incorrecte (API introuvable)")
+	case 403:
+		return errors.New("action refusée par le site")
 	case 413:
 		return errors.New("rapport trop volumineux pour le serveur")
 	}

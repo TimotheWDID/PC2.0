@@ -24,6 +24,7 @@ class DiagAppController extends DiagnosticController
         $user = $request->user();
 
         return response()->json([
+            'id' => $user->id,
             'user' => trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->email,
             'site' => config('app.name'),
             'url' => url('/'),
