@@ -65,6 +65,39 @@ site à l'identique.
   comparatif avant / après intervention à partir de l'historique et les
   travaux réalisés, **rapport technique** détaillé et **rapport
   d'inventaire** personnalisable, en HTML imprimable en PDF.
+- **Tickets** : les tickets du site, comme sur la page du ticket. Liste
+  « Mes tickets », « Non attribués », tous les ouverts, terminés, tout, avec
+  recherche (n°, client, téléphone, titre, n° de série) et le nombre
+  d'actions à faire ; onglet « À faire » qui reprend les actions non faites
+  de tous les tickets ouverts. La fiche d'un ticket a :
+  - le statut, la priorité et « Me l'attribuer » ;
+  - **Fiche** : demande du client, objets déposés, mot de passe de session
+    (masqué, à afficher ou copier), coordonnées et note interne du client,
+    commandes et devis liés, actions à faire ;
+  - **Suivi technicien** : l'historique du ticket, l'ajout d'un événement
+    (types et textes préremplis du site, date, actions à réaliser et listes
+    de tâches du site), cocher une action, retirer un événement avec sa
+    raison ou le restaurer ;
+  - **Échanges et notes** : la conversation avec le client et les notes
+    internes, réponse au client prévenu par e-mail ou SMS (modèles de SMS du
+    site) ou sans le prévenir, note interne avec mention `@prénomnom` d'un
+    collègue, pièces jointes, « Valider la mention », suppression de ses
+    messages ;
+  - **Fichiers** : fichiers du ticket, des échanges et fiches client des
+    diagnostics ; ajout (interne ou visible par le client), changement de
+    visibilité, suppression, envoi au client par e-mail ;
+  - **Diagnostics** : ceux du ticket, à ouvrir sur le site, fiche client et
+    case « Visible » par le client ; « Envoyer l'analyse ici » prépare
+    l'envoi de l'analyse en cours sur ce ticket ;
+  - **Appareil** : la fiche de l'appareil et son historique, avec l'ajout
+    d'une intervention (batterie, écran, stockage…).
+
+  Tout passe par le site avec le compte du technicien associé : l'historique,
+  les notifications au client et les mentions sont les mêmes que depuis la
+  page du ticket. La fiche ouverte se met à jour chaque minute (sauf pendant
+  une saisie). Les fichiers ouverts depuis un ticket sont enregistrés dans
+  `PC2Diag-rapports\Tickets\<n°>\` ; un fichier exécutable n'est pas lancé,
+  il est seulement montré dans l'Explorateur.
 - **Envoyer au site** : association avec une clé, recherche du ticket ou
   diag rapide, envoi de l'analyse en cours ou d'une analyse enregistrée, avec
   la liste des réparations lancées. L'envoi est celui du bouton « Envoyer au
@@ -140,9 +173,24 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | Méthode | Chemin | Rôle |
 | --- | --- | --- |
 | GET | `/me` | vérifie la clé, renvoie le technicien |
-| GET | `/tickets?q=` | tickets ouverts (n°, titre, client) |
-| GET | `/tickets/{id}` | un ticket |
+| GET | `/tickets?q=&scope=` | tickets (`open` par défaut, `mine`, `unassigned`, `closed`, `all`) |
+| GET | `/todos` | actions non faites des tickets ouverts |
+| GET | `/tickets/{id}` | le ticket complet : fiche, suivi, échanges, fichiers, diagnostics, appareil, choix des formulaires |
+| PATCH | `/tickets/{id}/status`, `/priority` | statut, priorité |
+| POST | `/tickets/{id}/assign-me` | s'attribuer le ticket |
+| POST | `/tickets/{id}/timeline-events` | événement de suivi (avec actions) |
+| PATCH, DELETE | `/tickets/{id}/timeline-events/{e}/actions`, `/{e}`, `/{e}/restore` | cocher une action, retirer, restaurer |
+| POST | `/tickets/{id}/device-events` | intervention sur l'appareil |
+| POST, DELETE | `/tickets/{id}/messages`, `/messages/{m}`, `/messages/{m}/validate-mention` | réponse, note interne, pièces jointes |
+| POST, PATCH, DELETE | `/tickets/{id}/files`, `/files/send`, `/files/{f}` | fichiers du ticket |
+| GET | `…/files/{f}/download`, `…/messages/{m}/attachments/{a}`, `…/diagnostics/{d}/client-report` | téléchargements (mêmes chemins que sur le site) |
+| PATCH | `/tickets/{id}/diagnostics/{d}/visibility` | diagnostic visible par le client |
 | POST | `/diagnostics` | multipart, comme « Envoyer au ticket » : `ticket_id?`, `report`, `inventory`, `state`, `files[]`, `file_sources[]`, `file_names[]`, `file_encodings[]` |
+
+Côté site, le suivi (statut, priorité, attribution, événements, interventions
+appareil) passe par `App\Support\TicketWorkflow`, partagé avec la page du
+ticket ; les échanges et les fichiers passent par les contrôleurs du site
+(`MessageController`, `TicketFileController`).
 
 Le rapport a le format `diag-atelier` et se rouvre dans le Diag Atelier. Les
 rapports au format `diag-app` des versions 1.0 à 1.2 (JSON) restent acceptés et
@@ -152,12 +200,12 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 
 | Fichier | Rôle |
 | --- | --- |
-| `ui.html` | interface (vues, règles de diagnostic, rapports client et inventaire, Diag atelier intégré) |
+| `ui.html` | interface (vues, règles de diagnostic, rapports client et inventaire, Diag atelier intégré, tickets du site) |
 | `atelier.html` | copie de `resources/diag/diag-atelier.html` faite par la compilation (non versionnée) |
 | `report.html` | modèle du rapport technique (`__DATA__`, `__BRAND__`) |
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
-| `api.go` | client de l'API (envoi multipart du Diag Atelier) |
+| `api.go` | client de l'API (envoi multipart du Diag Atelier, appels des tickets, pièces jointes, téléchargements) |
 | `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planete-Computers 2.0 de l'exe |
 | `main_windows.go` | fenêtre, pont `goCall`, analyse, historique, rapports, site |
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
@@ -172,8 +220,8 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.4.1        # Linux, macOS, Git Bash
-build.cmd 1.4.1         # invite de commandes Windows
+./build.sh 1.5.1        # Linux, macOS, Git Bash
+build.cmd 1.5.1         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
@@ -185,14 +233,37 @@ runtime WebView2 (présent sur Windows 10 et 11 à jour). Pour proposer le
 téléchargement sur la page Diag rapide, copier l'exe dans
 `public/downloads/PC2Diag.exe` sur le serveur.
 
-Icône : `winres/icon.png` (logo Planete-Computers 2.0). Pour la changer,
-`go-winres simply --icon winres/icon.png --manifest none --arch amd64 --out rsrc`
-régénère `rsrc_windows_amd64.syso`.
+Icône, manifeste et informations de version : `winres/winres.json` et
+`winres/icon.png`. Les scripts de compilation régénèrent
+`rsrc_windows_amd64.syso` avec la version demandée (`go run
+github.com/tc-hib/go-winres@v0.3.3 make …`).
 
 Tests : `go test ./...` ; pour vérifier les scripts PowerShell des
 réparations, `PSDUMP=<dossier> go test -run TestDumpPS` les écrit dans ce
 dossier.
 
-L'exe n'est pas signé : Windows SmartScreen peut afficher un avertissement au
-premier lancement (« Informations complémentaires » › « Exécuter quand
-même »). Une signature de code le supprime.
+## Antivirus
+
+Un outil de dépannage fait ce que font aussi les programmes malveillants :
+il demande les droits administrateur, lance PowerShell, touche à Defender, au
+pare-feu, au registre (RunOnce). Les antivirus le jugent sur ces signes. Pour
+paraître le moins suspect possible, l'exe :
+
+- porte un éditeur, un nom de produit, une description et sa version, et un
+  manifeste Windows (`winres/winres.json`) ;
+- garde ses symboles (compilé sans `-s -w`) ;
+- n'utilise plus de commande PowerShell encodée (`-EncodedCommand`, le signe
+  le plus surveillé) : chaque script de réparation est écrit dans un fichier
+  `.ps1` temporaire, lancé avec `-File`, puis effacé.
+
+Cela réduit les faux positifs sans les supprimer : **seule une signature de
+code** les fait vraiment disparaître (et retire aussi l'avertissement
+SmartScreen « Informations complémentaires › Exécuter quand même »). Il faut
+un certificat de signature de code au nom de la société, puis
+`signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f
+certificat.pfx dist\PC2Diag.exe` après chaque compilation.
+
+En attendant, un antivirus qui bloque l'exe se signale à son éditeur comme
+faux positif (Microsoft Defender : https://www.microsoft.com/wdsi/filesubmission ;
+les autres éditeurs ont un formulaire équivalent). Une exclusion locale sur
+le dossier de la clé USB marche aussi, poste par poste.

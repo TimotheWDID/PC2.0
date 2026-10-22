@@ -175,3 +175,11 @@ Investigation prealable : aucun systeme de piece jointe fonctionnel n'existait (
 | 2026-09-22 | Claude Code | Revue du module Devis : bug critique de route-model-binding corrige (show/update casses), 2 incoherences de nav corrigees | tests OK, donnees de test residuelles a nettoyer manuellement (voir section ci-dessus) |
 | 2026-10-08 | Claude Code | Fichiers de ticket internes/externes + envoi au client par email (table `ticket_files`, `TicketFileController`, composant `TicketFiles.tsx`) | 7 tests Pest dedies, suite complete OK, tsc/eslint/build OK |
 | 2026-10-17 | Claude Code | Diag rapide hors ticket : menu « Diag rapide » (/diag), Diag enregistrable sans ticket (`ticket_id` nullable), rattachement ultérieur à un ticket (remplit l'appareil comme un envoi depuis le ticket) | 5 tests Pest dédiés, suite complète OK, build OK |
+
+## Tickets dans PC2 Diag (Claude Code, 2026-10-22)
+
+- L'application PC2 Diag (1.5.0) a une vue « Tickets » : liste, fiche complète, suivi technicien, échanges et notes internes, fichiers, diagnostics, appareil, onglet « À faire ».
+- API : `routes/diag-app.php` (préfixe `/api/diag-app`, clé Bearer). Les chemins des tickets reprennent ceux du site, pour que les `download_path` renvoyés par le site marchent tels quels sous `/api/diag-app`.
+- Le suivi (statut, priorité, attribution, événements, actions, interventions appareil, liste « À faire ») est dans `App\Support\TicketWorkflow`, utilisé par `TicketController` et `DiagAppTicketController`. Les refus sont des `ValidationException` : erreurs de formulaire sur le site, 422 dans l'API. Toute évolution du suivi se fait là, pas dans les contrôleurs.
+- Messages et fichiers passent par `MessageController` / `TicketFileController` (notifications client, mentions). `AuthenticateDiagApp` donne aux appels de l'application une session vide (ces contrôleurs lisent le mode aperçu en session) et force les réponses JSON.
+- Tests : `tests/Feature/DiagAppTicketsTest.php`.

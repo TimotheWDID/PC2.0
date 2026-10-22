@@ -17,6 +17,7 @@ use App\Support\TicketActionListSettings;
 use App\Support\TicketCreatedNotificationSettings;
 use App\Support\TicketLabelSettings;
 use App\Support\TicketTimelineTemplateSettings;
+use App\Support\TicketWorkflow;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -1989,30 +1990,16 @@ class TicketController extends Controller
     /**
      * Update ticket status only
      */
-    public function updateStatus(Request $request, string $id)
+    public function updateStatus(Request $request, string $id, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
         $data = $request->validate([
-            'status' => 'required|in:open,in_progress,pending,resolved,closed',
+            'status' => ['required', Rule::in(TicketWorkflow::STATUSES)],
         ]);
 
-        $previousStatus = $ticket->status;
-        $ticket->status = $data['status'];
-        $ticket->save();
-
-        if ($previousStatus !== $ticket->status) {
-            $this->logTechnicianTimeline(
-                $ticket,
-                'status_changed',
-                'Statut du ticket modifie',
-                [
-                    'before' => $previousStatus,
-                    'after' => $ticket->status,
-                ]
-            );
-        }
+        $workflow->changeStatus($ticket, $data['status'], $this->isAgentContext() ? Auth::user() : null);
 
         return back();
     }
@@ -2020,30 +2007,16 @@ class TicketController extends Controller
     /**
      * Update ticket priority only
      */
-    public function updatePriority(Request $request, string $id)
+    public function updatePriority(Request $request, string $id, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
         $data = $request->validate([
-            'priority' => 'required|in:low,medium,high',
+            'priority' => ['required', Rule::in(TicketWorkflow::PRIORITIES)],
         ]);
 
-        $previousPriority = $ticket->priority;
-        $ticket->priority = $data['priority'];
-        $ticket->save();
-
-        if ($previousPriority !== $ticket->priority) {
-            $this->logTechnicianTimeline(
-                $ticket,
-                'priority_changed',
-                'Priorite du ticket modifiee',
-                [
-                    'before' => $previousPriority,
-                    'after' => $ticket->priority,
-                ]
-            );
-        }
+        $workflow->changePriority($ticket, $data['priority'], $this->isAgentContext() ? Auth::user() : null);
 
         return back();
     }
@@ -2051,151 +2024,34 @@ class TicketController extends Controller
     /**
      * Assign the authenticated agent user to a ticket in one click.
      */
-    public function selfAssign(string $id)
+    public function selfAssign(string $id, TicketWorkflow $workflow)
     {
         $agentUser = $this->ensureAgentOrAbort();
-
-        if (!($agentUser->agent?->is_active ?? false)) {
-            return back()->withErrors([
-                'assignee_id' => 'Votre compte agent est desactive.',
-            ]);
-        }
 
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
-        $currentAssignee = $ticket->assignee;
-
-        if ($currentAssignee && (int) $currentAssignee->id !== (int) $agentUser->id) {
-            return back()->withErrors([
-                'assignee_id' => 'Ce ticket est deja attribue a un autre agent.',
-            ]);
-        }
-
-        if ($currentAssignee && (int) $currentAssignee->id === (int) $agentUser->id) {
-            return back();
-        }
-
-        $previousAssigneeId = $ticket->assignee_id;
-        $ticket->assignee_id = $agentUser->id;
-        $ticket->save();
-
-        $this->logTechnicianTimeline(
-            $ticket,
-            'assignee_changed',
-            'Agent attribue au ticket',
-            [
-                'before' => $this->formatTimelineValue('assignee_id', $previousAssigneeId),
-                'after' => $this->formatTimelineValue('assignee_id', $ticket->assignee_id),
-            ]
-        );
-
-        return back()->with('success', 'Ticket attribue.');
+        return $workflow->assignToSelf($ticket, $agentUser)
+            ? back()->with('success', 'Ticket attribue.')
+            : back();
     }
 
     /**
      * Store a manual timeline event created by a technician.
      */
-    public function storeTimelineEvent(Request $request, string $id)
+    public function storeTimelineEvent(Request $request, string $id, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
         $user = $this->ensureAgentOrAbort();
 
-        $data = $request->validate([
-            'event_type' => ['required', 'string', Rule::in(TicketTimelineTemplateSettings::allowedEventTypes())],
-            'summary' => 'required|string|max:500',
-            'details' => 'nullable|string|max:3000',
-            'happened_at' => 'nullable|date',
-            'prerequisites' => 'nullable|array|max:20',
-            'prerequisites.*.name' => 'required_with:prerequisites|string|max:160',
-            'prerequisites.*.met' => 'nullable|boolean',
-            'actions' => 'nullable|array|max:30',
-            'actions.*.label' => 'required_with:actions|string|max:160',
-            'actions.*.done' => 'nullable|boolean',
-        ]);
-
-        $details = [];
-        if (!empty($data['details'])) {
-            $details['note'] = $data['details'];
-        }
-
-        if (!empty($data['prerequisites']) && is_array($data['prerequisites'])) {
-            $details['prerequisites'] = collect($data['prerequisites'])
-                ->filter(fn($p) => is_array($p) && !empty(trim((string) ($p['name'] ?? ''))))
-                ->map(fn($p) => [
-                    'name' => trim((string) ($p['name'] ?? '')),
-                    'met' => (bool) ($p['met'] ?? false),
-                ])
-                ->values()
-                ->all();
-        }
-
-        $happenedAt = $data['happened_at'] ?? now();
-        $normalizedActions = collect($data['actions'] ?? [])
-            ->filter(fn($action) => is_array($action) && !empty(trim((string) ($action['label'] ?? ''))))
-            ->map(function ($action) use ($user, $happenedAt) {
-                $isDone = (bool) ($action['done'] ?? false);
-                $doneAt = null;
-
-                if ($isDone) {
-                    if ($happenedAt instanceof \DateTimeInterface) {
-                        $doneAt = $happenedAt->toIso8601String();
-                    } elseif (is_string($happenedAt)) {
-                        $doneAt = $happenedAt;
-                    } else {
-                        $doneAt = now()->toIso8601String();
-                    }
-                }
-
-                return [
-                    'id' => (string) Str::uuid(),
-                    'label' => trim((string) ($action['label'] ?? '')),
-                    'done' => $isDone,
-                    'done_by_id' => $isDone ? $user->id : null,
-                    'done_by_name' => $isDone ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : null,
-                    'done_at' => $doneAt,
-                ];
-            })
-            ->values();
-
-        if ($normalizedActions->isNotEmpty()) {
-            $details['actions'] = $normalizedActions->all();
-        }
-
-        $details['source'] = 'manual';
-
-        $manualEvent = TicketTimelineEvent::create([
-            'ticket_id' => $ticket->id,
-            'technician_id' => $user->id,
-            'event_type' => $data['event_type'],
-            'summary' => $data['summary'],
-            'details' => !empty($details) ? $details : null,
-            'happened_at' => $happenedAt,
-        ]);
-
-        $normalizedActions
-            ->filter(fn(array $action) => (bool) ($action['done'] ?? false))
-            ->each(function (array $action) use ($ticket, $user, $manualEvent, $happenedAt) {
-                TicketTimelineEvent::create([
-                    'ticket_id' => $ticket->id,
-                    'technician_id' => $user->id,
-                    'event_type' => 'task_completed',
-                    'summary' => 'Action realisee: ' . $action['label'],
-                    'details' => [
-                        'source' => 'manual_action_completion',
-                        'action_label' => $action['label'],
-                        'parent_event_id' => $manualEvent->id,
-                    ],
-                    'happened_at' => $happenedAt,
-                ]);
-            });
+        $workflow->addTimelineEvent($ticket, $user, $request->validate(TicketWorkflow::timelineEventRules()));
 
         return back()->with('success', 'Evenement ajoute au suivi du ticket.');
     }
 
-    public function storeDeviceEvent(Request $request, string $id)
+    public function storeDeviceEvent(Request $request, string $id, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
@@ -2208,39 +2064,12 @@ class TicketController extends Controller
             ]);
         }
 
-        $data = $request->validate([
-            'event_type' => 'required|in:battery_replaced,screen_replaced,storage_upgraded,diagnostic,maintenance,note',
-            'summary' => 'required|string|max:500',
-            'details' => 'nullable|string|max:3000',
-            'happened_at' => 'nullable|date',
-        ]);
-
-        $deviceEvent = DeviceEvent::create([
-            'device_id' => $ticket->device_id,
-            'ticket_id' => $ticket->id,
-            'technician_id' => $user->id,
-            'event_type' => $data['event_type'],
-            'summary' => $data['summary'],
-            'details' => !empty($data['details']) ? ['note' => $data['details']] : null,
-            'happened_at' => $data['happened_at'] ?? now(),
-        ]);
-
-        $this->logTechnicianTimeline(
-            $ticket,
-            'device_event_added',
-            'Intervention enregistree sur appareil',
-            [
-                'device_event_id' => $deviceEvent->id,
-                'event_type' => $deviceEvent->event_type,
-                'summary' => $deviceEvent->summary,
-                'happened_at' => $deviceEvent->happened_at?->toIso8601String(),
-            ]
-        );
+        $workflow->addDeviceEvent($ticket, $user, $request->validate(TicketWorkflow::deviceEventRules()));
 
         return back()->with('success', 'Intervention appareil ajoutee.');
     }
 
-    public function removeTimelineEvent(Request $request, string $id, string $event)
+    public function removeTimelineEvent(Request $request, string $id, string $event, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
@@ -2251,45 +2080,24 @@ class TicketController extends Controller
             'reason' => 'nullable|string|max:500',
         ]);
 
-        $timelineEvent = TicketTimelineEvent::where('ticket_id', $ticket->id)->findOrFail($event);
-
-        if ($timelineEvent->trashed()) {
-            return back()->withErrors(['event' => 'Cet evenement est deja retire.']);
-        }
-
-        $timelineEvent->removed_by_id = $user->id;
-        $timelineEvent->removed_reason = $data['reason'] ?? null;
-        $timelineEvent->removed_at = now();
-        $timelineEvent->save();
-        $timelineEvent->delete();
+        $workflow->removeTimelineEvent($ticket, $user, $event, $data['reason'] ?? null);
 
         return back()->with('success', 'Evenement retire.');
     }
 
-    public function restoreTimelineEvent(Request $request, string $id, string $event)
+    public function restoreTimelineEvent(Request $request, string $id, string $event, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
 
         $user = $this->ensureAgentOrAbort();
 
-        $timelineEvent = TicketTimelineEvent::withTrashed()
-            ->where('ticket_id', $ticket->id)
-            ->findOrFail($event);
-
-        if (!$timelineEvent->trashed()) {
-            return back()->withErrors(['event' => 'Cet evenement est deja actif.']);
-        }
-
-        $timelineEvent->restore();
-        $timelineEvent->restored_by_id = $user->id;
-        $timelineEvent->restored_at = now();
-        $timelineEvent->save();
+        $workflow->restoreTimelineEvent($ticket, $user, $event);
 
         return back()->with('success', 'Evenement restaure.');
     }
 
-    public function updateTimelineAction(Request $request, string $id, string $event)
+    public function updateTimelineAction(Request $request, string $id, string $event, TicketWorkflow $workflow)
     {
         $ticket = Ticket::findOrFail($id);
         $this->authorizeTicketAccess($ticket);
@@ -2301,148 +2109,21 @@ class TicketController extends Controller
             'done' => 'required|boolean',
         ]);
 
-        $timelineEvent = TicketTimelineEvent::where('ticket_id', $ticket->id)->findOrFail($event);
-
-        if ($timelineEvent->trashed()) {
-            return back()->withErrors(['event' => 'Impossible de modifier une action sur un evenement retire.']);
-        }
-
-        $details = is_array($timelineEvent->details) ? $timelineEvent->details : [];
-        $actions = collect($details['actions'] ?? [])->values();
-        $actionIndex = (int) $data['action_index'];
-
-        if (!$actions->has($actionIndex)) {
-            return back()->withErrors(['action_index' => 'Action introuvable dans cet evenement.']);
-        }
-
-        $action = $actions->get($actionIndex);
-        if (!is_array($action)) {
-            return back()->withErrors(['action_index' => 'Action invalide.']);
-        }
-
         $nextDone = (bool) $data['done'];
-        $previousDone = (bool) ($action['done'] ?? false);
 
-        if ($previousDone === $nextDone) {
+        if (! $workflow->setTimelineAction($ticket, $user, $event, (int) $data['action_index'], $nextDone)) {
             return back();
-        }
-
-        $actionLabel = trim((string) ($action['label'] ?? 'Action'));
-        $action['id'] = (string) ($action['id'] ?? Str::uuid());
-        $action['done'] = $nextDone;
-        $action['done_by_id'] = $nextDone ? $user->id : null;
-        $action['done_by_name'] = $nextDone ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : null;
-        $action['done_at'] = $nextDone ? now()->toIso8601String() : null;
-
-        $actions->put($actionIndex, $action);
-        $details['actions'] = $actions->all();
-        $timelineEvent->details = $details;
-        $timelineEvent->save();
-
-        if ($nextDone) {
-            TicketTimelineEvent::create([
-                'ticket_id' => $ticket->id,
-                'technician_id' => $user->id,
-                'event_type' => 'task_completed',
-                'summary' => 'Action realisee: ' . $actionLabel,
-                'details' => [
-                    'source' => 'manual_action_completion',
-                    'action_id' => $action['id'],
-                    'action_label' => $actionLabel,
-                    'parent_event_id' => $timelineEvent->id,
-                ],
-                'happened_at' => now(),
-            ]);
-        } else {
-            TicketTimelineEvent::create([
-                'ticket_id' => $ticket->id,
-                'technician_id' => $user->id,
-                'event_type' => 'task_reopened',
-                'summary' => 'Action repassee a faire: ' . $actionLabel,
-                'details' => [
-                    'source' => 'manual_action_reopened',
-                    'action_id' => $action['id'],
-                    'action_label' => $actionLabel,
-                    'parent_event_id' => $timelineEvent->id,
-                ],
-                'happened_at' => now(),
-            ]);
         }
 
         return back()->with('success', $nextDone ? 'Action marquee comme realisee.' : 'Action marquee comme non realisee.');
     }
 
-    public function technicianTodos(): Response
+    public function technicianTodos(TicketWorkflow $workflow): Response
     {
         $this->ensureAgentOrAbort();
 
-        $allowedStatuses = ['open', 'in_progress', 'pending'];
-
-        $rows = TicketTimelineEvent::query()
-            ->with([
-                'ticket:id,title,status,priority,assignee_id',
-                'ticket.assignee:id,first_name,last_name',
-                'technician:id,first_name,last_name',
-            ])
-            ->whereHas('ticket', function ($query) use ($allowedStatuses) {
-                $query->whereIn('status', $allowedStatuses);
-            })
-            ->orderByDesc('happened_at')
-            ->limit(1000)
-            ->get()
-            ->flatMap(function (TicketTimelineEvent $event) {
-                $details = is_array($event->details) ? $event->details : [];
-                $actions = collect($details['actions'] ?? [])->values();
-
-                if ($actions->isEmpty() || !$event->ticket) {
-                    return [];
-                }
-
-                return $actions
-                    ->map(function ($action, $index) use ($event) {
-                        if (!is_array($action)) {
-                            return null;
-                        }
-
-                        $label = trim((string) ($action['label'] ?? ''));
-                        if ($label === '' || (bool) ($action['done'] ?? false)) {
-                            return null;
-                        }
-
-                        return [
-                            'ticket' => [
-                                'id' => $event->ticket->id,
-                                'title' => $event->ticket->title,
-                                'status' => $event->ticket->status,
-                                'priority' => $event->ticket->priority,
-                                'assignee_name' => $event->ticket->assignee
-                                    ? trim(($event->ticket->assignee->first_name ?? '') . ' ' . ($event->ticket->assignee->last_name ?? ''))
-                                    : null,
-                            ],
-                            'event' => [
-                                'id' => $event->id,
-                                'summary' => $event->summary,
-                                'happened_at' => $event->happened_at?->toIso8601String(),
-                                'technician_name' => $event->technician
-                                    ? trim(($event->technician->first_name ?? '') . ' ' . ($event->technician->last_name ?? ''))
-                                    : null,
-                            ],
-                            'action' => [
-                                'index' => $index,
-                                'id' => (string) ($action['id'] ?? ''),
-                                'label' => $label,
-                            ],
-                        ];
-                    })
-                    ->filter()
-                    ->values()
-                    ->all();
-            })
-            ->values()
-            ->all();
-
         return Inertia::render('Tickets/TechnicianTodos', [
-            'todoRows' => $rows,
+            'todoRows' => $workflow->pendingActions(),
         ]);
     }
 

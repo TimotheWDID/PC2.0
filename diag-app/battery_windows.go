@@ -23,7 +23,12 @@ type battTest struct {
 func readBatteryPoint(ctx context.Context) (map[string]any, bool) {
 	c, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	out, err := psCommand(c, batteryPointPS).Output()
+	cmd, cleanup, err := psCommand(c, batteryPointPS)
+	if err != nil {
+		return nil, false
+	}
+	defer cleanup()
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, false
 	}

@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -70,4 +71,44 @@ func pruneFiles(dir, prefix string, keep int) {
 		os.Remove(filepath.Join(dir, names[0]))
 		names = names[1:]
 	}
+}
+
+var ticketIDRe = regexp.MustCompile(`^/tickets/(\d+)/`)
+
+// ticketFilePath is where a file downloaded from a ticket is kept, next to
+// the analyses: PC2Diag-rapports\Tickets\<n°>\<name>.
+func ticketFilePath(root, apiPath, name string) string {
+	dir := "divers"
+	if m := ticketIDRe.FindStringSubmatch(apiPath); m != nil {
+		dir = m[1]
+	}
+	ext := strings.ToLower(filepath.Ext(name))
+	if len(ext) > 10 || unsafeExt.MatchString(ext) {
+		ext = ""
+	}
+	return filepath.Join(root, "Tickets", dir, safeFileName(strings.TrimSuffix(name, filepath.Ext(name)))+ext)
+}
+
+var unsafeExt = regexp.MustCompile(`[^.a-z0-9]`)
+var unsafeFileName = regexp.MustCompile(`[^\pL\pN _().-]+`)
+
+func safeFileName(s string) string {
+	s = strings.Trim(unsafeFileName.ReplaceAllString(s, "_"), " ._")
+	if r := []rune(s); len(r) > 80 {
+		s = string(r[:80])
+	}
+	if s == "" {
+		s = "fichier"
+	}
+	return s
+}
+
+// runnableExt: files that would run something if opened; they are shown in
+// the Explorer instead.
+func runnableExt(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msi", ".msp", ".scr", ".lnk", ".hta", ".reg", ".cpl", ".jar", ".pif", ".url":
+		return true
+	}
+	return false
 }

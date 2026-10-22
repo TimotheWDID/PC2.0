@@ -2,4 +2,4 @@ package main
 
 // Version of the app, sent with each report. Overridden at build time with
 // -ldflags "-X main.Version=…".
-var Version = "1.4.1"
+var Version = "1.5.1"

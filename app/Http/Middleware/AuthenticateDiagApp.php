@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Models\DiagAppToken;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Session\ArraySessionHandler;
+use Illuminate\Session\Store;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -15,6 +17,9 @@ class AuthenticateDiagApp
 {
     public function handle(Request $request, Closure $next)
     {
+        // JSON answers, errors included, whatever the client asked for
+        $request->headers->set('Accept', 'application/json');
+
         $plain = (string) $request->bearerToken();
         $token = $plain !== '' ? DiagAppToken::findByPlain($plain) : null;
         $user = $token?->user;
@@ -28,6 +33,14 @@ class AuthenticateDiagApp
         }
 
         Auth::setUser($user);
+
+        // The ticket controllers read the session (preview mode of the site):
+        // the app has none, so it gets an empty one that lives for this request.
+        if (! $request->hasSession()) {
+            $session = new Store('pc2diag', new ArraySessionHandler(1));
+            $session->start();
+            $request->setLaravelSession($session);
+        }
         $request->attributes->set('diag_app_token', $token);
 
         $token->forceFill([

@@ -498,6 +498,28 @@ func (a *app) send(ticketID int, exp AtelierExport) (*SendResult, error) {
 	return res, nil
 }
 
+// openTicketFile downloads a file of a ticket into PC2Diag-rapports\Tickets\<n°>
+// and opens it; a file that would run something is only shown in the Explorer.
+func (a *app) openTicketFile(path string) (string, error) {
+	name, data, err := a.client().Download(path)
+	if err != nil {
+		return "", err
+	}
+	p := ticketFilePath(reportsDir(), path, name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return "", fmt.Errorf("enregistrement impossible : %w", err)
+	}
+	if err := os.WriteFile(p, data, 0o600); err != nil {
+		return "", fmt.Errorf("enregistrement impossible : %w", err)
+	}
+	if runnableExt(p) {
+		_ = shellExecute("open", "explorer.exe", `/select,"`+p+`"`)
+	} else {
+		_ = shellExecute("open", p, "")
+	}
+	return p, nil
+}
+
 // ---------------------------------------------------------------- pont avec l'interface
 
 func (a *app) handle(method string, raw json.RawMessage) (any, error) {
@@ -652,6 +674,25 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		arg(0, &id)
 		arg(1, &exp)
 		return a.send(id, exp)
+	case "goSiteAPI":
+		var method, path string
+		var body json.RawMessage
+		arg(0, &method)
+		arg(1, &path)
+		arg(2, &body)
+		return a.client().Call(method, path, body)
+	case "goSiteUpload":
+		var path string
+		var fields map[string]string
+		var files []UploadFile
+		arg(0, &path)
+		arg(1, &fields)
+		arg(2, &files)
+		return a.client().Upload(path, fields, files)
+	case "goSiteOpenFile":
+		var path string
+		arg(0, &path)
+		return a.openTicketFile(path)
 	case "goAtelierPart":
 		var off int
 		arg(0, &off)

@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -36,17 +35,27 @@ func powershellExe() string {
 	return systemExe(`WindowsPowerShell\v1.0\powershell.exe`)
 }
 
-// psCommand builds a hidden PowerShell call for a script, passed encoded to
-// avoid any quoting issue.
-func psCommand(ctx context.Context, script string) *exec.Cmd {
-	u := utf16.Encode([]rune(script))
-	b := make([]byte, len(u)*2)
-	for i, c := range u {
-		b[2*i], b[2*i+1] = byte(c), byte(c>>8)
+// psCommand builds a hidden PowerShell call for a script. The script is
+// written to a temporary .ps1 file (UTF-8 with BOM, so accents survive) and
+// run with -File: an encoded command line is what antivirus software flags
+// first. Call cleanup once the command has finished.
+func psCommand(ctx context.Context, script string) (*exec.Cmd, func(), error) {
+	f, err := os.CreateTemp("", "pc2diag-*.ps1")
+	if err != nil {
+		return nil, nil, err
 	}
-	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", base64.StdEncoding.EncodeToString(b))
+	_, err = f.WriteString("\ufeff" + script)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	cleanup := func() { _ = os.Remove(f.Name()) }
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", f.Name())
 	hide(cmd)
-	return cmd
+	return cmd, cleanup, nil
 }
 
 func hide(cmd *exec.Cmd) {
@@ -143,7 +152,12 @@ func (a *app) runStep(ctx context.Context, id string, st Step) (int, error) {
 		hide(cmd)
 		a.emitGo("actionLog", map[string]any{"id": id, "line": "> " + st.Exe + " " + strings.Join(args, " ")})
 	} else {
-		cmd = psCommand(ctx, psPrelude+"\n"+st.PS)
+		var cleanup func()
+		var err error
+		if cmd, cleanup, err = psCommand(ctx, psPrelude+"\n"+st.PS); err != nil {
+			return -1, err
+		}
+		defer cleanup()
 	}
 	exe, _ := os.Executable()
 	cmd.Env = append(os.Environ(), "PC2DIAG_EXE="+exe)
