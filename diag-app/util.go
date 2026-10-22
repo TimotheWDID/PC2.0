@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"unicode/utf8"
 )
@@ -38,3 +39,15 @@ func chunkAt(s string, off, size int) (string, int) {
 	}
 	return s[off:end], end
 }
+
+// sensor is one live reading sent to the interface (event « sensors »).
+type sensor struct {
+	ID string  `json:"id"`
+	G  string  `json:"g"`
+	L  string  `json:"l"`
+	U  string  `json:"u"`
+	V  float64 `json:"v"`
+	K  string  `json:"k,omitempty"` // colonne du relevé envoyé au site (format HWiNFO), voir sensorLog dans ui.html
+}
+
+func round2(v float64) float64 { return math.Round(v*100) / 100 }

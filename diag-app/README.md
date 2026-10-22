@@ -1,6 +1,6 @@
 # PC2 Diag (application Windows)
 
-Application Windows de diagnostic et de dépannage de Planète Computers, reprise
+Application Windows de diagnostic et de dépannage de Planete-Computers 2.0, reprise
 de `DiagnosticPC.exe` (Go + fenêtre WebView2 + collecte PowerShell), avec en
 plus l'envoi du rapport au site de ticketing, sur un ticket ou en « diag
 rapide ». Son diagnostic détaillé est le **Diag Atelier du site**, intégré à
@@ -18,13 +18,27 @@ site à l'identique.
   Secure Boot, TPM, UAC, SMBv1, comptes), services, démarrage, logiciels,
   intégrité DISM, réseau et Internet.
 - **Diag atelier** : la page Diag Atelier du site (vues technicien et client,
-  viabilité, Windows 11, fiche d'inventaire, tests manuels, export PDF / JSON)
+  viabilité, Windows 11, tests manuels, export PDF / JSON)
   remplie avec l'analyse. On peut y ajouter un relevé HWiNFO ou un rapport
   batterie, comme sur le site.
+- **Tests manuels** : écran (aplats de couleur plein écran), clavier (les
+  touches s'allument), souris et pavé tactile, son gauche / droite, webcam et
+  micro, charge, réseau, USB, ventilateur, châssis. Chaque test se note OK, KO
+  ou non testé ; les résultats et les notes sont ceux de la section « Tests
+  manuels » du Diag atelier et partent au site avec le rapport.
 - **Résumé et problèmes** : score, constats classés par gravité avec la
   marche à suivre, arborescence Matériel / Windows, contrôles réussis.
 - **Capteurs en direct** (chaque seconde) : processeur, fréquence, mémoire,
-  disques, réseau, carte graphique, zones thermiques, batterie.
+  disques, réseau, carte graphique, zones thermiques, batterie. Les cartes
+  NVIDIA et AMD donnent en plus température, charge et consommation, lues
+  auprès de leur pilote (NVML, ADL), sans rien installer. Quand HWiNFO tourne
+  (la version portable suffit) avec « Shared Memory Support », ses capteurs
+  s'ajoutent : températures du processeur par cœur, consommation, ventilateurs.
+- **Relevé des capteurs** : enregistré dès le lancement (4 h au plus),
+  « Nouveau relevé » pour repartir de zéro avant un test en charge. Il part au
+  site avec l'analyse au format d'un relevé de surveillance HWiNFO : le Diag
+  Atelier (dans l'exe et sur le site) l'affiche en courbes. Un relevé HWiNFO
+  ajouté à la main dans le Diag atelier reste prioritaire.
 - **Réparations**, une par une ou enchaînées (préréglages « Entretien
   complet », « Réparer Windows Update », « Réparer le réseau ») : point de
   restauration, DISM, SFC, chkdsk en ligne ou au redémarrage, nettoyage,
@@ -34,13 +48,15 @@ site à l'identique.
   avec réouverture automatique de l'application.
 - **Test de batterie** : santé, test de décharge (avec ou sans charge CPU),
   dépannage d'une batterie non reconnue.
-- **Rapport client** (smileys, comparatif avant / après intervention à partir
-  de l'historique), **rapport technique** détaillé et **rapport
+- **Rapport client** : la fiche Client du Diag Atelier du site (verdict,
+  échelle « Où en est votre ordinateur ? », tuiles, conseils), avec en plus le
+  comparatif avant / après intervention à partir de l'historique et les
+  travaux réalisés, **rapport technique** détaillé et **rapport
   d'inventaire** personnalisable, en HTML imprimable en PDF.
 - **Envoyer au site** : association avec une clé, recherche du ticket ou
   diag rapide, envoi de l'analyse en cours ou d'une analyse enregistrée, avec
   la liste des réparations lancées. L'envoi est celui du bouton « Envoyer au
-  ticket » du Diag Atelier : rapport, fiche d'inventaire, tests manuels et
+  ticket » du Diag Atelier : rapport, valeurs de la fiche appareil, tests manuels et
   fichiers (l'analyse, et les relevés HWiNFO ou batterie ajoutés). La fiche
   appareil du ticket est complétée (seuls les champs vides sont remplis, les
   différences sont signalées).
@@ -55,6 +71,11 @@ peuvent être combinés ; quand le rapport système HWiNFO est là, il prime pou
 l'identité de la machine. L'analyse de l'application ajoute ses propres
 sections : stabilité, sécurité, mises à jour, espace disque, périphériques,
 réseau, logiciels et réparations faites.
+
+PC assemblé : quand le BIOS garde les textes par défaut du fabricant de la
+carte mère (« To be filled by O.E.M. », « System manufacturer »…), le fabricant
+et le modèle affichés et envoyés au site sont ceux de la carte mère, avec la
+mention « PC assemblé ».
 
 ## Portable : rien n'est installé sur le PC du client
 
@@ -118,19 +139,21 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
 | `api.go` | client de l'API (envoi multipart du Diag Atelier) |
-| `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planète Computers de l'exe |
+| `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planete-Computers 2.0 de l'exe |
 | `main_windows.go` | fenêtre, pont `goCall`, analyse, historique, rapports, site |
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
 | `sensors_windows.go` | capteurs en direct (compteurs PDH) |
 | `battery_windows.go` | test de décharge |
+| `gpu_windows.go` | capteurs des cartes graphiques NVIDIA (NVML) et AMD (ADL) |
+| `hwinfo.go`, `hwinfo_windows.go` | lecture des capteurs de HWiNFO (mémoire partagée) |
 
 ## Compiler
 
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.3.0        # Linux, macOS, Git Bash
-build.cmd 1.3.0         # invite de commandes Windows
+./build.sh 1.4.0        # Linux, macOS, Git Bash
+build.cmd 1.4.0         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
@@ -142,7 +165,7 @@ runtime WebView2 (présent sur Windows 10 et 11 à jour). Pour proposer le
 téléchargement sur la page Diag rapide, copier l'exe dans
 `public/downloads/PC2Diag.exe` sur le serveur.
 
-Icône : `winres/icon.png` (logo Planète Computers). Pour la changer,
+Icône : `winres/icon.png` (logo Planete-Computers 2.0). Pour la changer,
 `go-winres simply --icon winres/icon.png --manifest none --arch amd64 --out rsrc`
 régénère `rsrc_windows_amd64.syso`.
 

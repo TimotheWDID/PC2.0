@@ -20,6 +20,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
@@ -403,6 +404,15 @@ func saveHTML(name, html string) (string, error) {
 	return p, nil
 }
 
+// saveCSV writes a sensors log next to the analyses (PC2Diag-rapports).
+func saveCSV(name, csv string) (string, error) {
+	p := filepath.Join(reportsDir(), safeName(strings.TrimSuffix(name, ".csv"))+".csv")
+	if err := os.WriteFile(p, []byte(csv), 0o600); err != nil {
+		return "", fmt.Errorf("enregistrement impossible : %w", err)
+	}
+	return p, nil
+}
+
 // exportReport fills the technical report with the last analysis.
 func (a *app) exportReport(brand json.RawMessage) (string, error) {
 	a.mu.Lock()
@@ -525,6 +535,11 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		arg(0, &name)
 		arg(1, &html)
 		return saveHTML(name, html)
+	case "goSaveCSV":
+		var name, csv string
+		arg(0, &name)
+		arg(1, &csv)
+		return saveCSV(name, csv)
 	case "goReboot":
 		delay, resume := 60, true
 		arg(0, &delay)
@@ -643,6 +658,7 @@ func main() {
 			Width:  1280,
 			Height: 860,
 			Center: true,
+			IconId: 1, // icône Planete-Computers 2.0 (rsrc_windows_amd64.syso)
 		},
 	})
 	if w == nil {
@@ -655,6 +671,7 @@ func main() {
 		os.Exit(1)
 	}
 	a.w = w
+	setWindowIcons(w.Window())
 
 	// Un seul point d'entrée asynchrone : chaque appel tourne dans sa propre
 	// goroutine pour ne jamais figer la fenêtre, puis résout sa promesse.
@@ -683,6 +700,38 @@ func main() {
 	w.SetHtml(uiHTML)
 	w.Run()
 	w.Destroy()
+}
+
+// setWindowIcons gives the title bar (small icon) and the taskbar / Alt+Tab
+// (large icon) the Planete-Computers 2.0 logo, each at its native size, so it
+// stays sharp whatever the screen scaling.
+func setWindowIcons(hwnd unsafe.Pointer) {
+	if hwnd == nil {
+		return
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	loadImage, metrics, send := user32.NewProc("LoadImageW"), user32.NewProc("GetSystemMetrics"), user32.NewProc("SendMessageW")
+	var inst windows.Handle
+	_ = windows.GetModuleHandleEx(0, nil, &inst)
+	const (
+		imageIcon   = 1
+		wmSetIcon   = 0x0080
+		iconSmall   = 0
+		iconBig     = 1
+		smCxIcon    = 11
+		smCyIcon    = 12
+		smCxSmIcon  = 49
+		smCySmIcon  = 50
+		resIconMain = 1
+	)
+	for _, ic := range [][3]uintptr{{iconSmall, smCxSmIcon, smCySmIcon}, {iconBig, smCxIcon, smCyIcon}} {
+		cx, _, _ := metrics.Call(ic[1])
+		cy, _, _ := metrics.Call(ic[2])
+		h, _, _ := loadImage.Call(uintptr(inst), resIconMain, imageIcon, cx, cy, 0)
+		if h != 0 {
+			send.Call(uintptr(hwnd), wmSetIcon, ic[0], h)
+		}
+	}
 }
 
 // removeAllRetry deletes a folder the WebView2 processes may still hold for a
