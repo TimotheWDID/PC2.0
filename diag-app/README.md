@@ -98,6 +98,13 @@ rangé **à côté de l'exe** :
   d'accès ;
 - `PC2Diag-rapports\` : les analyses (historique pour le comparatif avant /
   après), les rapports HTML et le journal `PC2Diag-journal.txt`.
+- `PC2Diag-rapports\PC2Diag-collecte_<date>.txt` : le détail de chaque
+  analyse (les 10 dernières), avec l'heure de début et la durée de chaque
+  vérification. Si l'analyse reste bloquée sur une étape, la dernière ligne
+  nomme la vérification qui ne rend pas la main ; `PC2Diag-journal.txt` note
+  aussi, chaque minute, l'étape qui ne progresse plus. Les vérifications de
+  l'étape 4 (BitLocker, volumes, `fsutil dirty`, taille des fichiers
+  temporaires) sont abandonnées au bout de 15 à 30 s si elles ne répondent pas.
 
 Si la clé USB est protégée en écriture, ce dossier est créé sur le bureau.
 
@@ -165,8 +172,8 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.4.0        # Linux, macOS, Git Bash
-build.cmd 1.4.0         # invite de commandes Windows
+./build.sh 1.4.1        # Linux, macOS, Git Bash
+build.cmd 1.4.1         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans

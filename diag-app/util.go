@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -51,3 +54,20 @@ type sensor struct {
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
+
+// pruneFiles keeps the keep most recent files of dir whose name starts with
+// prefix (their names end with a sortable date) and deletes the others.
+func pruneFiles(dir, prefix string, keep int) {
+	entries, _ := os.ReadDir(dir)
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for len(names) > keep {
+		os.Remove(filepath.Join(dir, names[0]))
+		names = names[1:]
+	}
+}
