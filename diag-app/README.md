@@ -220,8 +220,8 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.5.0        # Linux, macOS, Git Bash
-build.cmd 1.5.0         # invite de commandes Windows
+./build.sh 1.5.1        # Linux, macOS, Git Bash
+build.cmd 1.5.1         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
@@ -233,14 +233,37 @@ runtime WebView2 (présent sur Windows 10 et 11 à jour). Pour proposer le
 téléchargement sur la page Diag rapide, copier l'exe dans
 `public/downloads/PC2Diag.exe` sur le serveur.
 
-Icône : `winres/icon.png` (logo Planete-Computers 2.0). Pour la changer,
-`go-winres simply --icon winres/icon.png --manifest none --arch amd64 --out rsrc`
-régénère `rsrc_windows_amd64.syso`.
+Icône, manifeste et informations de version : `winres/winres.json` et
+`winres/icon.png`. Les scripts de compilation régénèrent
+`rsrc_windows_amd64.syso` avec la version demandée (`go run
+github.com/tc-hib/go-winres@v0.3.3 make …`).
 
 Tests : `go test ./...` ; pour vérifier les scripts PowerShell des
 réparations, `PSDUMP=<dossier> go test -run TestDumpPS` les écrit dans ce
 dossier.
 
-L'exe n'est pas signé : Windows SmartScreen peut afficher un avertissement au
-premier lancement (« Informations complémentaires » › « Exécuter quand
-même »). Une signature de code le supprime.
+## Antivirus
+
+Un outil de dépannage fait ce que font aussi les programmes malveillants :
+il demande les droits administrateur, lance PowerShell, touche à Defender, au
+pare-feu, au registre (RunOnce). Les antivirus le jugent sur ces signes. Pour
+paraître le moins suspect possible, l'exe :
+
+- porte un éditeur, un nom de produit, une description et sa version, et un
+  manifeste Windows (`winres/winres.json`) ;
+- garde ses symboles (compilé sans `-s -w`) ;
+- n'utilise plus de commande PowerShell encodée (`-EncodedCommand`, le signe
+  le plus surveillé) : chaque script de réparation est écrit dans un fichier
+  `.ps1` temporaire, lancé avec `-File`, puis effacé.
+
+Cela réduit les faux positifs sans les supprimer : **seule une signature de
+code** les fait vraiment disparaître (et retire aussi l'avertissement
+SmartScreen « Informations complémentaires › Exécuter quand même »). Il faut
+un certificat de signature de code au nom de la société, puis
+`signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f
+certificat.pfx dist\PC2Diag.exe` après chaque compilation.
+
+En attendant, un antivirus qui bloque l'exe se signale à son éditeur comme
+faux positif (Microsoft Defender : https://www.microsoft.com/wdsi/filesubmission ;
+les autres éditeurs ont un formulaire équivalent). Une exclusion locale sur
+le dossier de la clé USB marche aussi, poste par poste.
