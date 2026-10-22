@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Response;
 
 class TicketController extends Controller
@@ -1083,6 +1084,24 @@ class TicketController extends Controller
      */
     public function store(Request $request)
     {
+        $ticket = $this->createTicket($request);
+
+        if ($request->boolean('print_label')) {
+            return redirect()->route('tickets.printLabel', $ticket->id);
+        }
+
+        // Redirect to dashboard after creating a ticket
+        return redirect()->route('dashboard');
+    }
+
+    /**
+     * Creates the ticket of the creation form, with its customer, device,
+     * order and follow-up, and notifies the customer. Shared with the PC2
+     * Diag application; refusals are validation errors (form errors on the
+     * site, a 422 in the application's API).
+     */
+    public function createTicket(Request $request): Ticket
+    {
         $currentUser = Auth::user();
         $isAgent = $this->isAgentContext();
         $supportsTicketKind = $this->supportsTicketKind();
@@ -1133,15 +1152,15 @@ class TicketController extends Controller
         $noDevicePassword = $request->boolean('no_device_password');
 
         if ($normalizedDevicePassword === null && !$noDevicePassword) {
-            return back()->withErrors([
+            throw ValidationException::withMessages([
                 'device_password' => 'Renseignez le mot de passe de l\'appareil ou cochez "Je n\'ai pas de mots de passe".',
-            ])->withInput();
+            ]);
         }
 
         if ($normalizedDevicePassword === null && $noDevicePassword && !$request->boolean('password_empty_confirmed')) {
-            return back()->withErrors([
+            throw ValidationException::withMessages([
                 'no_device_password' => 'Merci de confirmer explicitement l\'absence de mot de passe.',
-            ])->withInput();
+            ]);
         }
 
         $ticket = new Ticket();
@@ -1205,9 +1224,9 @@ class TicketController extends Controller
         );
 
         if ($resolvedNotificationPreference === null) {
-            return back()->withErrors([
+            throw ValidationException::withMessages([
                 'notify_by' => 'Choisissez Email ou SMS lorsque les deux moyens de contact sont disponibles.',
-            ])->withInput();
+            ]);
         }
 
         if (!empty($data['device_id'])) {
@@ -1217,9 +1236,9 @@ class TicketController extends Controller
                 ->first();
 
             if (!$device) {
-                return back()->withErrors([
+                throw ValidationException::withMessages([
                     'device_id' => 'Cet appareil ne correspond pas au client du ticket.',
-                ])->withInput();
+                ]);
             }
 
             $ticket->device_id = $device->id;
@@ -1362,12 +1381,7 @@ class TicketController extends Controller
 
         $this->notifyCustomerTicketCreated($ticket);
 
-        if ($request->boolean('print_label')) {
-            return redirect()->route('tickets.printLabel', $ticket->id);
-        }
-
-        // Redirect to dashboard after creating a ticket
-        return redirect()->route('dashboard');
+        return $ticket;
     }
 
     /**

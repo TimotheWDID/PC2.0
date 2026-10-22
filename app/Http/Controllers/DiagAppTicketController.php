@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Commande;
 use App\Models\Device;
 use App\Models\DeviceEvent;
@@ -192,6 +193,119 @@ class DiagAppTicketController extends Controller
         $this->workflow->addDeviceEvent($ticket, $request->user(), $request->validate(TicketWorkflow::deviceEventRules()));
 
         return $this->ok($ticket, 'Intervention ajoutée au suivi de l\'appareil.', [], 201);
+    }
+
+    /**
+     * What the new ticket form needs: categories, items the customer can
+     * leave, and the customers matching q (with their devices).
+     */
+    public function createOptions(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+        $customers = [];
+
+        if (mb_strlen($search) >= 2) {
+            $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
+            $customers = User::query()
+                ->whereDoesntHave('agent')
+                ->where(fn (Builder $query) => $query
+                    ->where('first_name', 'like', $like)
+                    ->orWhere('last_name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhereHas('company', fn (Builder $company) => $company->where('company_name', 'like', $like)))
+                ->with(['devices', 'company:id,client_type,company_name,first_name,last_name'])
+                ->orderBy('last_name')
+                ->limit(20)
+                ->get()
+                ->map(fn (User $user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'company' => $user->company?->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'devices' => $user->devices->map(fn (Device $device) => [
+                        'id' => $device->id,
+                        'name' => $device->display_name,
+                        'serial_number' => $device->serial_number,
+                    ])->values(),
+                ])
+                ->values()
+                ->all();
+        }
+
+        return response()->json([
+            'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
+            'brought_items' => collect(self::BROUGHT_ITEM_LABELS)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values(),
+            'customers' => $customers,
+        ]);
+    }
+
+    /**
+     * A ticket created from the application, by the site's own creation
+     * (customer, notifications, follow-up), for the PC the application runs
+     * on: its device on the customer's file is used, or created from what
+     * the application read (brand, model, serial number).
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_selection' => 'required|in:existing,new',
+            'user_id' => 'required_if:user_selection,existing|nullable|integer|exists:users,id',
+            'user_first_name' => 'required_if:user_selection,new|nullable|string|max:100',
+            'user_last_name' => 'nullable|string|max:100',
+            'user_phone' => 'nullable|string|max:30',
+            'user_address' => 'nullable|string|max:255',
+            'user_postal_code' => 'nullable|string|max:20',
+            'user_city' => 'nullable|string|max:100',
+            'priority' => ['nullable', Rule::in(TicketWorkflow::PRIORITIES)],
+            'machine' => 'nullable|array',
+            'machine.brand' => 'nullable|string|max:120',
+            'machine.model' => 'nullable|string|max:120',
+            'machine.serial' => 'nullable|string|max:120',
+        ], [
+            'user_first_name.required_if' => 'Indiquez au moins le prénom du nouveau client.',
+            'user_id.required_if' => 'Choisissez le client.',
+        ]);
+
+        $machine = $request->input('machine', []);
+        $serial = self::serialKey($machine['serial'] ?? null) ? trim((string) $machine['serial']) : null;
+        $model = trim((string) ($machine['model'] ?? ''));
+        $device = null;
+
+        if ($request->input('user_selection') === 'existing' && $serial) {
+            $device = Device::query()
+                ->where('user_id', $request->integer('user_id'))
+                ->get(['id', 'serial_number'])
+                ->first(fn (Device $device) => self::serialKey($device->serial_number) === self::serialKey($serial));
+        }
+
+        $taken = $serial && ! $device && Device::query()->whereNotNull('serial_number')->get(['serial_number'])
+            ->contains(fn (Device $device) => self::serialKey($device->serial_number) === self::serialKey($serial));
+
+        $request->merge(array_filter([
+            'ticket_kind' => 'standard',
+            'status' => 'open',
+            'priority' => $request->input('priority') ?: 'medium',
+            'device_id' => $device?->id,
+            'quick_add_device' => ! $device && $model !== '' ? true : null,
+            'quick_device_type' => 'computer',
+            'quick_device_brand' => $machine['brand'] ?? null,
+            'quick_device_model' => $model !== '' ? $model : null,
+            'quick_device_serial_number' => $taken ? null : $serial,
+        ], fn ($value) => $value !== null));
+        $request->request->remove('special_only');
+        $request->request->remove('quick_add_commande');
+
+        $ticket = app(TicketController::class)->createTicket($request);
+        $ticket->load(['user:id,first_name,last_name,email', 'device', 'assignee:id,first_name,last_name']);
+
+        return response()->json([
+            'ok' => true,
+            'message' => "Ticket #{$ticket->id} créé.",
+            'ticket' => $this->summary($ticket, (int) $request->user()->id),
+            'warnings' => $taken ? ["Le numéro de série {$serial} est déjà sur l'appareil d'un autre client : il n'a pas été repris."] : [],
+        ], 201);
     }
 
     /**
@@ -490,6 +604,10 @@ class DiagAppTicketController extends Controller
                 'technician' => TicketWorkflow::personName($diagnostic->technician),
                 'report_url' => route('tickets.diagnostics.show', [$ticket, $diagnostic]),
                 'client_report_path' => "/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/client-report",
+                // the PC2 Diag analysis it was built from, to reopen it in the application
+                'app_scan_path' => collect($diagnostic->files ?? [])->contains('source', 'app')
+                    ? "/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/files/app"
+                    : null,
             ])
             ->all();
     }

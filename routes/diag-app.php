@@ -13,6 +13,8 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
 
     // Tickets: same paths as on the site, so its download paths work here too
     Route::get('tickets', [DiagAppTicketController::class, 'index'])->name('diag-app.tickets');
+    Route::get('tickets/create', [DiagAppTicketController::class, 'createOptions'])->name('diag-app.tickets.create');
+    Route::post('tickets', [DiagAppTicketController::class, 'store'])->name('diag-app.tickets.store');
     Route::get('tickets/for-machine', [DiagAppTicketController::class, 'forMachine'])->name('diag-app.tickets.for-machine');
     Route::get('todos', [DiagAppTicketController::class, 'todos'])->name('diag-app.todos');
 
@@ -41,6 +43,7 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
         Route::get('files/{file}/download', [TicketFileController::class, 'download'])->whereNumber('file')->name('files.download');
 
         Route::patch('diagnostics/{diagnostic}/visibility', [DiagAppController::class, 'updateVisibility'])->whereNumber('diagnostic')->name('diagnostics.visibility');
+        Route::get('diagnostics/{diagnostic}/files/{source}', [DiagAppController::class, 'file'])->whereNumber('diagnostic')->whereIn('source', ['app', 'aida', 'hwinfo', 'battery'])->name('diagnostics.file');
         Route::get('diagnostics/{diagnostic}/client-report', [DiagAppController::class, 'clientReport'])->whereNumber('diagnostic')->name('diagnostics.client-report');
     });
 });

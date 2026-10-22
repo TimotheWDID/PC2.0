@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -141,4 +145,26 @@ func saveLink(path string, v json.RawMessage) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// decodeScan reads a PC2 Diag analysis kept with a diagnostic on the site
+// (gzipped by the application, plain when added on the site's Diag Atelier).
+func decodeScan(data []byte) (json.RawMessage, error) {
+	if len(data) > 2 && data[0] == 0x1f && data[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		if data, err = io.ReadAll(io.LimitReader(zr, 200<<20)); err != nil {
+			return nil, fmt.Errorf("analyse illisible : %w", err)
+		}
+	}
+	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
+	var probe struct {
+		Meta map[string]any `json:"meta"`
+	}
+	if json.Unmarshal(data, &probe) != nil || probe.Meta == nil {
+		return nil, errors.New("ce diagnostic n'a pas été fait avec PC2 Diag : ouvrez-le sur le site")
+	}
+	return data, nil
 }

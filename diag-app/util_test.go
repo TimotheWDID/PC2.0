@@ -139,3 +139,19 @@ func TestLinkFile(t *testing.T) {
 		t.Error("JSON invalide accepté")
 	}
 }
+
+func TestDecodeScan(t *testing.T) {
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_, _ = zw.Write([]byte(`{"meta":{"computer":"PC-X"}}`))
+	_ = zw.Close()
+	for _, in := range [][]byte{gz.Bytes(), []byte("\xEF\xBB\xBF{\"meta\":{\"computer\":\"PC-X\"}}")} {
+		got, err := decodeScan(in)
+		if err != nil || string(got) != `{"meta":{"computer":"PC-X"}}` {
+			t.Errorf("decodeScan : %s, %v", got, err)
+		}
+	}
+	if _, err := decodeScan([]byte(`Sensor,Value`)); err == nil {
+		t.Error("un fichier qui n'est pas une analyse est accepté")
+	}
+}
