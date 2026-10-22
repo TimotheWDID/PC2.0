@@ -119,3 +119,23 @@ func TestTicketFilePath(t *testing.T) {
 		t.Error("runnableExt")
 	}
 }
+
+func TestLinkFile(t *testing.T) {
+	dir := t.TempDir()
+	p := linkFile(dir, `DESKTOP-ÉLAN/..\x`)
+	if filepath.Dir(p) != filepath.Join(dir, "Suivi") {
+		t.Fatalf("chemin : %s", p)
+	}
+	if loadLink(p) != nil {
+		t.Error("aucun suivi attendu")
+	}
+	if err := saveLink(p, json.RawMessage(`{"ticket":{"id":5}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(loadLink(p)); got != `{"ticket":{"id":5}}` {
+		t.Errorf("relu : %s", got)
+	}
+	if saveLink(p, json.RawMessage(`{`)) == nil {
+		t.Error("JSON invalide accepté")
+	}
+}

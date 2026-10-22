@@ -689,6 +689,12 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		arg(1, &fields)
 		arg(2, &files)
 		return a.client().Upload(path, fields, files)
+	case "goLinkGet":
+		return loadLink(linkFile(reportsDir(), a.machine)), nil
+	case "goLinkSave":
+		var v json.RawMessage
+		arg(0, &v)
+		return true, saveLink(linkFile(reportsDir(), a.machine), v)
 	case "goSiteOpenFile":
 		var path string
 		arg(0, &path)

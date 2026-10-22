@@ -194,6 +194,160 @@ class DiagAppTicketController extends Controller
         return $this->ok($ticket, 'Intervention ajoutée au suivi de l\'appareil.', [], 201);
     }
 
+    /**
+     * The open tickets of the PC the application runs on: by the serial
+     * number of the ticket's device, of a diagnostic sent on the ticket or
+     * of an earlier follow-up written by the application; by the computer's
+     * name alone as a weaker hint, for PCs without a usable serial. With
+     * ticket, also says where the ticket linked earlier stands.
+     */
+    public function forMachine(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'serial' => 'nullable|string|max:255',
+            'computer' => 'nullable|string|max:255',
+            'ticket' => 'nullable|integer|min:1',
+        ]);
+        $serial = self::serialKey($data['serial'] ?? null);
+        $computer = self::nameKey($data['computer'] ?? null);
+        $me = (int) $request->user()->id;
+        $with = ['user:id,first_name,last_name,email', 'device', 'assignee:id,first_name,last_name'];
+
+        $current = null;
+        if (! empty($data['ticket']) && ($linked = Ticket::query()->with($with)->find($data['ticket']))) {
+            $current = $this->summary($linked, $me) + ['open' => in_array($linked->status, TicketWorkflow::OPEN_STATUSES, true)];
+        }
+
+        // ticket id => how it was found; a serial match beats a name match
+        $matches = [];
+        $found = function (?int $ticketId, string $by) use (&$matches) {
+            if (! $ticketId) {
+                return;
+            }
+            $strong = $by !== 'name';
+            if (! isset($matches[$ticketId]) || ($strong && ! $matches[$ticketId]['strong'])) {
+                $matches[$ticketId] = ['by' => $by, 'strong' => $strong];
+            }
+        };
+        // a record of the same PC: same serial, or same name when one side has no serial
+        $sameMachine = function (?string $recordSerial, ?string $recordName) use ($serial, $computer): ?bool {
+            $recordSerial = self::serialKey($recordSerial);
+            if ($serial && $recordSerial) {
+                return $serial === $recordSerial ? true : null;
+            }
+
+            return $computer && self::nameKey($recordName) === $computer ? false : null;
+        };
+
+        $open = Ticket::query()->standardOnly()->whereIn('status', TicketWorkflow::OPEN_STATUSES)->select('id');
+
+        if ($serial) {
+            Ticket::query()
+                ->whereIn('id', $open)
+                ->whereHas('device', fn (Builder $device) => $device->whereNotNull('serial_number'))
+                ->with('device:id,serial_number')
+                ->get(['id', 'device_id'])
+                ->each(fn (Ticket $ticket) => self::serialKey($ticket->device?->serial_number) === $serial ? $found($ticket->id, 'device') : null);
+        }
+
+        if ($serial || $computer) {
+            Diagnostic::query()
+                ->whereIn('ticket_id', $open)
+                ->latest('id')
+                ->limit(1000)
+                ->get(['id', 'ticket_id', 'machine_name', 'inventory'])
+                ->each(function (Diagnostic $diagnostic) use ($found, $sameMachine) {
+                    $inventory = is_array($diagnostic->inventory) ? $diagnostic->inventory : [];
+                    $same = $sameMachine($inventory['serial'] ?? null, $diagnostic->machine_name);
+                    if ($same !== null) {
+                        $found($diagnostic->ticket_id, $same ? 'diagnostic' : 'name');
+                    }
+                });
+
+            TicketTimelineEvent::query()
+                ->whereIn('ticket_id', $open)
+                ->where('event_type', TicketWorkflow::APP_ACTIVITY_EVENT)
+                ->latest('id')
+                ->limit(2000)
+                ->get(['id', 'ticket_id', 'details'])
+                ->each(function (TicketTimelineEvent $event) use ($found, $sameMachine) {
+                    $machine = is_array($event->details['machine'] ?? null) ? $event->details['machine'] : [];
+                    $same = $sameMachine($machine['serial'] ?? null, $machine['computer'] ?? null);
+                    if ($same !== null) {
+                        $found($event->ticket_id, $same ? 'app' : 'name');
+                    }
+                });
+        }
+
+        $labels = [
+            'device' => 'Numéro de série de l\'appareil du ticket',
+            'diagnostic' => 'Numéro de série d\'un diagnostic envoyé sur le ticket',
+            'app' => 'PC déjà suivi par PC2 Diag sur ce ticket',
+            'name' => 'Même nom de PC (à confirmer)',
+        ];
+
+        $tickets = Ticket::query()
+            ->with($with)
+            ->whereKey(array_keys($matches))
+            ->orderByDesc('updated_at')
+            ->get()
+            ->sortBy(fn (Ticket $ticket) => $matches[$ticket->id]['strong'] ? 0 : 1)
+            ->take(10)
+            ->map(fn (Ticket $ticket) => $this->summary($ticket, $me) + [
+                'match' => $matches[$ticket->id] + ['label' => $labels[$matches[$ticket->id]['by']]],
+            ])
+            ->values();
+
+        return response()->json([
+            'serial' => $serial,
+            'computer' => $computer,
+            'current' => $current,
+            'tickets' => $tickets,
+        ]);
+    }
+
+    /**
+     * Follow-up written by the application: what the technician did on the
+     * PC, in batches (the application keeps what it could not send yet).
+     */
+    public function storeActivity(Request $request, Ticket $ticket): JsonResponse
+    {
+        $data = $request->validate([
+            'entries' => 'required|array|min:1|max:50',
+            'entries.*.kind' => 'required|string|max:40',
+            'entries.*.summary' => 'required|string|max:500',
+            'entries.*.note' => 'nullable|string|max:3000',
+            'entries.*.happened_at' => 'nullable|date',
+            'entries.*.uid' => 'nullable|string|max:64',
+            'machine' => 'nullable|array',
+            'machine.serial' => 'nullable|string|max:255',
+            'machine.computer' => 'nullable|string|max:255',
+            'machine.model' => 'nullable|string|max:255',
+        ]);
+
+        $written = $this->workflow->addAppActivity($ticket, $request->user(), $data['entries'], $data['machine'] ?? []);
+
+        return $this->ok($ticket, 'Suivi technicien mis à jour.', ['written' => $written], 201);
+    }
+
+    /** Serial numbers BIOS makers leave as placeholders identify no PC. */
+    private static function serialKey(?string $serial): ?string
+    {
+        $serial = strtoupper(trim((string) $serial));
+        if (strlen($serial) < 4 || preg_match('/^(TO BE FILLED BY O\.?E\.?M\.?|SYSTEM SERIAL NUMBER|DEFAULT STRING|O\.?E\.?M\.?|NOT (APPLICABLE|SPECIFIED|AVAILABLE)|NONE|N\/A|UNDEFINED|EMPTY|0+|X+|1234567890?|123456789)$/', $serial)) {
+            return null;
+        }
+
+        return $serial;
+    }
+
+    private static function nameKey(?string $name): ?string
+    {
+        $name = strtoupper(trim((string) $name));
+
+        return strlen($name) >= 2 ? $name : null;
+    }
+
     private function ok(Ticket $ticket, string $message, array $extra = [], int $status = 200): JsonResponse
     {
         return response()->json(['ok' => true, 'message' => $message, 'ticket_id' => $ticket->id] + $extra, $status);

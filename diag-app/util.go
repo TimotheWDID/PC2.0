@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -111,4 +112,33 @@ func runnableExt(name string) bool {
 		return true
 	}
 	return false
+}
+
+// The ticket follow-up of a PC (the ticket it is linked to and the entries
+// not sent yet) is kept in PC2Diag-rapports\Suivi\<PC>.json: the key goes
+// from PC to PC, and the entries must survive a reboot or a lost network.
+func linkFile(root, machine string) string {
+	return filepath.Join(root, "Suivi", safeFileName(machine)+".json")
+}
+
+func loadLink(path string) json.RawMessage {
+	b, err := os.ReadFile(path)
+	if err != nil || !json.Valid(b) {
+		return nil
+	}
+	return b
+}
+
+func saveLink(path string, v json.RawMessage) error {
+	if !json.Valid(v) {
+		return fmt.Errorf("suivi illisible")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, v, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }

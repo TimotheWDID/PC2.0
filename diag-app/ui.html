@@ -301,6 +301,7 @@ table.du .mono{text-align:right}
 .tk-chipf{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 10px;font-size:12px;background:var(--panel)}
 .tk-vis{font-size:11.5px;border-radius:4px;padding:0 6px;background:var(--row);color:var(--muted)} .tk-vis.ext{background:var(--info-bg);color:var(--info)}
 .du-x.danger,.btn.danger{color:var(--crit);border-color:var(--crit)}
+.tb.lk-none{color:var(--warn);border-color:var(--warn)} .lk-tb .cnt{margin-left:2px}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -312,6 +313,7 @@ table.du .mono{text-align:right}
   <button class="tb" data-go="atelier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Diag atelier</button>
   <button class="tb" data-go="tickets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>Tickets</button>
   <button class="tb" data-go="site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>Envoyer au site</button>
+  <button class="tb lk-tb" id="bLink" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span>Ticket du PC</span><b class="cnt warn" hidden></b></button>
   <div class="spacer"></div>
   <div class="who"><span id="pcName">—</span><span class="pill" id="adminPill">Administrateur</span></div>
 </header>
@@ -339,7 +341,7 @@ table.du .mono{text-align:right}
   window.__goDone = (id, err, res) => { const p = pend[id]; if (!p) return; delete pend[id]; if (err) p.rej(err); else p.res(res); };
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
-   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart','goSiteAPI','goSiteUpload','goSiteOpenFile',
+   'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart','goSiteAPI','goSiteUpload','goSiteOpenFile','goLinkGet','goLinkSave',
    'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
@@ -1022,6 +1024,7 @@ V.tests = () => {
 };
 async function testsSet(id, v){
   if (TESTS.checks[id] === v) delete TESTS.checks[id]; else TESTS.checks[id] = v;
+  lkTest(id);
   if (view === 'tests') render();
   try { const w = await atelierSync(); testsPush(w); } catch (_) {}
 }
@@ -1246,9 +1249,10 @@ $('#content').addEventListener('click', async e => {
     RB.resume = resume; RB.delay = delay;
     const err = await api.reboot(delay, resume);
     if (err) { status('Redémarrage impossible : ' + err); return; }
+    lkBeforeReboot(resume);
     startRebootCountdown(delay);
   }
-  if (e.target.id === 'rbCancel') { await api.cancelReboot(); stopRebootCountdown(); status('Redémarrage annulé.'); }
+  if (e.target.id === 'rbCancel') { await api.cancelReboot(); stopRebootCountdown(); status('Redémarrage annulé.'); lkNote('reboot', 'Redémarrage du PC annulé'); }
   const pr = e.target.closest('[data-qpreset]'); if (pr) { const k = pr.dataset.qpreset;
     if (k === 'none') { QUEUE.sel.clear(); } else { const pset = QPRESETS[k]; QUEUE.sel = new Set(pset.ids.filter(id => ACTIONS.find(a => a.id === id))); QUEUE.restore = pset.restore; }
     render(); }
@@ -1290,11 +1294,13 @@ async function finishQueue(){
   QUEUE.active = false;
   const okCount = Object.values(QUEUE.results).filter(r => r.ok).length;
   const anyReboot = QUEUE.ids.some(id => { const a = ACTIONS.find(x => x.id === id); return a && a.reboot && QUEUE.results[id] && QUEUE.results[id].ok; });
+  lkNote('repair', `Enchaînement de réparations : ${okCount}/${QUEUE.ids.length} réussie(s)${QUEUE.stop ? ' (arrêté par le technicien)' : ''}`,
+    QUEUE.ids.map(id => `${(ACTIONS.find(a => a.id === id) || {title: id}).title} : ${!QUEUE.results[id] ? 'non lancée' : QUEUE.results[id].ok ? 'réussie' : 'échec ou annulée'}`));
   if (!QUEUE.stop && QUEUE.reboot && anyReboot) {
     status('Réparations terminées (' + okCount + '/' + QUEUE.ids.length + ') — redémarrage nécessaire.');
     RB.resume = QUEUE.resume;
     const err = await api.reboot(60, QUEUE.resume);
-    if (!err) { startRebootCountdown(60); return; }
+    if (!err) { lkBeforeReboot(QUEUE.resume); startRebootCountdown(60); return; }
     status('Redémarrage impossible : ' + err);
   } else {
     status('Réparations terminées : ' + okCount + '/' + QUEUE.ids.length + ' réussie(s)' + (QUEUE.stop ? ' (arrêté)' : '') + (anyReboot && !QUEUE.reboot ? ' — un redémarrage est conseillé.' : ''));
@@ -1574,9 +1580,9 @@ const brandForm = () => ({client: $('#r-client').value.trim(), tech: $('#r-tech'
 $('#content').addEventListener('click', async e => {
   if (e.target.id === 'r-save') { CFG = {shop: $('#r-shop').value, address: $('#r-addr').value, phone: $('#r-phone').value, email: $('#r-email').value, tech: $('#r-tech').value}; const ok = await api.saveCfg(CFG); $('#r-msg').textContent = ok ? 'En-tête mémorisé à côté de l\'exe.' : 'Impossible d\'enregistrer (clé protégée en écriture ?).'; }
   if (e.target.id === 'r-go') { const b = brandForm(); $('#r-msg').textContent = 'Génération…';
-    try { await loadBefore(); const html = await buildClientReport(b); const p = await api.saveHTML('Bilan_' + ((D.meta || {}).computer || 'PC') + (b.client ? '_' + b.client : ''), html); $('#r-msg').innerHTML = 'Bilan enregistré : <span class="mono">' + esc(p) + '</span>'; } catch (err) { $('#r-msg').textContent = 'Erreur : ' + err; } }
+    try { await loadBefore(); const html = await buildClientReport(b); const p = await api.saveHTML('Bilan_' + ((D.meta || {}).computer || 'PC') + (b.client ? '_' + b.client : ''), html); lkNote('report', 'Bilan client enregistré', baseName(p)); $('#r-msg').innerHTML = 'Bilan enregistré : <span class="mono">' + esc(p) + '</span>'; } catch (err) { $('#r-msg').textContent = 'Erreur : ' + err; } }
   if (e.target.id === 'r-tech-go') { const b = brandForm(); $('#r-msg').textContent = 'Génération…';
-    try { const p = await api.exp(b); $('#r-msg').innerHTML = 'Rapport technique enregistré : <span class="mono">' + esc(p) + '</span>'; } catch (err) { $('#r-msg').textContent = 'Erreur : ' + err; } }
+    try { const p = await api.exp(b); lkNote('report', 'Rapport technique enregistré', baseName(p)); $('#r-msg').innerHTML = 'Rapport technique enregistré : <span class="mono">' + esc(p) + '</span>'; } catch (err) { $('#r-msg').textContent = 'Erreur : ' + err; } }
 });
 
 // ----- rapport d'inventaire personnalisable
@@ -1630,7 +1636,7 @@ $('#content').addEventListener('click', async e => {
     if (!chosen.length) { $('#inv-msg').textContent = 'Cochez au moins une section.'; return; }
     $('#inv-msg').textContent = 'Génération…';
     try { const html = buildInventory(chosen, {client: $('#inv-client').value.trim(), tech: $('#inv-tech').value.trim(), head: $('#inv-head').checked});
-      const p = await api.saveHTML('Inventaire_' + ((D.meta || {}).computer || 'PC'), html); $('#inv-msg').innerHTML = 'Rapport enregistré : <span class="mono">' + esc(p) + '</span>'; }
+      const p = await api.saveHTML('Inventaire_' + ((D.meta || {}).computer || 'PC'), html); lkNote('report', 'Rapport d\'inventaire enregistré', baseName(p)); $('#inv-msg').innerHTML = 'Rapport enregistré : <span class="mono">' + esc(p) + '</span>'; }
     catch (err) { $('#inv-msg').textContent = 'Erreur : ' + err; } }
 });
 function buildInventory(chosen, opt){
@@ -1849,6 +1855,7 @@ V.site = () => {
       <div class="acts" style="display:flex;gap:10px;margin-top:12px;align-items:center"><button class="btn go" id="s-pair">Associer</button><span id="s-pmsg" style="color:var(--crit)">${esc(SITE.pairErr)}</span></div></div></div>`;
   }
   if (SITE.tickets === null && !SITE.loading && !s.meError) setTimeout(siteSearch, 0);
+  if (!SITE.ticket && !SITE.quick && LK.ticket) SITE.ticket = {...LK.ticket};
   const acct = s.meError
     ? `<div class="banner">Le site ne répond pas ou refuse la clé : ${esc(s.meError)} <button class="btn" id="s-check">Réessayer</button> <button class="btn" id="s-unpair">Changer de clé</button></div>`
     : `<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1">Connecté à <b>${esc((s.me && s.me.site) || s.server)}</b>${s.me && s.me.user ? ' en tant que <b>' + esc(s.me.user) + '</b>' : ''}<div style="color:var(--muted);font-size:12.5px">${esc(s.server)}</div></div><button class="btn" id="s-unpair">Dissocier</button></div>`;
@@ -1894,10 +1901,10 @@ $('#content').addEventListener('click', async e => {
     const server = $('#s-server').value.trim(), token = $('#s-token').value.trim();
     t.disabled = true; $('#s-pmsg').textContent = 'Vérification…';
     try { SITE.state = await sapi.pair(server, token); SITE.pairErr = ''; SITE.tickets = null; } catch (err) { SITE.pairErr = String(err); }
-    render(); return;
+    render(); lkPaint(); if (tkPaired()) { if (D) { LK.looked = false; lkLookup(); } lkFlush(); } return;
   }
-  if (t.id === 's-unpair') { SITE.state = await sapi.unpair(); SITE.tickets = null; SITE.ticket = null; SITE.result = null; render(); return; }
-  if (t.id === 's-check') { t.disabled = true; SITE.state = await sapi.check(); SITE.tickets = null; render(); return; }
+  if (t.id === 's-unpair') { SITE.state = await sapi.unpair(); SITE.tickets = null; SITE.ticket = null; SITE.result = null; render(); lkPaint(); return; }
+  if (t.id === 's-check') { t.disabled = true; SITE.state = await sapi.check(); SITE.tickets = null; render(); lkPaint(); if (tkPaired()) { if (D && !LK.looked) lkLookup(); lkFlush(); } return; }
   if (t.id === 's-search') { SITE.q = $('#s-q').value.trim(); siteSearch(); return; }
   if (t.id === 's-quick') { SITE.quick = true; SITE.ticket = null; SITE.result = null; render(); return; }
   const tk = t.closest('[data-sticket]');
@@ -1906,7 +1913,8 @@ $('#content').addEventListener('click', async e => {
   if (t.id === 's-send') {
     const acts = $('#s-acts') && $('#s-acts').checked ? done.map(d => ({id:d.id, title:d.title, ok:d.ok, at:d.at})) : [];
     SITE.sending = true; SITE.sendErr = ''; SITE.result = null; render();
-    try { SITE.result = await sapi.send(SITE.quick ? 0 : SITE.ticket.id, acts, SITE.file); status('Rapport envoyé au site.'); }
+    try { SITE.result = await sapi.send(SITE.quick ? 0 : SITE.ticket.id, acts, SITE.file); status('Rapport envoyé au site.');
+      if (SITE.result.ticket && !LK.ticket && !LK.off && SITE.file === '') lkLink({...SITE.ticket, ...SITE.result.ticket}, 'pick'); }
     catch (err) { SITE.sendErr = String(err) + ' L\'analyse reste enregistrée dans PC2Diag-rapports : vous pourrez l\'envoyer plus tard depuis cet écran.'; }
     SITE.sending = false; render();
   }
@@ -1930,7 +1938,7 @@ const TEV = {ticket_created_by_technician:'Création', ticket_creation_customer_
   assignee_changed:'Attribution', internal_note_added:'Note interne', public_reply_added:'Réponse au client', commande_linked:'Commande', commande_created_direct:'Commande créée',
   commande_updated_direct:'Commande modifiée', commande_status_changed_direct:'Statut commande', device_event_added:'Intervention appareil', diagnostic_added:'Diagnostic',
   diagnostic_shared:'Diagnostic partagé', diagnostic_unshared:'Diagnostic masqué', files_added:'Fichiers', file_removed:'Fichier supprimé', files_sent:'Fichiers envoyés',
-  task_completed:'Action réalisée', task_reopened:'Action rouverte'};
+  task_completed:'Action réalisée', task_reopened:'Action rouverte', diag_app_activity:'PC2 Diag'};
 const TDEV = {maintenance:'Maintenance', diagnostic:'Diagnostic', battery_replaced:'Batterie remplacée', screen_replaced:'Écran remplacé', storage_upgraded:'Stockage amélioré', note:'Note technique'};
 const TSRC = {ticket:'Ticket', chat:'Échange', diagnostic:'Diagnostic'};
 const TDTYPE = {computer:'Ordinateur', laptop:'Ordinateur portable', desktop:'Ordinateur fixe', phone:'Téléphone', tablet:'Tablette', other:'Autre'};
@@ -2019,8 +2027,8 @@ V.ticket = id => {
   const d = TK.d;
   if (!d) return head('Ticket #' + id) + (TK.dErr ? `<div class="banner">${esc(TK.dErr)} <button class="btn" id="tk-dreload">Réessayer</button> <button class="btn" data-nav="tickets">Retour à la liste</button></div>` : '<div class="empty">Chargement du ticket…</div>');
   const t = d.ticket;
-  const sub = [t.client ? esc(t.client) : '', t.device ? esc(t.device) : '', 'créé le ' + fdt(t.created_at), 'mis à jour le ' + fdt(t.updated_at)].filter(Boolean).join(' · ');
-  const right = `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-nav="tickets">Liste</button><button class="btn" id="tk-dreload"${TK.dLoading ? ' disabled' : ''}>${TK.dLoading ? 'Actualisation…' : 'Actualiser'}</button><button class="btn" data-surl="${esc(t.url)}">Ouvrir sur le site</button><button class="btn go" id="tk-sendscan">Envoyer l'analyse ici</button></div>`;
+  const sub = [LK.ticket && LK.ticket.id === t.id ? '<b>ticket de ce PC</b>' : '', t.client ? esc(t.client) : '', t.device ? esc(t.device) : '', 'créé le ' + fdt(t.created_at), 'mis à jour le ' + fdt(t.updated_at)].filter(Boolean).join(' · ');
+  const right = `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-nav="tickets">Liste</button><button class="btn" id="tk-dreload"${TK.dLoading ? ' disabled' : ''}>${TK.dLoading ? 'Actualisation…' : 'Actualiser'}</button><button class="btn" data-surl="${esc(t.url)}">Ouvrir sur le site</button>${LK.ticket && LK.ticket.id === t.id ? '' : `<button class="btn" id="tk-linkpc"${t.status === 'resolved' || t.status === 'closed' ? ' disabled title="Ticket terminé"' : ''}>Rattacher ce PC</button>`}<button class="btn go" id="tk-sendscan">Envoyer l'analyse ici</button></div>`;
   const me = tkMe();
   const ctl = `<div class="card tk-ctl">
     <div><span class="tk-k">Statut</span><div class="seg tk-seg">${Object.keys(TST).map(s => `<button data-tkstatus="${s}" aria-pressed="${t.status === s}" class="${s}"${TK.busy ? ' disabled' : ''}>${TST[s]}</button>`).join('')}</div></div>
@@ -2213,6 +2221,7 @@ $('#content').addEventListener('click', async e => {
     tkList(); return; }
   if (!view.startsWith('ticket:')) return;
   if (t.id === 'tk-dreload') { TK.flash = TK.flashErr = ''; TK.dLoading = true; render(); tkLoad(TK.cur); return; }
+  if (t.id === 'tk-linkpc' && TK.d) { lkLink(TK.d.ticket, 'pick'); render(); return; }
   if (t.id === 'tk-sendscan' && TK.d) { const x = TK.d.ticket; SITE.ticket = {id: x.id, title: x.title, client: x.client}; SITE.quick = false; SITE.result = null; go('site'); return; }
   const tab = t.closest('[data-tktab]'); if (tab) { TK.tab = tab.dataset.tktab; TK.flash = TK.flashErr = ''; TK.confirm = ''; render(); return; }
   const s1 = t.closest('[data-tkstatus]'); if (s1 && TK.d && s1.dataset.tkstatus !== TK.d.ticket.status) { tkDo(tkapi.call('PATCH', P + '/status', {status: s1.dataset.tkstatus})); return; }
@@ -2310,26 +2319,233 @@ setInterval(() => {
   tkLoad(TK.cur, true);
 }, 60000);
 
+// ===================== suivi du PC sur son ticket =====================
+// Le ticket ouvert pour ce PC est retrouvé sur le site (n° de série de
+// l'appareil du ticket, d'un diagnostic envoyé ou d'un suivi précédent de
+// l'application, sinon le nom du PC) ; sans certitude, on le demande au
+// technicien. Ce qu'il fait ensuite dans l'application (analyses,
+// réparations, tests, rapports, redémarrages, notes) s'écrit dans le suivi
+// technicien du ticket. Ce qui n'est pas encore parti est gardé dans
+// PC2Diag-rapports\Suivi et repart dès que le site répond, même après un
+// redémarrage.
+const LK = {ticket:null, serial:'', off:false, queue:[], log:[], pending:[], machine:{}, started:new Date().toISOString(),
+  looked:false, asked:false, busy:false, err:'', cands:null, q:'', found:null, searching:false, sessionFor:0, flushing:false,
+  timer:null, retry:null, wait:60, tests:{}, testsTimer:null, ovl:null};
+const LKBY = {device:'n° de série de l\'appareil du ticket', diagnostic:'n° de série d\'un diagnostic du ticket', app:'déjà suivi par PC2 Diag sur ce ticket', name:'même nom de PC'};
+const lkUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const lkT = t => ({id: t.id, title: t.title, client: t.client || '', device: t.device || ''});
+const lkTime = iso => new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+function lkMachine(){
+  const m = (D && D.meta) || {};
+  return {serial: m.serial || '', computer: m.computer || info.computer || '', model: D ? [maker(m), m.model].filter(Boolean).join(' ') : ''};
+}
+const lkIdLine = m => [m.computer, m.model, m.serial ? 'n° de série ' + m.serial : ''].filter(Boolean).join(' · ');
+function lkSave(){ try { goLinkSave({ticket: LK.ticket, serial: LK.serial, off: LK.off, queue: LK.queue}).catch(() => {}); } catch (_) {} }
+async function lkRestore(){
+  let s = null;
+  try { s = await goLinkGet(); } catch (_) {}
+  if (s) { LK.ticket = s.ticket || null; LK.serial = s.serial || ''; LK.off = !!s.off; LK.queue = arr(s.queue); }
+  LK.machine = lkMachine();
+  lkPaint();
+  if (LK.queue.length && tkPaired()) lkFlush(); // ce qui n'était pas parti avant la fermeture ou le redémarrage
+}
+// Après l'analyse, on sait quel PC c'est : on cherche son ticket.
+function lkIdentify(){
+  const m = lkMachine();
+  if (LK.serial && m.serial && LK.serial.toUpperCase() !== m.serial.toUpperCase()) { LK.ticket = null; LK.off = false; LK.sessionFor = 0; } // autre PC du même nom
+  LK.machine = m; if (m.serial) LK.serial = m.serial;
+  lkSave();
+  if (!LK.looked) lkLookup();
+}
+async function lkLookup(){
+  if (!tkPaired() || LK.busy || !LK.machine.computer) return;
+  const m = LK.machine;
+  LK.busy = true; LK.err = ''; lkPaint();
+  let r;
+  try { r = await tkapi.call('GET', '/tickets/for-machine?serial=' + encodeURIComponent(m.serial || '') + '&computer=' + encodeURIComponent(m.computer || '') + (LK.ticket ? '&ticket=' + LK.ticket.id : '')); }
+  catch (err) { LK.busy = false; LK.err = 'Recherche du ticket de ce PC impossible : ' + err; lkPaint(); return; }
+  LK.busy = false; LK.looked = true; LK.cands = r.tickets || [];
+  if (LK.ticket) {
+    if (r.current && r.current.open) { LK.ticket = lkT(r.current); lkSave(); lkSessionStart('restored'); lkPaint(); return; }
+    status(r.current ? `Le ticket #${LK.ticket.id} est ${(TST[r.current.status] || r.current.status).toLowerCase()} : ce PC n'y est plus rattaché.` : `Le ticket #${LK.ticket.id} n'existe plus : ce PC n'y est plus rattaché.`);
+    LK.ticket = null; LK.sessionFor = 0; lkSave();
+  }
+  if (LK.off) { lkPaint(); return; }
+  const strong = LK.cands.filter(t => t.match && t.match.strong);
+  if (strong.length === 1) { lkLink(strong[0], 'auto'); return; }
+  lkPaint();
+  if (!LK.asked) { LK.asked = true; lkPanel(); }
+}
+function lkLink(t, how){
+  if (LK.ticket && LK.ticket.id !== t.id) LK.sessionFor = 0;
+  LK.ticket = lkT(t); LK.off = false; lkSave();
+  if (!SITE.quick && (!SITE.ticket || how !== 'auto')) SITE.ticket = {...LK.ticket};
+  status(`Ce PC est rattaché au ticket #${t.id} : ce que vous faites ici s'inscrit dans son suivi technicien.`);
+  lkSessionStart(how, t.match);
+  lkPaint();
+}
+function lkUnlink(off){
+  LK.ticket = null; LK.off = !!off; LK.sessionFor = 0; LK.pending = []; lkSave();
+  status(off ? 'Ce PC ne sera pas suivi sur un ticket.' : 'Ce PC n\'est plus rattaché à un ticket.');
+  lkPaint();
+}
+// Première entrée de la session sur le ticket, puis ce qui a été fait avant le rattachement.
+function lkSessionStart(how, match){
+  if (!LK.ticket || LK.sessionFor === LK.ticket.id) return;
+  LK.sessionFor = LK.ticket.id;
+  const note = [lkIdLine(LK.machine), how === 'auto' ? 'Ticket retrouvé automatiquement : ' + (LKBY[match && match.by] || 'n° de série') + '.' : how === 'pick' ? 'Ticket choisi par le technicien.' : how === 'restored' ? 'PC déjà rattaché à ce ticket lors d\'une session précédente.' : '',
+    info.version ? 'PC2 Diag ' + info.version + (info.admin ? '' : ', sans droits administrateur') + '.' : ''].filter(Boolean).join('\n');
+  lkQueue({uid: lkUid(), kind: 'session', summary: info.resumed ? 'PC2 Diag relancé sur le PC après le redémarrage' : 'PC2 Diag lancé sur le PC du client', note, happened_at: LK.started});
+  LK.pending.splice(0).forEach(lkQueue);
+}
+// Une chose faite par le technicien : vers le suivi du ticket rattaché.
+function lkNote(kind, summary, lines){
+  const note = arr(lines).filter(Boolean).join('\n');
+  const e = {uid: lkUid(), kind, summary: String(summary).slice(0, 500), note: note ? note.slice(0, 3000) : null, happened_at: new Date().toISOString()};
+  if (LK.ticket) lkQueue(e);
+  else if (!LK.off && LK.pending.length < 40) { LK.pending.push(e); lkPaint(); }
+}
+function lkQueue(e){
+  LK.queue.push({t: LK.ticket.id, m: LK.machine, e});
+  LK.log.unshift({...e, t: LK.ticket.id, sent: false});
+  lkSave(); lkPaint();
+  clearTimeout(LK.timer); LK.timer = setTimeout(lkFlush, 1500);
+}
+async function lkFlush(){
+  if (LK.flushing || !LK.queue.length || !tkPaired()) return;
+  LK.flushing = true; clearTimeout(LK.retry);
+  try {
+    while (LK.queue.length) {
+      const first = LK.queue[0], key = JSON.stringify(first.m);
+      const batch = LK.queue.filter(q => q.t === first.t && JSON.stringify(q.m) === key).slice(0, 50);
+      await tkapi.call('POST', `/tickets/${first.t}/activity`, {machine: first.m, entries: batch.map(q => q.e)});
+      const sent = new Set(batch.map(q => q.e.uid));
+      LK.queue = LK.queue.filter(q => !sent.has(q.e.uid));
+      LK.log.forEach(l => { if (sent.has(l.uid)) l.sent = true; });
+      lkSave();
+      if (view === 'ticket:' + first.t && TK.cur === first.t && !TK.busy) tkLoad(first.t, true);
+    }
+    LK.err = ''; LK.wait = 60;
+  } catch (err) {
+    LK.err = 'Suivi pas encore envoyé (' + err + '). Nouvel essai dans ' + Math.round(LK.wait / 60) + ' min.';
+    LK.retry = setTimeout(lkFlush, LK.wait * 1000); LK.wait = Math.min(LK.wait * 2, 900);
+  }
+  LK.flushing = false; lkPaint();
+}
+// Les tests manuels s'enchaînent : un seul résumé, une minute après le dernier verdict.
+function lkTest(id){
+  LK.tests[id] = TESTS.checks[id] || '';
+  clearTimeout(LK.testsTimer); LK.testsTimer = setTimeout(lkTestsDone, 60000);
+}
+function lkTestsDone(){
+  clearTimeout(LK.testsTimer);
+  const ids = Object.keys(LK.tests); if (!ids.length) return;
+  const lbl = id => (TESTS.list.find(c => c.id === id) || {}).label || id;
+  const okN = ids.filter(id => LK.tests[id] === 'ok').length, koN = ids.filter(id => LK.tests[id] === 'ko').length;
+  lkNote('tests', `Tests manuels : ${okN} OK, ${koN} KO`, ids.map(id => `${lbl(id)} : ${LK.tests[id] === 'ok' ? 'OK' : LK.tests[id] === 'ko' ? 'KO' : 'verdict retiré'}`));
+  LK.tests = {};
+}
+function lkScanDone(seconds){
+  const n = sev => F.filter(f => f.sev === sev).length;
+  const lines = F.filter(f => f.sev !== 'info').sort((a, b) => ORDER[a.sev] - ORDER[b.sev]).slice(0, 15).map(f => `[${SEVL[f.sev]}] ${f.title}`);
+  if (F.filter(f => f.sev !== 'info').length > 15) lines.push('…');
+  if (seconds) lines.push(`Analyse faite en ${seconds} s${info.admin ? '' : ' (sans droits administrateur : partielle)'}.`);
+  lkNote('scan', `${SESSION.length > 1 ? 'Nouvelle analyse' : 'Analyse'} du PC : ${LV[levelOf(F)].t.toLowerCase()} (${n('crit')} critique(s), ${n('warn')} à corriger, ${n('info')} conseil(s))`, lines);
+}
+function lkBattery(r){
+  const h = battHealth();
+  const lines = [r.seconds ? `Durée du test : ${Math.max(1, Math.round(r.seconds / 60))} min${r.stopped ? ' (arrêté avant la fin)' : ''}.` : '',
+    r.avgW ? `Consommation moyenne : ${wfmt(r.avgW)}.` : '', r.runtimeH ? `Autonomie estimée : ${(+r.runtimeH).toFixed(1).replace('.', ',')} h.` : '', ...arr(r.anomalies)];
+  lkNote('battery', `Test de batterie : ${h != null ? 'santé ' + h + ' % — ' + battVerdict(h)[1].toLowerCase() : r.ok ? 'pas d\'anomalie' : 'anomalies relevées'}`, lines);
+}
+function lkBeforeReboot(resume){
+  lkTestsDone();
+  lkNote('reboot', 'Redémarrage du PC lancé depuis PC2 Diag', resume ? 'PC2 Diag se relance après le redémarrage.' : '');
+}
+
+// La pastille du ticket dans la barre du haut, et la fenêtre de suivi.
+function lkPaint(){
+  const b = $('#bLink'); if (!b) return;
+  b.hidden = !tkPaired();
+  const wait = LK.queue.length + (LK.ticket ? 0 : LK.pending.length);
+  b.classList.toggle('lk-none', !LK.ticket && !LK.off);
+  b.querySelector('span').textContent = LK.ticket ? 'Ticket #' + LK.ticket.id : LK.busy ? 'Recherche du ticket…' : LK.off ? 'PC non suivi' : 'Ticket du PC ?';
+  b.title = LK.ticket ? `Ce PC est rattaché au ticket #${LK.ticket.id} — ${LK.ticket.title}` : 'Rattacher ce PC à son ticket';
+  const c = b.querySelector('.cnt'); c.hidden = !wait || !LK.ticket; c.textContent = wait; c.title = wait + ' entrée(s) pas encore envoyée(s)';
+  if (LK.ovl && LK.ovl.o.isConnected) lkPanelRender();
+}
+function lkPanel(){
+  LK.asked = true;
+  if (LK.ovl && LK.ovl.o.isConnected) return;
+  if (LK.ticket === null && !LK.cands && !LK.busy && tkPaired()) lkLookup();
+  LK.ovl = overlay('<div class="ovl-box wide lk-box" style="user-select:text"></div>', {onClose: () => { LK.ovl = null; LK.changing = false; LK.found = null; }});
+  lkPanelRender();
+  if (!LK.ticket && tkPaired()) lkSearch(); // les tickets ouverts, pour choisir sans rien taper
+}
+function lkPanelRender(){
+  const box = LK.ovl.o.querySelector('.lk-box'); if (!box) return;
+  const note = $('#lk-note') ? $('#lk-note').value : '', q = $('#lk-q') ? $('#lk-q').value : LK.q;
+  const m = LK.machine.computer ? LK.machine : lkMachine();
+  const row = (t, extra) => `<tr><td><b>#${t.id}</b> ${esc(t.title)}${extra || ''}</td><td>${esc(t.client || '—')}</td><td>${esc(t.device || '—')}</td><td>${tkBadge(t.status)}</td><td><button class="btn go" data-lklink="${t.id}">Rattacher</button></td></tr>`;
+  const table = (list, how) => `<div style="overflow:auto;max-height:340px"><table class="list tk-tbl"><thead><tr><th>Ticket</th><th>Client</th><th>Appareil</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(t => row(t, how && t.match ? `<div class="tk-sub">${t.match.strong ? 'Trouvé par ' : 'Indice : '}${esc(LKBY[t.match.by] || t.match.by)}</div>` : '')).join('')}</tbody></table></div>`;
+  let cur;
+  if (LK.ticket) cur = `<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-left:4px solid var(--ok)"><div style="flex:1;min-width:220px">Ce PC est rattaché au <b>ticket #${LK.ticket.id}</b> — ${esc(LK.ticket.title)}${LK.ticket.client ? ' · ' + esc(LK.ticket.client) : ''}<div class="tk-sub">Analyses, réparations, tests, rapports et redémarrages s'inscrivent dans son suivi technicien.</div></div>
+      <button class="btn go" data-close data-tkopen="${LK.ticket.id}">Voir le ticket</button><button class="btn" id="lk-change">Changer de ticket</button><button class="btn" id="lk-unlink">Détacher</button></div>`;
+  else cur = `<div class="card">${LK.busy ? '<div class="empty">Recherche du ticket de ce PC…</div>'
+      : LK.cands && LK.cands.length ? `<div style="margin-bottom:8px">${LK.cands.some(t => t.match.strong) ? 'Plusieurs tickets ouverts correspondent à ce PC' : 'Aucun ticket n\'a ce numéro de série ; ces tickets ouverts ont un PC du même nom'} : lequel est le bon ?</div>${table(LK.cands, true)}`
+      : `<div style="margin-bottom:4px">Aucun ticket ouvert ne correspond à ce PC${m.serial ? ' (n° de série ' + esc(m.serial) + ')' : ''}. Cherchez-le ci-dessous.</div>`}</div>`;
+  const search = LK.ticket && !LK.changing ? '' : `<div class="card"><h3 style="margin:0 0 8px">Chercher le ticket</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="search" id="lk-q" type="search" style="flex:1;min-width:220px;margin:0" placeholder="N° de ticket, client, téléphone, titre ou n° de série" value="${esc(q)}"><button class="btn" id="lk-search">Rechercher</button></div>
+    ${LK.searching ? '<div class="empty">Recherche…</div>' : LK.found ? (LK.found.length ? '<div style="margin-top:8px">' + table(LK.found) + '</div>' : '<div class="empty">Aucun ticket ouvert ne correspond.</div>') : ''}
+    ${LK.ticket ? '' : `<div class="ovl-acts" style="margin-top:10px"><button class="btn" id="lk-off">Ce PC n'a pas de ticket</button><span class="tk-sub">Rien ne sera inscrit sur un ticket. Vous pourrez le rattacher plus tard avec le bouton « Ticket du PC » en haut.</span></div>`}</div>`;
+  const journal = LK.log.length || LK.pending.length ? `<div class="card"><h3 style="margin:0 0 8px">Inscrit au suivi pendant cette session</h3>${LK.pending.length ? `<div class="tk-sub" style="margin-bottom:6px">${LK.pending.length} entrée(s) en attente : elles partiront sur le ticket dès que ce PC y sera rattaché.</div>` : ''}<table class="list"><tbody>${LK.log.slice(0, 40).map(l => `<tr><td class="tk-sub" style="white-space:nowrap">${lkTime(l.happened_at)}</td><td>${esc(l.summary)}${l.note ? `<div class="tk-sub" style="white-space:pre-wrap">${esc(l.note)}</div>` : ''}</td><td class="tk-sub" style="white-space:nowrap">#${l.t} · ${l.sent ? '<span style="color:var(--ok)">envoyé</span>' : 'en attente'}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const err = LK.err ? `<div class="banner">${esc(LK.err)} <button class="btn" id="lk-retry">Réessayer</button>${LK.queue.length ? ' <button class="btn" id="lk-drop">Abandonner les ' + LK.queue.length + ' entrée(s) en attente</button>' : ''}</div>` : '';
+  const add = LK.ticket ? `<div class="card"><h3 style="margin:0 0 8px">Ajouter une note au suivi</h3><textarea id="lk-note" rows="3" style="width:100%" placeholder="Ce que vous avez fait ou constaté sur ce PC (pièce changée, appel au client, test…)">${esc(note)}</textarea><div class="ovl-acts" style="margin-top:8px"><button class="btn go" id="lk-addnote">Ajouter au suivi du ticket #${LK.ticket.id}</button></div></div>` : '';
+  box.innerHTML = `<h2>${LK.ticket ? 'Suivi de ce PC sur son ticket' : 'À quel ticket correspond ce PC ?'}</h2><div class="tk-sub" style="margin-bottom:10px">${esc(lkIdLine(m) || 'PC')}</div>
+    <div class="stack">${err}${cur}${search}${add}${journal}</div><div class="ovl-acts"><span style="flex:1"></span><button class="btn" data-close>Fermer</button></div>`;
+}
+async function lkSearch(){
+  LK.q = ($('#lk-q') || {}).value || ''; LK.searching = true; lkPanelRender();
+  try { LK.found = ((await tkapi.call('GET', '/tickets?scope=open&q=' + encodeURIComponent(LK.q.trim()))) || {}).tickets || []; } catch (err) { LK.found = []; LK.err = String(err); }
+  LK.searching = false; lkPanelRender();
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('#bLink')) { lkPanel(); return; }
+  if (!t.closest('.lk-box')) return;
+  const ln = t.closest('[data-lklink]');
+  if (ln) { const id = +ln.dataset.lklink, tk = [...(LK.cands || []), ...(LK.found || [])].find(x => x.id === id); if (tk) { LK.changing = false; LK.found = null; lkLink(tk, 'pick'); } return; }
+  if (t.id === 'lk-search') { lkSearch(); return; }
+  if (t.id === 'lk-change') { LK.changing = true; lkSearch(); return; }
+  if (t.id === 'lk-unlink') { lkUnlink(false); return; }
+  if (t.id === 'lk-off') { lkUnlink(true); LK.ovl && LK.ovl.close(); return; }
+  if (t.id === 'lk-retry') { LK.err = ''; LK.wait = 60; if (LK.queue.length) lkFlush(); else { LK.looked = false; lkLookup(); } return; }
+  if (t.id === 'lk-drop') { LK.queue = []; LK.err = ''; lkSave(); lkPaint(); return; }
+  if (t.id === 'lk-addnote') { const v = $('#lk-note').value.trim(); if (!v) return; $('#lk-note').value = ''; lkNote('note', v.length > 160 ? v.slice(0, 157) + '…' : v, v.length > 160 ? v : ''); status('Note ajoutée au suivi du ticket #' + LK.ticket.id + '.'); return; }
+  const op = t.closest('[data-tkopen]'); if (op) tkOpen(op.dataset.tkopen);
+});
+document.addEventListener('keydown', e => { if (e.target.id === 'lk-q' && e.key === 'Enter') lkSearch(); });
+
 // ===================== évènements du programme =====================
 function status(t){ $('#stMsg').textContent = t; }
 window.onGo = (kind, p) => {
-  if (kind === 'site') { SITE.state = p; if (view === 'site') render(); }
+  if (kind === 'site') { SITE.state = p; if (view === 'site') render(); lkPaint(); if (tkPaired()) { if (D && !LK.looked) lkLookup(); lkFlush(); } }
   if (kind === 'scanProgress') { scanState = {running:true, ...p}; status(`Analyse ${p.step}/${p.total} — ${p.label}`); if (view === 'summary') { const lb = document.querySelector('.scanning .lbl'); if (lb) { lb.innerHTML = `<span>${esc(p.label)}</span><span class="mono">${p.step}/${p.total}</span>`; document.querySelector('.scanning .progress i').style.width = Math.round(100 * p.step / p.total) + '%'; const sl = document.querySelector('.scanning .scanslow'); if (sl) sl.innerHTML = scanSlow(); } else render(); } }
-  if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; if (ATL.ready || view === 'atelier') atelierSync(); scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); }
+  if (kind === 'scanDone') { SESSION.push({file: p.file || ('session-' + (SESSION.length + 1)), date: new Date().toISOString(), data: p.data}); beforeSel = null; refreshHist().then(() => { if (view === 'report') render(); }); D = p.data; SITE.file = ''; SITE.result = null; if (ATL.ready || view === 'atelier') atelierSync(); scanState = null; $('#bScan').disabled = false; F.length = 0; OK.length = 0; rules(D); status(`Analyse terminée en ${p.seconds} s — ${F.length} constat(s)`); renderTree(); render(); lkIdentify(); lkScanDone(p.seconds); }
   if (kind === 'scanError') { scanState = {error: p, log: scanState && scanState.log}; $('#bScan').disabled = false; status('Échec de l\'analyse'); render(); }
   if (kind === 'sensors') onSensors(p);
   if (kind === 'duProgress') duOnProgress(p);
-  if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
+  if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; lkNote('disk', `Analyse de l'espace disque : ${p.root} (${duSize(p.size)})`); status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
   if (kind === 'duError') { DU.running = false; DU.err = p; status(p); renderTree(); if (view === 'disk-usage') render(); }
   if (kind === 'battPoint') { BT.now = p; BT.points.push(p); if (view === 'battery-test') { render(); drawBattChart(); } }
   if (kind === 'battTick') { BT.elapsed = p.elapsed; BT.target = p.target; status(`Test de batterie : ${Math.floor(p.elapsed/60)}:${String(p.elapsed%60).padStart(2,'0')} / ${BT.dur}:00`); if (view === 'battery-test' && !$('#btChart')) render(); else { const bar = document.querySelector('#content .progress i'); if (bar) bar.style.width = Math.min(100, Math.round(100 * p.elapsed / (p.target || 1))) + '%'; } }
   if (kind === 'battError') { BT.running = false; BT.error = p; status(p); renderTree(); if (view === 'battery-test') render(); }
-  if (kind === 'battDone') { BT.running = false; BT.paused = false; BT.result = {...analyzeBatt(), seconds: p.seconds, stopped: p.stopped}; status('Test de batterie terminé' + (p.stopped ? ' (arrêté)' : '')); renderTree(); if (view === 'battery-test') render(); }
+  if (kind === 'battDone') { BT.running = false; BT.paused = false; BT.result = {...analyzeBatt(), seconds: p.seconds, stopped: p.stopped}; lkBattery(BT.result); status('Test de batterie terminé' + (p.stopped ? ' (arrêté)' : '')); renderTree(); if (view === 'battery-test') render(); }
   if (kind === 'actionStep') { run.step = `Étape ${p.index + 1}/${p.count} — ${p.label}`; const el = $('#runStep'); if (el) el.textContent = run.step; status('Réparation : ' + run.step); }
   if (kind === 'actionLog') appendLog(p.id, p.line, p.replace);
   if (kind === 'actionDone') { const a = ACTIONS.find(x => x.id === p.id) || {title:p.id}; run.result[p.id] = p; run.id = null; done.push({id:p.id, title:a.title, ok:p.ok, at:new Date().toISOString()});
     appendLog(p.id, p.ok ? `— Terminé en ${p.seconds} s.${p.reboot ? ' Redémarrez le PC pour finaliser.' : ''}` : '— Interrompu.', false);
     if (p.ok && p.reboot && !QUEUE.active) rebootSuggested = true;
+    if (!QUEUE.active) lkNote('repair', `Réparation « ${a.title} » : ${p.ok ? 'terminée' : 'échec ou annulée'}`, [p.ok && p.seconds ? `Durée : ${p.seconds} s.` : '', p.ok && p.reboot ? 'Un redémarrage est nécessaire pour la finaliser.' : '']);
     status(`${a.title} : ${p.ok ? 'terminé' : 'échec ou annulé'}`); renderTree(); if (view === 'repair') render();
     if (QUEUE.active) queueOnDone(p); }
 };
@@ -2408,6 +2624,7 @@ $('#bScan').addEventListener('click', startScan);
   // nom du magasin : « Planete-Computers 2.0 », aussi pour les en-têtes enregistrés avec l'ancien nom
   if (!CFG.shop || /^plan[eèé]te[\s-]*computers(\s*2\.0)?$/i.test(CFG.shop.trim())) CFG.shop = 'Planete-Computers 2.0';
   try { SITE.state = await sapi.state(); } catch (_) {}
+  await lkRestore();
   await refreshHist();
   if (info.resumed) status('Reprise automatique après le redémarrage — nouvelle analyse en cours pour le comparatif avant/après.');
   renderTree(); render(); api.sensors(); startScan();
