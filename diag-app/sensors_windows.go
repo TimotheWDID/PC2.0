@@ -118,7 +118,9 @@ func (a *app) sensorLoop() {
 	toMB := func(v float64) float64 { return v / 1048576 }
 	toMbit := func(v float64) float64 { return v * 8 / 1e6 }
 	defs := []*sensorDef{
-		{id: "cpu", group: "Processeur", label: "Utilisation", unit: "%", path: `\Processor Information(_Total)\% Processor Utility`},
+		// « % Processor Utility » est rapporté à la fréquence de base : il dépasse 100 %
+		// dès que le Turbo Boost monte au-delà. Le Gestionnaire des tâches le borne aussi à 100.
+		{id: "cpu", group: "Processeur", label: "Utilisation", unit: "%", path: `\Processor Information(_Total)\% Processor Utility`, conv: func(v float64) float64 { return math.Min(100, v) }},
 		{id: "cpuperf", path: `\Processor Information(_Total)\% Processor Performance`},
 		{id: "cpubase", path: `\Processor Information(_Total)\Processor Frequency`},
 		{id: "cpuq", group: "Processeur", label: "File d'attente", unit: "", path: `\System\Processor Queue Length`},
