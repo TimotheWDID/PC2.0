@@ -163,14 +163,10 @@ function NoteFields({
                 )}
             </label>
             <label className="block space-y-1">
-                <span className="text-xs font-medium">
-                    Ce que ça veut dire
-                </span>
+                <span className="text-xs font-medium">Ce que ça veut dire</span>
                 <Textarea
                     value={data.explain}
-                    onChange={(event) =>
-                        setData('explain', event.target.value)
-                    }
+                    onChange={(event) => setData('explain', event.target.value)}
                     rows={3}
                     maxLength={2000}
                 />
@@ -341,8 +337,8 @@ export default function EventNotes({
                             <p className="text-sm text-muted-foreground">
                                 Aucun événement appris pour l’instant. Dans PC2
                                 Diag, ouvrez un événement inconnu de
-                                l’observateur d’événements et cliquez
-                                « Apprendre cet événement à PC2 Diag ».
+                                l’observateur d’événements et cliquez «
+                                Apprendre cet événement à PC2 Diag ».
                             </p>
                         ) : (
                             shown.map((note) => (
