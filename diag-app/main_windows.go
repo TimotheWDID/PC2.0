@@ -293,7 +293,7 @@ func (a *app) collect() (map[string]any, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress, "-Log", logFile)
+	cmd := exec.CommandContext(ctx, powershellExe(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Out", out, "-Progress", progress, "-Log", logFile, "-ExeDir", exeDir())
 	hide(cmd)
 	cmd.WaitDelay = 5 * time.Second
 	var output bytes.Buffer

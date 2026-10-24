@@ -3,7 +3,9 @@
 # dans $Progress : sans console, la sortie de PowerShell reste en mémoire tampon.
 # $Log reçoit l'heure de début et la durée de chaque vérification : si la
 # collecte reste bloquée, sa dernière ligne dit laquelle ne rend pas la main.
-param([string]$Out = "$env:TEMP\pc2diag.json", [string]$Progress, [string]$Log)
+# $ExeDir : dossier de PC2Diag.exe. Le disque qui le porte (la clé de l'atelier)
+# est retiré des disques et des volumes, toutes ses partitions comprises.
+param([string]$Out = "$env:TEMP\pc2diag.json", [string]$Progress, [string]$Log, [string]$ExeDir)
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -169,7 +171,42 @@ $R.topProcesses = @(Try-Get 'procs' { Get-Process | Sort-Object WorkingSet64 -De
 
 # ---------------------------------------------------------------- Disques
 Step "Disques et état SMART"
-$R.disks = @(Try-Get 'physicaldisk' { Get-PhysicalDisk | ForEach-Object {
+# Clé de l'atelier : numéro du disque physique d'où tourne l'exe et lettres de
+# toutes ses partitions, seulement si ce disque est en USB. Jamais le disque de
+# Windows (exe copié sur le PC du client).
+$toolDisk = $null; $toolLetters = @()
+$exeLetter = if ($ExeDir -match '^([A-Za-z]):') { $Matches[1].ToUpper() } else { $null }
+if ($exeLetter) {
+  $tk = Try-Get 'toolkey' {
+    Invoke-Timed 'toolkey' 20 {
+      param($letter)
+      $ErrorActionPreference = 'Stop'
+      try {
+        $n = (Get-Partition -DriveLetter $letter).DiskNumber
+        if ([string](Get-Disk -Number $n).BusType -ne 'USB') { return '' }
+        $l = @(Get-Partition -DiskNumber $n | Where-Object { "$($_.DriveLetter)" -match '^[A-Za-z]$' } | ForEach-Object { "$($_.DriveLetter):".ToUpper() })
+      } catch {
+        # Windows 7 : pas de module Storage, associations WMI
+        $dd = Get-CimInstance -Query "ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='$($letter):'} WHERE AssocClass=Win32_LogicalDiskToPartition" |
+          Get-CimAssociatedInstance -ResultClassName Win32_DiskDrive | Select-Object -First 1
+        if (-not $dd -or $dd.InterfaceType -ne 'USB') { return '' }
+        $n = $dd.Index
+        $l = @($dd | Get-CimAssociatedInstance -ResultClassName Win32_DiskPartition | Get-CimAssociatedInstance -ResultClassName Win32_LogicalDisk | ForEach-Object { $_.DeviceID })
+      }
+      '{0}|{1}' -f $n, ($l -join ',')
+    } @($exeLetter)
+  }
+  if ($tk) {
+    $n, $l = "$tk" -split '\|', 2
+    $letters = @($l -split ',' | Where-Object { $_ })
+    if ($n -ne '' -and $letters -notcontains $env:SystemDrive) { $toolDisk = $n; $toolLetters = $letters }
+  }
+  if ($toolLetters) {
+    $R.toolKey = [ordered]@{ disk = $toolDisk; letters = $toolLetters }
+    Log ("      clé de l'atelier : disque {0}, lecteurs {1}, exclus de l'analyse" -f $toolDisk, ($toolLetters -join ' '))
+  }
+}
+$R.disks = @(Try-Get 'physicaldisk' { Get-PhysicalDisk | Where-Object { $null -eq $toolDisk -or [string]$_.DeviceId -ne $toolDisk } | ForEach-Object {
   $pd = $_; $rc = $null
   try { $rc = $pd | Get-StorageReliabilityCounter -ErrorAction Stop } catch {}
   [ordered]@{ name = $pd.FriendlyName; serial = ($pd.SerialNumber -as [string]).Trim(); media = [string]$pd.MediaType; bus = [string]$pd.BusType
@@ -193,7 +230,7 @@ Try-Get 'bitlocker' {
   } | ForEach-Object { $k, $v = "$_" -split '\|', 2; $bl[$k.TrimEnd('\')] = $v }
 } | Out-Null
 $ld = @(Try-Get 'volumes' { Invoke-Timed 'volumes' 30 { $ErrorActionPreference = 'Stop'; Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' } } @())
-$R.volumes = @($ld | ForEach-Object {
+$R.volumes = @($ld | Where-Object { $toolLetters -notcontains $_.DeviceID } | ForEach-Object {
   $v = $_; $dirty = $null
   if ($isAdmin) {
     $q = Try-Get "fsutil $($v.DeviceID)" { Run-Exe 'fsutil.exe' "dirty query $($v.DeviceID)" 15 }
