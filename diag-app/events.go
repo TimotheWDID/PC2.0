@@ -470,9 +470,12 @@ type evGroup struct {
 	Count    int      `json:"count"`
 	First    string   `json:"first"`
 	Last     string   `json:"last"`
-	Times    []string `json:"times"`    // les plus récentes d'abord, evMaxTimes au plus
-	Messages []evOcc  `json:"messages"` // messages différents, les plus récents d'abord
-	Days     []string `json:"days"`     // jours (AAAA-MM-JJ, heure locale) où il apparaît
+	Times    []string `json:"times"`            // les plus récentes d'abord, evMaxTimes au plus
+	Messages []evOcc  `json:"messages"`         // messages différents, les plus récents d'abord
+	Days     []string `json:"days"`             // jours (AAAA-MM-JJ, heure locale) où il apparaît
+	Causes   []string `json:"causes,omitempty"` // provenances possibles, de la plus fréquente à la plus rare
+	Hints    []string `json:"hints,omitempty"`  // ce que les événements de ce PC disent en plus (events_hints.go)
+	raw      []evRaw  // tous les événements du groupe, les plus récents d'abord
 }
 
 type evMark struct {
@@ -503,6 +506,8 @@ type evResult struct {
 	Groups    []evGroup `json:"groups"`
 	Timeline  []evMark  `json:"timeline"`
 	Daily     []evDay   `json:"daily"`
+	Cross     []evCross `json:"cross"`    // combinaisons trouvées sur ce PC (events_hints.go)
+	Symptoms  []evSympt `json:"symptoms"` // ce que dit le client → groupes trouvés
 }
 
 type evCounts struct {
@@ -607,6 +612,7 @@ func groupEvents(raw evScanRaw, loc *time.Location) evResult {
 		}
 		g := &res.Groups[i]
 		g.Count++
+		g.raw = append(g.raw, e)
 		if e.Level >= 1 && e.Level < g.Level {
 			g.Level = e.Level
 		}
@@ -667,6 +673,7 @@ func groupEvents(raw evScanRaw, loc *time.Location) evResult {
 			res.Timeline = append(res.Timeline, m)
 		}
 	}
+	evAnalyze(&res, loc)
 	res.Total = 0
 	for i := range res.Groups {
 		g := &res.Groups[i]
