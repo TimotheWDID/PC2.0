@@ -166,6 +166,54 @@ perdue, révoquez la clé depuis la page Diag rapide.
    **Envoyer** : le rapport apparaît sur le ticket (ou dans Diag rapide) et
    s'ouvre en un clic.
 
+## Suivi du PC sur son ticket
+
+Dès la première analyse, l'application cherche sur le site le ticket ouvert
+de ce PC : numéro de série de l'appareil du ticket, d'un diagnostic déjà
+envoyé sur le ticket, ou d'un suivi précédent de l'application ; à défaut, le
+nom du PC (simple indice). Un seul ticket trouvé par le numéro de série : il
+est rattaché tout seul. Sinon, une fenêtre demande au technicien de choisir
+(tickets correspondants, puis tous les tickets ouverts et une recherche), ou
+d'indiquer que ce PC n'a pas de ticket.
+
+Une fois rattaché (bouton **Ticket #n** en haut, à côté de « Envoyer au
+site »), ce que le technicien fait dans l'application s'inscrit dans le
+**suivi technicien** du ticket, sous le type « PC2 Diag » : ouverture de
+l'application sur le PC, analyses (constats principaux), réparations et
+enchaînements de réparations (réussies ou non), tests manuels (regroupés),
+test de batterie, espace disque, rapports enregistrés, redémarrages, et les
+notes saisies dans la fenêtre de suivi. Ce qui a été fait avant le
+rattachement part au moment du rattachement.
+
+Ce qui n'a pas pu partir (site injoignable) est gardé dans
+`PC2Diag-rapports\Suivi\<nom du PC>.json` avec le ticket rattaché : l'envoi
+reprend tout seul, aussi après un redémarrage ou une réouverture de
+l'application. Chaque entrée a un identifiant, le site ne l'écrit qu'une fois.
+
+### Créer un ticket depuis l'application
+
+Quand aucun ticket ne correspond (fenêtre « À quel ticket correspond ce
+PC ? », ou **Tickets › Nouveau ticket pour ce PC**), **Créer un ticket pour
+ce PC** ouvre le formulaire du site : client existant (recherche) ou nouveau,
+titre, problème, priorité, catégorie, canal de notification, objets déposés,
+mot de passe (ou absence confirmée), attribution. Le ticket est créé par la
+même fonction que sur le site (`TicketController::createTicket`) : le client
+reçoit la confirmation de dépôt et le suivi note la création. L'appareil est
+celui du client qui a le même numéro de série, sinon il est créé avec la
+marque, le modèle et le numéro de série lus par l'analyse. Le PC est rattaché
+au nouveau ticket aussitôt.
+
+### Rouvrir un diagnostic du ticket
+
+Dans **Diagnostics** d'un ticket, **Rouvrir dans l'appli** recharge
+l'analyse PC2 Diag d'un diagnostic enregistré (faite sur un autre PC) :
+résumé, problèmes, matériel, Windows, Diag atelier, rapport client. Un
+bandeau rappelle qu'il s'agit d'un diagnostic rouvert ; les réparations et
+l'envoi au site sont masqués, et le suivi du ticket continue de viser ce
+PC-ci. **Revenir à ce PC** (ou une nouvelle analyse) remet l'analyse locale.
+Seuls les diagnostics qui contiennent l'analyse de l'application (fichier
+`app`) se rouvrent ; les autres s'ouvrent sur le site.
+
 ## API utilisée
 
 Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
@@ -175,6 +223,10 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | GET | `/me` | vérifie la clé, renvoie le technicien |
 | GET | `/tickets?q=&scope=` | tickets (`open` par défaut, `mine`, `unassigned`, `closed`, `all`) |
 | GET | `/todos` | actions non faites des tickets ouverts |
+| GET, POST | `/tickets/create?q=`, `/tickets` | choix du formulaire et clients trouvés ; création du ticket (mêmes champs que le formulaire du site, plus `machine`) |
+| GET | `/tickets/{id}/diagnostics/{d}/files/{source}` | fichiers d'un diagnostic (`app` : l'analyse PC2 Diag, rouverte par l'application) |
+| GET | `/tickets/for-machine?serial=&computer=&ticket=` | tickets ouverts de ce PC (et où en est le ticket déjà rattaché) |
+| POST | `/tickets/{id}/activity` | suivi écrit par l'application : `machine`, `entries[]` (`uid`, `kind`, `summary`, `note`, `happened_at`) |
 | GET | `/tickets/{id}` | le ticket complet : fiche, suivi, échanges, fichiers, diagnostics, appareil, choix des formulaires |
 | PATCH | `/tickets/{id}/status`, `/priority` | statut, priorité |
 | POST | `/tickets/{id}/assign-me` | s'attribuer le ticket |
@@ -220,8 +272,8 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.5.1        # Linux, macOS, Git Bash
-build.cmd 1.5.1         # invite de commandes Windows
+./build.sh 1.7.0        # Linux, macOS, Git Bash
+build.cmd 1.7.0         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans

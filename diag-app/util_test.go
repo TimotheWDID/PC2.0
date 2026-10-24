@@ -119,3 +119,39 @@ func TestTicketFilePath(t *testing.T) {
 		t.Error("runnableExt")
 	}
 }
+
+func TestLinkFile(t *testing.T) {
+	dir := t.TempDir()
+	p := linkFile(dir, `DESKTOP-ÉLAN/..\x`)
+	if filepath.Dir(p) != filepath.Join(dir, "Suivi") {
+		t.Fatalf("chemin : %s", p)
+	}
+	if loadLink(p) != nil {
+		t.Error("aucun suivi attendu")
+	}
+	if err := saveLink(p, json.RawMessage(`{"ticket":{"id":5}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(loadLink(p)); got != `{"ticket":{"id":5}}` {
+		t.Errorf("relu : %s", got)
+	}
+	if saveLink(p, json.RawMessage(`{`)) == nil {
+		t.Error("JSON invalide accepté")
+	}
+}
+
+func TestDecodeScan(t *testing.T) {
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_, _ = zw.Write([]byte(`{"meta":{"computer":"PC-X"}}`))
+	_ = zw.Close()
+	for _, in := range [][]byte{gz.Bytes(), []byte("\xEF\xBB\xBF{\"meta\":{\"computer\":\"PC-X\"}}")} {
+		got, err := decodeScan(in)
+		if err != nil || string(got) != `{"meta":{"computer":"PC-X"}}` {
+			t.Errorf("decodeScan : %s, %v", got, err)
+		}
+	}
+	if _, err := decodeScan([]byte(`Sensor,Value`)); err == nil {
+		t.Error("un fichier qui n'est pas une analyse est accepté")
+	}
+}

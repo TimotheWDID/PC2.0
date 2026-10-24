@@ -261,3 +261,146 @@ it('keeps the ticket page working through the shared workflow', function () {
     expect($ticket->fresh()->status)->toBe('pending')
         ->and($ticket->timelineEvents()->pluck('event_type')->sort()->values()->all())->toBe(['manual_note', 'status_changed']);
 });
+
+it('finds the open tickets of the PC the application runs on', function () {
+    $agent = dtAgent();
+    $byDevice = dtTicket(['title' => 'Par appareil']);
+    $byDevice->update(['device_id' => Device::create(['user_id' => $byDevice->user_id, 'device_type' => 'laptop', 'serial_number' => 'sn-777'])->id]);
+    $byDiag = dtTicket(['title' => 'Par diagnostic']);
+    Diagnostic::create(['ticket_id' => $byDiag->id, 'technician_id' => $agent->id, 'machine_name' => 'AUTRE-NOM', 'report' => ['format' => 'diag-app'], 'inventory' => ['serial' => 'SN-777']]);
+    $byName = dtTicket(['title' => 'Par nom']);
+    Diagnostic::create(['ticket_id' => $byName->id, 'technician_id' => $agent->id, 'machine_name' => 'desktop-abc', 'report' => ['format' => 'diag-app']]);
+    $otherPc = dtTicket(['title' => 'Autre PC, même nom']);
+    Diagnostic::create(['ticket_id' => $otherPc->id, 'technician_id' => $agent->id, 'machine_name' => 'DESKTOP-ABC', 'report' => ['format' => 'diag-app'], 'inventory' => ['serial' => 'SN-999']]);
+    $closed = dtTicket(['title' => 'Fermé', 'status' => 'closed']);
+    $closed->update(['device_id' => Device::create(['user_id' => $closed->user_id, 'device_type' => 'laptop', 'serial_number' => 'SN-777B'])->id]);
+    Diagnostic::create(['ticket_id' => $closed->id, 'technician_id' => $agent->id, 'machine_name' => 'DESKTOP-ABC', 'report' => ['format' => 'diag-app'], 'inventory' => ['serial' => 'SN-777']]);
+    $key = dtKey($agent);
+
+    $response = $this->withToken($key)->getJson('/api/diag-app/tickets/for-machine?serial=SN-777&computer=DESKTOP-ABC&ticket='.$closed->id)
+        ->assertOk()
+        ->assertJsonPath('serial', 'SN-777')
+        ->assertJsonPath('current.id', $closed->id)
+        ->assertJsonPath('current.open', false)
+        ->assertJsonCount(3, 'tickets');
+    $found = collect($response->json('tickets'))->mapWithKeys(fn ($t) => [$t['title'] => [$t['match']['by'], $t['match']['strong']]])->all();
+    expect($found)->toBe([
+        'Par appareil' => ['device', true],
+        'Par diagnostic' => ['diagnostic', true],
+        'Par nom' => ['name', false],
+    ]);
+
+    // a placeholder serial identifies no PC: only the name is used
+    $this->withToken($key)->getJson('/api/diag-app/tickets/for-machine?serial=To%20be%20filled%20by%20O.E.M.&computer=nobody')
+        ->assertJsonPath('serial', null)->assertJsonCount(0, 'tickets');
+});
+
+it('writes the application follow-up once, and finds the PC by it later', function () {
+    $agent = dtAgent();
+    $ticket = dtTicket();
+    $key = dtKey($agent);
+    $payload = [
+        'machine' => ['serial' => 'PF3XYZ', 'computer' => 'PC-CLAIRE', 'model' => 'Lenovo ThinkPad'],
+        'entries' => [
+            ['uid' => 'a1', 'kind' => 'session', 'summary' => 'PC2 Diag lancé sur PC-CLAIRE', 'happened_at' => '2026-10-22T09:00:00+02:00'],
+            ['uid' => 'a2', 'kind' => 'repair', 'summary' => 'Réparation : Nettoyage du disque — réussie', 'note' => '2,3 Go libérés'],
+        ],
+    ];
+
+    $this->withToken($key)->postJson("/api/diag-app/tickets/{$ticket->id}/activity", $payload)
+        ->assertCreated()->assertJsonPath('written', 2);
+    $this->withToken($key)->postJson("/api/diag-app/tickets/{$ticket->id}/activity", $payload)
+        ->assertCreated()->assertJsonPath('written', 0);
+
+    $events = $ticket->timelineEvents()->where('event_type', 'diag_app_activity')->orderBy('id')->get();
+    expect($events)->toHaveCount(2)
+        ->and($events[0]->technician_id)->toBe($agent->id)
+        ->and($events[0]->happened_at->format('Y-m-d H:i'))->toBe('2026-10-22 07:00')
+        ->and($events[1]->details)->toMatchArray(['note' => '2,3 Go libérés', 'source' => 'diag_app', 'kind' => 'repair', 'machine' => ['serial' => 'PF3XYZ', 'computer' => 'PC-CLAIRE', 'model' => 'Lenovo ThinkPad']]);
+
+    $this->withToken($key)->getJson('/api/diag-app/tickets/for-machine?serial=pf3xyz&computer=RENAMED')
+        ->assertJsonCount(1, 'tickets')
+        ->assertJsonPath('tickets.0.id', $ticket->id)
+        ->assertJsonPath('tickets.0.match.by', 'app');
+    $this->withToken($key)->getJson("/api/diag-app/tickets/{$ticket->id}")
+        ->assertJsonPath('timeline.0.event_type', 'diag_app_activity');
+
+    $this->withToken($key)->postJson("/api/diag-app/tickets/{$ticket->id}/activity", ['entries' => [['kind' => 'x']]])
+        ->assertUnprocessable()->assertJsonValidationErrors('entries.0.summary');
+});
+
+it('creates a ticket for the PC from the application, for an existing or a new customer', function () {
+    Notification::fake();
+    $agent = dtAgent();
+    $client = User::factory()->create(['first_name' => 'Paul', 'last_name' => 'Martin', 'email' => 'paul@example.test', 'phone' => '0600000000']);
+    $known = Device::create(['user_id' => $client->id, 'device_type' => 'laptop', 'brand' => 'Dell', 'model' => 'Latitude', 'serial_number' => 'DL-42']);
+    $key = dtKey($agent);
+
+    $this->withToken($key)->getJson('/api/diag-app/tickets/create?q=mart')
+        ->assertOk()
+        ->assertJsonPath('customers.0.id', $client->id)
+        ->assertJsonPath('customers.0.devices.0.serial_number', 'DL-42')
+        ->assertJsonPath('brought_items.0.key', 'computer');
+
+    // existing customer: the PC's device on their file is used
+    $response = $this->withToken($key)->postJson('/api/diag-app/tickets', [
+        'user_selection' => 'existing', 'user_id' => $client->id, 'title' => 'Écran noir', 'message' => 'Ne démarre plus',
+        'brought_items' => ['computer', 'charger'], 'no_device_password' => true, 'password_empty_confirmed' => true,
+        'notify_by' => 'SMS', 'priority' => 'high', 'assign_to_me' => true,
+        'machine' => ['brand' => 'DELL', 'model' => 'Latitude 5520', 'serial' => 'dl-42'],
+    ])->assertCreated()->assertJsonPath('ticket.title', 'Écran noir')->assertJsonPath('ticket.mine', true);
+    $ticket = Ticket::find($response->json('ticket.id'));
+    expect($ticket->device_id)->toBe($known->id)
+        ->and($ticket->priority)->toBe('high')
+        ->and($ticket->status)->toBe('open')
+        ->and($ticket->notify_by)->toBe('SMS')
+        ->and($ticket->timelineEvents()->pluck('event_type')->all())->toContain('ticket_created_by_technician');
+
+    // new customer: the PC becomes their device; a serial already used elsewhere is left out
+    $response = $this->withToken($key)->postJson('/api/diag-app/tickets', [
+        'user_selection' => 'new', 'user_first_name' => 'Léa', 'user_last_name' => 'Petit', 'user_phone' => '0611111111',
+        'title' => 'Virus', 'device_password' => '1234',
+        'machine' => ['brand' => 'HP', 'model' => 'Pavilion 15', 'serial' => 'DL-42'],
+    ])->assertCreated()->assertJsonCount(1, 'warnings');
+    $ticket = Ticket::with(['device', 'user'])->find($response->json('ticket.id'));
+    expect($ticket->user->first_name)->toBe('Léa')
+        ->and($ticket->device->model)->toBe('Pavilion 15')
+        ->and($ticket->device->serial_number)->toBeNull()
+        ->and($ticket->device_password)->toBe('1234');
+
+    $this->withToken($key)->postJson('/api/diag-app/tickets', ['user_selection' => 'new', 'user_first_name' => 'Léa', 'title' => 'X'])
+        ->assertUnprocessable()->assertJsonValidationErrors('device_password');
+    $this->withToken($key)->postJson('/api/diag-app/tickets', ['user_selection' => 'existing', 'title' => 'X', 'device_password' => 'a'])
+        ->assertUnprocessable()->assertJsonValidationErrors('user_id');
+});
+
+it('still refuses a ticket without password on the site form', function () {
+    $agent = dtAgent();
+    $client = User::factory()->create();
+
+    $this->actingAs($agent)->from('/tickets/create')->post('/tickets', ['user_selection' => 'existing', 'user_id' => $client->id, 'title' => 'Test'])
+        ->assertRedirect('/tickets/create')
+        ->assertSessionHasErrors('device_password');
+    $this->actingAs($agent)->post('/tickets', ['user_selection' => 'existing', 'user_id' => $client->id, 'title' => 'Test', 'device_password' => 'x'])
+        ->assertRedirect(route('dashboard'));
+    expect(Ticket::where('title', 'Test')->exists())->toBeTrue();
+});
+
+it('gives back the PC2 Diag analysis a diagnostic was built from, to reopen it on another PC', function () {
+    $agent = dtAgent();
+    $ticket = dtTicket();
+    $diagnostic = Diagnostic::create(['ticket_id' => $ticket->id, 'technician_id' => $agent->id, 'machine_name' => 'PC-CLAIRE', 'report' => ['format' => 'diag-atelier']]);
+    $path = $diagnostic->storageDirectory().'/app.txt.gz';
+    Storage::disk('local')->put($path, gzencode('{"meta":{"computer":"PC-CLAIRE"}}'));
+    $diagnostic->update(['files' => [['source' => 'app', 'name' => 'Analyse.json', 'encoding' => 'gzip', 'path' => $path, 'size' => 40]]]);
+    $old = Diagnostic::create(['ticket_id' => $ticket->id, 'technician_id' => $agent->id, 'machine_name' => 'Ancien', 'report' => ['format' => 'diag-app']]);
+    $key = dtKey($agent);
+
+    $diagnostics = collect($this->withToken($key)->getJson("/api/diag-app/tickets/{$ticket->id}")->json('diagnostics'))->keyBy('id');
+    expect($diagnostics[$diagnostic->id]['app_scan_path'])->toBe("/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/files/app")
+        ->and($diagnostics[$old->id]['app_scan_path'])->toBeNull();
+
+    $response = $this->withToken($key)->get("/api/diag-app/tickets/{$ticket->id}/diagnostics/{$diagnostic->id}/files/app")->assertOk();
+    expect(gzdecode($response->streamedContent()))->toBe('{"meta":{"computer":"PC-CLAIRE"}}');
+    $this->withToken($key)->get("/api/diag-app/tickets/{$ticket->id}/diagnostics/{$old->id}/files/app")->assertNotFound();
+});

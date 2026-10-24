@@ -118,6 +118,7 @@ const builtInEventTypeLabels: Record<string, string> = {
   files_sent: 'Fichiers envoyes',
   task_completed: 'Action realisee',
   task_reopened: 'Action reouverte',
+  diag_app_activity: 'PC2 Diag',
 };
 
 const diagnosticBadgeClass: Record<string, string> = {
@@ -127,6 +128,13 @@ const diagnosticBadgeClass: Record<string, string> = {
 };
 
 const getTimelineAccent = (eventType: string) => {
+  if (eventType === 'diag_app_activity') {
+    return {
+      dot: 'bg-[#7c3aed]',
+      badge: 'border-[#7c3aed] text-[#5b21b6] bg-[#f5f3ff] dark:text-[#c4b5fd] dark:bg-[#24183f]',
+    };
+  }
+
   if (eventType.startsWith('commande_')) {
     return {
       dot: 'bg-[#e6892e]',

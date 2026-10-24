@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -111,4 +116,55 @@ func runnableExt(name string) bool {
 		return true
 	}
 	return false
+}
+
+// The ticket follow-up of a PC (the ticket it is linked to and the entries
+// not sent yet) is kept in PC2Diag-rapports\Suivi\<PC>.json: the key goes
+// from PC to PC, and the entries must survive a reboot or a lost network.
+func linkFile(root, machine string) string {
+	return filepath.Join(root, "Suivi", safeFileName(machine)+".json")
+}
+
+func loadLink(path string) json.RawMessage {
+	b, err := os.ReadFile(path)
+	if err != nil || !json.Valid(b) {
+		return nil
+	}
+	return b
+}
+
+func saveLink(path string, v json.RawMessage) error {
+	if !json.Valid(v) {
+		return fmt.Errorf("suivi illisible")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, v, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// decodeScan reads a PC2 Diag analysis kept with a diagnostic on the site
+// (gzipped by the application, plain when added on the site's Diag Atelier).
+func decodeScan(data []byte) (json.RawMessage, error) {
+	if len(data) > 2 && data[0] == 0x1f && data[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		if data, err = io.ReadAll(io.LimitReader(zr, 200<<20)); err != nil {
+			return nil, fmt.Errorf("analyse illisible : %w", err)
+		}
+	}
+	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
+	var probe struct {
+		Meta map[string]any `json:"meta"`
+	}
+	if json.Unmarshal(data, &probe) != nil || probe.Meta == nil {
+		return nil, errors.New("ce diagnostic n'a pas été fait avec PC2 Diag : ouvrez-le sur le site")
+	}
+	return data, nil
 }

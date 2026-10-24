@@ -13,6 +13,9 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
 
     // Tickets: same paths as on the site, so its download paths work here too
     Route::get('tickets', [DiagAppTicketController::class, 'index'])->name('diag-app.tickets');
+    Route::get('tickets/create', [DiagAppTicketController::class, 'createOptions'])->name('diag-app.tickets.create');
+    Route::post('tickets', [DiagAppTicketController::class, 'store'])->name('diag-app.tickets.store');
+    Route::get('tickets/for-machine', [DiagAppTicketController::class, 'forMachine'])->name('diag-app.tickets.for-machine');
     Route::get('todos', [DiagAppTicketController::class, 'todos'])->name('diag-app.todos');
 
     Route::prefix('tickets/{ticket}')->whereNumber('ticket')->name('diag-app.tickets.')->group(function () {
@@ -25,6 +28,7 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
         Route::patch('timeline-events/{event}/actions', [DiagAppTicketController::class, 'updateTimelineAction'])->whereNumber('event')->name('timeline.actions');
         Route::delete('timeline-events/{event}', [DiagAppTicketController::class, 'removeTimelineEvent'])->whereNumber('event')->name('timeline.remove');
         Route::patch('timeline-events/{event}/restore', [DiagAppTicketController::class, 'restoreTimelineEvent'])->whereNumber('event')->name('timeline.restore');
+        Route::post('activity', [DiagAppTicketController::class, 'storeActivity'])->name('activity.store');
         Route::post('device-events', [DiagAppTicketController::class, 'storeDeviceEvent'])->name('device-events.store');
 
         Route::post('messages', [MessageController::class, 'store'])->name('messages.store');
@@ -39,6 +43,7 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
         Route::get('files/{file}/download', [TicketFileController::class, 'download'])->whereNumber('file')->name('files.download');
 
         Route::patch('diagnostics/{diagnostic}/visibility', [DiagAppController::class, 'updateVisibility'])->whereNumber('diagnostic')->name('diagnostics.visibility');
+        Route::get('diagnostics/{diagnostic}/files/{source}', [DiagAppController::class, 'file'])->whereNumber('diagnostic')->whereIn('source', ['app', 'aida', 'hwinfo', 'battery'])->name('diagnostics.file');
         Route::get('diagnostics/{diagnostic}/client-report', [DiagAppController::class, 'clientReport'])->whereNumber('diagnostic')->name('diagnostics.client-report');
     });
 });

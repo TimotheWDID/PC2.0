@@ -6,6 +6,7 @@ use App\Models\DeviceEvent;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,9 @@ class TicketWorkflow
     public const PRIORITIES = ['low', 'medium', 'high'];
 
     public const DEVICE_EVENT_TYPES = ['battery_replaced', 'screen_replaced', 'storage_upgraded', 'diagnostic', 'maintenance', 'note'];
+
+    /** Follow-up written by the PC2 Diag application while it runs on the ticket's PC. */
+    public const APP_ACTIVITY_EVENT = 'diag_app_activity';
 
     public static function timelineEventRules(): array
     {
@@ -388,6 +392,72 @@ class TicketWorkflow
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * What the PC2 Diag application did on the ticket's PC (analysis,
+     * repairs, tests…), one follow-up event per entry. Each entry carries a
+     * uid so an entry sent again after a lost answer is not written twice;
+     * the machine identity lets the application find the ticket again.
+     *
+     * @return int number of events written
+     */
+    public function addAppActivity(Ticket $ticket, User $technician, array $entries, array $machine): int
+    {
+        $machine = array_filter([
+            'serial' => self::cleanText($machine['serial'] ?? null),
+            'computer' => self::cleanText($machine['computer'] ?? null),
+            'model' => self::cleanText($machine['model'] ?? null),
+        ]);
+
+        $known = TicketTimelineEvent::withTrashed()
+            ->where('ticket_id', $ticket->id)
+            ->where('event_type', self::APP_ACTIVITY_EVENT)
+            ->latest('id')
+            ->limit(1000)
+            ->get(['id', 'details'])
+            ->map(fn (TicketTimelineEvent $event) => $event->details['uid'] ?? null)
+            ->filter()
+            ->flip();
+
+        $written = 0;
+        foreach ($entries as $entry) {
+            $uid = self::cleanText($entry['uid'] ?? null);
+            if ($uid !== null && $known->has($uid)) {
+                continue;
+            }
+
+            TicketTimelineEvent::create([
+                'ticket_id' => $ticket->id,
+                'technician_id' => $technician->id,
+                'event_type' => self::APP_ACTIVITY_EVENT,
+                'summary' => $entry['summary'],
+                'details' => array_filter([
+                    'note' => self::cleanText($entry['note'] ?? null),
+                    'source' => 'diag_app',
+                    'kind' => $entry['kind'],
+                    'uid' => $uid,
+                    'machine' => $machine ?: null,
+                ]),
+                'happened_at' => ! empty($entry['happened_at'])
+                    ? Carbon::parse($entry['happened_at'])->setTimezone(config('app.timezone'))
+                    : now(),
+            ]);
+
+            if ($uid !== null) {
+                $known->put($uid, true);
+            }
+            $written++;
+        }
+
+        return $written;
+    }
+
+    private static function cleanText(mixed $value): ?string
+    {
+        $value = is_scalar($value) ? trim((string) $value) : '';
+
+        return $value !== '' ? $value : null;
     }
 
     private function log(Ticket $ticket, ?User $technician, string $type, string $summary, array $details): void
