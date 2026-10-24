@@ -14,7 +14,8 @@ import (
 // avertissements des journaux Système et Application (et quelques jalons :
 // démarrages, arrêts, mises à jour, antivirus). Ici, les événements sont
 // regroupés (même source, même numéro, même application ou service), puis
-// expliqués en français à partir de evKB. Ce qui n'est pas répertorié garde le
+// expliqués en français à partir de evKB, puis des événements appris par les
+// techniciens (events_learned.go). Ce qui n'est pas répertorié garde le
 // message de Windows.
 
 type evRaw struct {
@@ -461,6 +462,9 @@ type evGroup struct {
 	Sev      string   `json:"sev"`
 	Noise    bool     `json:"noise,omitempty"`
 	Known    bool     `json:"known"`
+	Learned  bool     `json:"learned,omitempty"` // expliqué par une fiche apprise (events_learned.go)
+	NoteBy   string   `json:"noteBy,omitempty"`  // qui a écrit ou corrigé la fiche
+	NoteAt   string   `json:"noteAt,omitempty"`  // quand
 	Cat      string   `json:"cat"`
 	Title    string   `json:"title"`
 	Explain  string   `json:"explain,omitempty"`
@@ -494,20 +498,22 @@ type evDay struct {
 }
 
 type evResult struct {
-	Days      int       `json:"days"`
-	From      string    `json:"from"`
-	To        string    `json:"to"`
-	Admin     bool      `json:"admin"`
-	Truncated []string  `json:"truncated,omitempty"`
-	Errors    []string  `json:"errors,omitempty"`
-	Seconds   float64   `json:"seconds"`
-	Total     int       `json:"total"`
-	Counts    evCounts  `json:"counts"`
-	Groups    []evGroup `json:"groups"`
-	Timeline  []evMark  `json:"timeline"`
-	Daily     []evDay   `json:"daily"`
-	Cross     []evCross `json:"cross"`    // combinaisons trouvées sur ce PC (events_hints.go)
-	Symptoms  []evSympt `json:"symptoms"` // ce que dit le client → groupes trouvés
+	Days       int       `json:"days"`
+	From       string    `json:"from"`
+	To         string    `json:"to"`
+	Admin      bool      `json:"admin"`
+	Truncated  []string  `json:"truncated,omitempty"`
+	Errors     []string  `json:"errors,omitempty"`
+	Seconds    float64   `json:"seconds"`
+	Total      int       `json:"total"`
+	Counts     evCounts  `json:"counts"`
+	Groups     []evGroup `json:"groups"`
+	Timeline   []evMark  `json:"timeline"`
+	Daily      []evDay   `json:"daily"`
+	Cross      []evCross `json:"cross"`                // combinaisons trouvées sur ce PC (events_hints.go)
+	Symptoms   []evSympt `json:"symptoms"`             // ce que dit le client → groupes trouvés
+	Learned    int       `json:"learned"`              // fiches apprises connues de l'application
+	LearnedErr string    `json:"learnedErr,omitempty"` // site injoignable : copie locale utilisée
 }
 
 type evCounts struct {
@@ -586,7 +592,11 @@ func groupEvents(raw evScanRaw, loc *time.Location) evResult {
 	daily := map[string]*evDay{}
 	for _, e := range evs {
 		k := evLookup(e.Src, e.ID)
-		if k == nil && (e.Level < 1 || e.Level > 3) {
+		var ln *evNote
+		if k == nil {
+			ln = learnedLookup(e.Src, e.ID)
+		}
+		if k == nil && ln == nil && (e.Level < 1 || e.Level > 3) {
 			continue // information non répertoriée (jalons d'une autre source)
 		}
 		subject := ""
@@ -602,6 +612,12 @@ func groupEvents(raw evScanRaw, loc *time.Location) evResult {
 			}
 			if k != nil {
 				g.Known, g.Sev, g.Noise, g.Cat, g.Title, g.Explain, g.Advice, g.Act, g.Tool = true, k.Sev, k.Noise, k.Cat, k.Title, k.Explain, k.Advice, k.Act, k.Tool
+			} else if ln != nil {
+				g.Known, g.Learned, g.Noise, g.Cat, g.Title, g.Explain, g.Advice = true, true, ln.Noise, evGuessCat(e.Log, e.Src), ln.Title, ln.Explain, ln.Advice
+				g.Sev, g.Causes, g.NoteBy, g.NoteAt = ln.Sev, ln.Causes, ln.By, ln.UpdatedAt
+				if _, ok := evSevOrder[g.Sev]; !ok {
+					g.Sev = evLevelSev[e.Level]
+				}
 			} else {
 				g.Sev, g.Cat = evLevelSev[e.Level], evGuessCat(e.Log, e.Src)
 				g.Title = evShortSrc(e.Src) + " : événement " + fmt.Sprint(e.ID)

@@ -26,6 +26,7 @@ var eventsPS string
 var evState struct {
 	sync.Mutex
 	running bool
+	raw     *evScanRaw // dernière lecture, regroupée à nouveau quand une fiche est apprise
 	last    *evResult
 }
 
@@ -45,11 +46,18 @@ func (a *app) startEventScan(days int) bool {
 
 	a.log("Observateur d'événements : lecture des %d derniers jours", days)
 	go func() {
-		res, err := readEvents(days)
+		// les fiches apprises arrivent du site pendant la lecture des journaux
+		synced := make(chan string, 1)
+		go func() { synced <- a.syncLearned() }()
+		raw, err := readEvents(days)
+		learnErr := <-synced
+		var res *evResult
 		evState.Lock()
 		evState.running = false
 		if err == nil {
-			evState.last = res
+			res = regroup(raw)
+			res.LearnedErr = learnErr
+			evState.raw, evState.last = raw, res
 		}
 		evState.Unlock()
 		if err != nil {
@@ -63,7 +71,7 @@ func (a *app) startEventScan(days int) bool {
 	return true
 }
 
-func readEvents(days int) (*evResult, error) {
+func readEvents(days int) (*evScanRaw, error) {
 	dir, err := os.MkdirTemp("", "pc2diag-ev")
 	if err != nil {
 		return nil, err
@@ -101,9 +109,78 @@ func readEvents(days int) (*evResult, error) {
 	if err := json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &raw); err != nil {
 		return nil, fmt.Errorf("résultat illisible : %w", err)
 	}
-	res := groupEvents(raw, time.Local)
-	res.Seconds = time.Since(started).Round(100 * time.Millisecond).Seconds()
-	return &res, nil
+	raw.Seconds = time.Since(started).Round(100 * time.Millisecond).Seconds()
+	return &raw, nil
+}
+
+func regroup(raw *evScanRaw) *evResult {
+	res := groupEvents(*raw, time.Local)
+	res.Learned = len(learnedNotes())
+	return &res
+}
+
+// ---------------------------------------------------------------- événements appris
+
+// Copie des fiches du site, pour expliquer les événements appris hors ligne.
+func learnedCachePath() string { return filepath.Join(reportsDir(), "evenements-appris.json") }
+
+func loadLearnedCache() {
+	b, err := os.ReadFile(learnedCachePath())
+	if err != nil {
+		return
+	}
+	var c struct {
+		Notes []evNote `json:"notes"`
+	}
+	if json.Unmarshal(b, &c) == nil {
+		setLearned(c.Notes)
+	}
+}
+
+func saveLearnedCache() {
+	b, _ := json.MarshalIndent(map[string]any{"saved": time.Now().Format(time.RFC3339), "notes": learnedNotes()}, "", "  ")
+	_ = os.WriteFile(learnedCachePath(), b, 0o600)
+}
+
+// syncLearned télécharge les fiches du site ; en cas d'échec, la copie locale
+// sert. Renvoie le problème rencontré, vide si tout va bien ou sans site associé.
+func (a *app) syncLearned() string {
+	a.mu.Lock()
+	paired := a.cfg.Server != "" && a.cfg.Token != ""
+	a.mu.Unlock()
+	if !paired {
+		return ""
+	}
+	c := a.client()
+	c.http.Timeout = 10 * time.Second // ne pas retarder la lecture des journaux
+	notes, err := c.EventNotes()
+	if err != nil {
+		a.log("Événements appris : site injoignable, copie locale utilisée (%v)", err)
+		return "Événements appris : le site n'a pas répondu, la dernière copie gardée sur la clé est utilisée (" + err.Error() + ")."
+	}
+	setLearned(notes)
+	saveLearnedCache()
+	return ""
+}
+
+// learnEvent enregistre sur le site ce que le technicien a appris d'un
+// événement, puis réexplique la dernière lecture des journaux.
+func (a *app) learnEvent(n evNote) (*evResult, error) {
+	saved, err := a.client().SaveEventNote(n)
+	if err != nil {
+		a.log("Événement appris non enregistré : %v", err)
+		return nil, err
+	}
+	a.log("Événement appris : %s n° %d, « %s »", saved.Source, saved.EventID, saved.Title)
+	upsertLearned(*saved)
+	saveLearnedCache()
+	evState.Lock()
+	defer evState.Unlock()
+	if evState.raw == nil {
+		return nil, nil
+	}
+	evState.last = regroup(evState.raw)
+	return evState.last, nil
 }
 
 func eventsCSV() (string, error) {

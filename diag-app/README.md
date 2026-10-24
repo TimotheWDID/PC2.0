@@ -78,6 +78,15 @@ site à l'identique.
   ou donne la piste à suivre quand les journaux ne disent rien. Export CSV dans
   `PC2Diag-rapports`. Le bilan part dans le suivi du ticket à la première
   lecture, et chaque événement peut y être noté.
+  **Événements appris** : un événement que PC2 Diag ne connaît pas s'apprend
+  depuis sa fiche (« Apprendre cet événement à PC2 Diag » : titre,
+  explication, causes, marche à suivre, gravité). La fiche est enregistrée sur
+  le site, donc partagée : chaque PC2 Diag associé télécharge la liste à
+  chaque lecture des journaux et explique ensuite cet événement comme les
+  autres (« Appris par l'atelier »). Une copie reste dans
+  `PC2Diag-rapports\evenements-appris.json` pour travailler hors ligne. Sur le
+  site, **Diag rapide › Événements appris** permet de relire, corriger,
+  ajouter ou supprimer les fiches.
 - **Réparations**, une par une ou enchaînées (préréglages « Entretien
   complet », « Réparer Windows Update », « Réparer le réseau ») : point de
   restauration, DISM, SFC, chkdsk en ligne ou au redémarrage, nettoyage,
@@ -248,6 +257,7 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | Méthode | Chemin | Rôle |
 | --- | --- | --- |
 | GET | `/me` | vérifie la clé, renvoie le technicien |
+| GET, POST | `/event-notes` | événements appris (liste complète) ; apprendre un événement : `source`, `event_id`, `title`, `explain`, `advice?`, `causes[]`, `sev`, `noise` (met à jour la fiche si l'événement est déjà appris) |
 | GET | `/tickets?q=&scope=` | tickets (`open` par défaut, `mine`, `unassigned`, `closed`, `all`) |
 | GET | `/todos` | actions non faites des tickets ouverts |
 | GET, POST | `/tickets/create?q=`, `/tickets` | choix du formulaire et clients trouvés ; création du ticket (mêmes champs que le formulaire du site, plus `machine`) |
@@ -294,6 +304,7 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `hwinfo.go`, `hwinfo_windows.go` | lecture des capteurs de HWiNFO (mémoire partagée) |
 | `diskusage.go`, `diskusage_windows.go` | espace disque : parcours des dossiers, arbre pour la carte, lecteurs, export CSV |
 | `events.ps1`, `events.go`, `events_windows.go` | observateur d'événements : lecture des journaux (PowerShell, lecture seule), regroupement, explications en français (`evKB`), chronologie, export CSV |
+| `events_learned.go` | événements appris par les techniciens (fiches du site, copie hors ligne) |
 | `events_hints.go` | pistes de l'observateur : causes classées, indices tirés des événements du PC, diagnostic croisé, symptômes |
 
 ## Compiler
@@ -301,8 +312,8 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.9.0        # Linux, macOS, Git Bash
-build.cmd 1.9.0         # invite de commandes Windows
+./build.sh 1.10.0       # Linux, macOS, Git Bash
+build.cmd 1.10.0        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans

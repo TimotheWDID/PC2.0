@@ -282,6 +282,14 @@ table.du .mono{text-align:right}
 .ev-g .chev{transition:transform .15s;color:var(--muted)} .ev-g.open .chev{transform:rotate(90deg)}
 .ev-g ol.causes{margin:2px 0 0;padding-left:22px;display:grid;gap:1px;font-size:12.5px}
 .ev-hints{background:var(--info-bg);border-radius:6px;padding:7px 10px;font-size:12.5px}
+.ev-learned{font-size:12px;color:var(--accent)}
+.ev-teach{border:1px solid var(--accent);border-radius:8px;padding:10px 12px;display:grid;gap:8px;background:var(--panel);max-width:95ch}
+.ev-teach label{display:grid;gap:3px;font-size:12px;font-weight:600}
+.ev-teach input:not([type]),.ev-teach textarea,.ev-teach select{font:inherit;font-weight:400;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.ev-teach textarea{min-height:58px;resize:vertical}
+.ev-teach .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.ev-teach .row label{display:flex;gap:6px;align-items:center}
+.ev-teach .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ev-hints b{color:var(--info)} .ev-hints ul{margin:3px 0 0;padding-left:18px;display:grid;gap:2px}
 .ev-cross{display:grid;gap:8px;margin-top:8px}
 .ev-cross article{border:1px solid var(--line);border-left:4px solid var(--sev);border-radius:8px;padding:9px 12px;display:grid;gap:5px;background:var(--panel)}
@@ -399,7 +407,7 @@ table.du .mono{text-align:right}
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
    'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart','goSiteAPI','goSiteUpload','goSiteOpenFile','goLinkGet','goLinkSave','goSiteLoadDiag',
-   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree','goEvents','goEventsCSV'].forEach(n => { window[n] = (...a) => call(n, a); });
+   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree','goEvents','goEventsCSV','goEvLearn'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
 </script>
@@ -1051,7 +1059,7 @@ $('#content').addEventListener('keydown', e => { if (e.target.id === 'du-path' &
 // ----- observateur d'événements simplifié : le programme lit les erreurs et
 // avertissements des journaux Système et Application (et les démarrages, arrêts,
 // mises à jour, antivirus), les regroupe et les explique (events.go).
-const EV = {running: false, res: null, err: '', days: 7, sev: '', cat: '', log: '', q: '', noise: false, sort: 'sev', day: '', sym: '', focus: null, open: new Set(), tl: false, started: 0, timer: 0, noted: false};
+const EV = {teach: '', teachErr: '', teaching: false, running: false, res: null, err: '', days: 7, sev: '', cat: '', log: '', q: '', noise: false, sort: 'sev', day: '', sym: '', focus: null, open: new Set(), tl: false, started: 0, timer: 0, noted: false};
 const EVSEV = {crit: 'Grave', warn: 'À surveiller', info: 'Pour information'};
 const EVLOG = l => /defender/i.test(l) ? 'Antivirus' : l === 'System' ? 'Système' : l === 'Application' ? 'Applications' : l;
 const EVTOOLS = {reliability: 'Analyse de fiabilité', devmgmt: 'Gestionnaire de périphériques', services: 'Services', defender: 'Sécurité Windows', minidump: 'Dossier Minidump', diskmgmt: 'Gestion des disques', resmon: 'Moniteur de ressources', windowsupdate: 'Windows Update'};
@@ -1117,14 +1125,17 @@ function evGroupHTML(g){
   const acts = [];
   if (g.act && typeof ACTIONS !== 'undefined' && ACTIONS.find(x => x.id === g.act)) acts.push(`<button class="btn go" data-act="${g.act}">Réparer : ${esc(ACTIONS.find(x => x.id === g.act).title)}…</button>`);
   if (g.tool && EVTOOLS[g.tool]) acts.push(`<button class="btn" data-tool="${g.tool}">Ouvrir : ${EVTOOLS[g.tool]}</button>`);
-  if (!g.known) acts.push(`<button class="btn" data-ev-web="${esc(g.key)}">Chercher cet événement en ligne</button>`);
+  if (!g.known || g.learned) acts.push(`<button class="btn" data-ev-web="${esc(g.key)}">Chercher cet événement en ligne</button>`);
+  if (tkPaired() && (!g.known || g.learned)) acts.push(`<button class="btn${g.learned ? '' : ' go'}" data-ev-teach="${esc(g.key)}">${g.learned ? 'Corriger la fiche apprise' : 'Apprendre cet événement à PC2 Diag'}</button>`);
   if (!LK.off) acts.push(`<button class="btn" data-ev-note="${esc(g.key)}">Noter dans le suivi du ticket</button>`);
+  const teach = open && EV.teach === g.key;
   const body = open ? `
-    <div class="fix">${g.known ? esc(g.explain) : 'Événement que PC2 Diag ne connaît pas encore : le message de Windows ci-dessous en dit plus. S\'il ne se répète pas et que le client ne se plaint de rien, il est probablement sans conséquence.'}</div>
+    <div class="fix">${g.known ? esc(g.explain) : 'Événement que PC2 Diag ne connaît pas encore : le message de Windows ci-dessous en dit plus. S\'il ne se répète pas et que le client ne se plaint de rien, il est probablement sans conséquence.' + (tkPaired() ? ' Si vous savez ce qu\'il veut dire, apprenez-le à PC2 Diag : tous les PC2 Diag associés au site en profiteront.' : '')}</div>
+    ${g.learned ? `<div class="ev-learned">Appris par l'atelier${g.noteBy ? ' · ' + esc(g.noteBy) : ''}${g.noteAt ? ', le ' + new Date(g.noteAt).toLocaleDateString('fr-FR') : ''} (fiche partagée par le site)</div>` : ''}
     ${arr(g.hints).length ? `<div class="ev-hints"><b>Sur ce PC</b><ul>${g.hints.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
     ${arr(g.causes).length ? `<div class="fix"><b>D'où ça vient le plus souvent</b><ol class="causes">${g.causes.map(c => `<li>${esc(c)}</li>`).join('')}</ol></div>` : ''}
     ${g.advice ? `<div class="fix"><b>Que faire :</b> ${esc(g.advice)}</div>` : ''}
-    ${acts.length ? `<div class="acts">${acts.join('')}</div>` : ''}
+    ${teach ? evTeachHTML(g) : acts.length ? `<div class="acts">${acts.join('')}</div>` : ''}
     <div class="meta">${g.count} fois · du ${evDT(g.first)} au ${evDT(g.last)} · ${g.days.length} jour(s) différent(s) · journal ${esc(EVLOG(g.log))} · source ${esc(g.src)} · n° ${g.id} · niveau Windows : ${['', 'critique', 'erreur', 'avertissement', 'information'][g.level] || ''}</div>
     ${g.count > 1 ? `<div class="times">${g.times.map(t => `<span>${evDT(t)}</span>`).join('')}${g.count > g.times.length ? `<span>… et ${g.count - g.times.length} de plus</span>` : ''}</div>` : ''}
     ${g.messages.map((m, i) => `<div class="sub" style="font-size:12px;color:var(--muted)">Message de Windows${g.messages.length > 1 ? ' (' + (i + 1) + '/' + g.messages.length + ', ' + evDT(m.t) + ')' : ''}</div><pre>${esc(m.msg)}</pre>`).join('')}` : '';
@@ -1132,6 +1143,38 @@ function evGroupHTML(g){
     <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg>
     <span class="sev">${g.noise ? 'Sans gravité' : EVSEV[g.sev]}</span><h3>${esc(g.title)}${g.subject ? ` <small>${esc(g.subject)}</small>` : ''}</h3><span class="cat">${esc(g.cat)}</span><span class="n">× ${g.count}</span><span class="when">${evRel(g.last)}</span></div>${body}</article>`;
 }
+// apprendre un événement inconnu : la fiche part sur le site, partagée par tous les PC2 Diag (events_learned.go)
+function evTeachHTML(g){
+  const v = g.learned ? g : {title: '', explain: '', advice: '', causes: [], sev: g.sev, noise: false};
+  return `<div class="ev-teach" data-ev-form="${esc(g.key)}"><b>${g.learned ? 'Corriger ce que PC2 Diag sait de cet événement' : 'Apprendre cet événement à PC2 Diag'}</b>
+    <div class="sub" style="color:var(--muted);font-size:12px">Source ${esc(g.src)}, n° ${g.id}. La fiche est enregistrée sur le site : tous les PC2 Diag associés l'utiliseront dès leur prochaine lecture des journaux. Elle se relit et se corrige aussi sur le site (Diag rapide › Événements appris).</div>
+    <label>Titre<input data-f="title" maxlength="160" value="${esc(v.title)}" placeholder="Ex : Le pilote Wi-Fi a perdu la connexion"></label>
+    <label>Ce que ça veut dire<textarea data-f="explain" maxlength="2000" placeholder="En une ou deux phrases, pour un technicien qui ne connaît pas cet événement">${esc(v.explain)}</textarea></label>
+    <label>D'où ça vient le plus souvent (une cause par ligne, la plus fréquente d'abord)<textarea data-f="causes">${esc(arr(v.causes).join('\n'))}</textarea></label>
+    <label>Que faire<textarea data-f="advice" maxlength="2000">${esc(v.advice)}</textarea></label>
+    <div class="row"><label>Gravité <select data-f="sev">${['crit', 'warn', 'info'].map(k => `<option value="${k}"${v.sev === k ? ' selected' : ''}>${EVSEV[k]}</option>`).join('')}</select></label>
+      <label><input type="checkbox" data-f="noise"${v.noise ? ' checked' : ''}> Sans gravité : masqué par défaut</label></div>
+    <div class="acts"><button class="btn go" data-ev-teach-save="${esc(g.key)}"${EV.teaching ? ' disabled' : ''}>${EV.teaching ? 'Enregistrement…' : 'Enregistrer pour tous les PC2 Diag'}</button><button class="btn" data-ev-teach-cancel>Annuler</button><span style="color:var(--crit);font-size:12px">${esc(EV.teachErr)}</span></div></div>`;
+}
+async function evTeachSave(key){
+  const g = EV.res.groups.find(x => x.key === key), f = document.querySelector(`[data-ev-form="${CSS.escape(key)}"]`);
+  if (!g || !f) return;
+  const val = n => f.querySelector(`[data-f="${n}"]`);
+  const note = {source: g.src, event_id: g.id, title: val('title').value.trim(), explain: val('explain').value.trim(), advice: val('advice').value.trim(),
+    causes: val('causes').value.split('\n').map(x => x.trim()).filter(Boolean), sev: val('sev').value, noise: val('noise').checked};
+  if (!note.title || !note.explain) { EV.teachErr = 'Indiquez au moins un titre et ce que veut dire l\'événement.'; evRepaint(key); return; }
+  EV.teaching = true; EV.teachErr = ''; evRepaint(key);
+  try {
+    const res = await goEvLearn(note);
+    EV.teach = '';
+    if (res) EV.res = res;
+    status(`Événement appris : « ${note.title} ». Tous les PC2 Diag associés l'expliqueront désormais.`);
+    lkNote('events', 'Événement appris à PC2 Diag : ' + note.title, [`Source ${g.src}, n° ${g.id}`, note.explain]);
+  } catch (err) { EV.teachErr = String(err); }
+  EV.teaching = false;
+  if (view === 'events') render();
+}
+function evRepaint(key){ const el = document.querySelector(`[data-ev-key="${CSS.escape(key)}"]`), g = EV.res && EV.res.groups.find(x => x.key === key); if (el && g) el.outerHTML = evGroupHTML(g); }
 function evListHTML(){
   const list = evFiltered();
   if (!list.length) return `<div class="empty">${EV.res.groups.length ? 'Aucun événement ne correspond aux filtres.' : 'Aucune erreur ni avertissement sur la période.'}</div>`;
@@ -1152,8 +1195,9 @@ V.events = () => {
   if (!r.admin) notes.push('Sans droits administrateur, une partie des journaux peut manquer : relancez l\'application en administrateur.');
   if (arr(r.truncated).length) notes.push('Journaux très chargés : seuls les 2 000 derniers événements de « ' + arr(r.truncated).map(EVLOG).join(' », « ') + ' » sont lus. Réduisez la période pour voir plus loin en détail.');
   arr(r.errors).forEach(e => notes.push('Lecture incomplète : ' + e));
+  if (r.learnedErr) notes.push(r.learnedErr);
   const keep = evKeep(r);
-  out += `<div class="card"><div class="du-bar" style="justify-content:space-between"><b style="font-size:15px"><span class="dot ${vs}" style="display:inline-block;margin-right:6px"></span>${esc(vt)}</b><span class="sub" style="color:var(--muted);font-size:12px">${r.days === 1 ? '24 dernières heures' : r.days + ' derniers jours'} · ${r.total.toLocaleString('fr-FR')} événement(s) lus en ${r.seconds.toLocaleString('fr-FR')} s${LK.off ? '' : ' · <button class="btn" id="ev-note-all" style="margin-left:6px">Noter le bilan dans le suivi</button>'}</span></div>
+  out += `<div class="card"><div class="du-bar" style="justify-content:space-between"><b style="font-size:15px"><span class="dot ${vs}" style="display:inline-block;margin-right:6px"></span>${esc(vt)}</b><span class="sub" style="color:var(--muted);font-size:12px">${r.days === 1 ? '24 dernières heures' : r.days + ' derniers jours'} · ${r.total.toLocaleString('fr-FR')} événement(s) lus en ${r.seconds.toLocaleString('fr-FR')} s${r.learned ? ' · ' + r.learned + ' appris par l\'atelier' : ''}${LK.off ? '' : ' · <button class="btn" id="ev-note-all" style="margin-left:6px">Noter le bilan dans le suivi</button>'}</span></div>
     <div class="ev-tiles">${['crit', 'warn', 'info'].map(s => { const n = r.groups.filter(g => !g.noise && g.sev === s); return `<button class="ev-tile ${s}" data-ev-sev="${s}" aria-pressed="${EV.sev === s}"><b>${n.length}</b><span>${EVSEV[s]} · ${n.reduce((a, g) => a + g.count, 0)} fois</span></button>`; }).join('')}</div>
     ${keep.length ? `<div class="sub" style="margin-top:10px;font-weight:600">Ce qu'il faut retenir</div><ul class="ev-keep">${keep.map(g => `<li><span class="dot ${g.sev}" style="display:inline-block;margin-right:5px"></span><a data-ev-open="${esc(g.key)}">${esc(evName(g))}</a> : ${g.count > 1 ? g.count + ' fois, la dernière ' : ''}${evRel(g.last)}${g.days.length > 1 ? ` (sur ${g.days.length} jours)` : ''}</li>`).join('')}</ul>` : ''}
     ${r.counts.noise ? `<div class="sub" style="color:var(--muted);font-size:12px;margin-top:8px">${r.counts.noise.toLocaleString('fr-FR')} message(s) habituels et sans gravité (DCOM, compteurs, certificats…) sont masqués${EV.noise ? '' : ' : cochez « Afficher les messages sans gravité » pour les voir'}.</div>` : ''}
@@ -1226,6 +1270,9 @@ $('#content').addEventListener('click', async e => {
   if (t.closest('[data-ev-unfocus]')) { EV.focus = null; render(); return; }
   const cn = t.closest('[data-ev-crossnote]'); if (cn) { const c = EV.res.cross[+cn.dataset.evCrossnote]; if (c) { lkNote('events', 'Diagnostic croisé : ' + c.title, [c.text].concat(arr(c.evidence))); status(LK.ticket ? 'Noté dans le suivi du ticket #' + LK.ticket.id + '.' : 'Gardé : partira dans le suivi dès que le PC sera rattaché à un ticket.'); } return; }
   const nt = t.closest('[data-ev-note]'); if (nt) { const g = EV.res.groups.find(x => x.key === nt.dataset.evNote); if (g) { lkNote('events', 'Événement Windows : ' + evName(g), [evNoteLine(g)].concat(arr(g.hints), [g.known ? g.explain : '', `Source ${g.src}, n° ${g.id}`])); status(LK.ticket ? 'Noté dans le suivi du ticket #' + LK.ticket.id + '.' : 'Gardé : partira dans le suivi dès que le PC sera rattaché à un ticket.'); } return; }
+  const te = t.closest('[data-ev-teach]'); if (te) { EV.teach = te.dataset.evTeach; EV.teachErr = ''; evRepaint(EV.teach); const f = document.querySelector(`[data-ev-form="${CSS.escape(EV.teach)}"] [data-f="title"]`); f && f.focus(); return; }
+  const ts = t.closest('[data-ev-teach-save]'); if (ts) { if (!EV.teaching) evTeachSave(ts.dataset.evTeachSave); return; }
+  if (t.closest('[data-ev-teach-cancel]')) { const k = EV.teach; EV.teach = ''; EV.teachErr = ''; evRepaint(k); return; }
   const wb = t.closest('[data-ev-web]'); if (wb) { const g = EV.res.groups.find(x => x.key === wb.dataset.evWeb); if (g) goOpenURL('https://www.google.com/search?q=' + encodeURIComponent(`Event ID ${g.id} ${g.src}`)); return; }
   const tg = t.closest('[data-ev-toggle]'); if (tg) { const k = tg.dataset.evToggle; EV.open.has(k) ? EV.open.delete(k) : EV.open.add(k); const el = tg.closest('.ev-g'), g = EV.res.groups.find(x => x.key === k); if (el && g) el.outerHTML = evGroupHTML(g); }
 });
@@ -2906,7 +2953,7 @@ window.onGo = (kind, p) => {
   if (kind === 'sensors') onSensors(p);
   if (kind === 'duProgress') duOnProgress(p);
   if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; lkNote('disk', `Analyse de l'espace disque : ${p.root} (${duSize(p.size)})`); status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
-  if (kind === 'evDone') { EV.running = false; EV.res = p; EV.err = ''; EV.open.clear(); const [vt] = evVerdict(p); status(`Observateur d'événements : ${vt.charAt(0).toLowerCase() + vt.slice(1)} (${p.total} événements en ${p.seconds} s)`); if (!EV.noted) { EV.noted = true; evNoteAll(true); } renderTree(); if (view === 'events') render(); }
+  if (kind === 'evDone') { EV.running = false; EV.res = p; EV.err = ''; EV.teach = ''; EV.open.clear(); const [vt] = evVerdict(p); status(`Observateur d'événements : ${vt.charAt(0).toLowerCase() + vt.slice(1)} (${p.total} événements en ${p.seconds} s)`); if (!EV.noted) { EV.noted = true; evNoteAll(true); } renderTree(); if (view === 'events') render(); }
   if (kind === 'evError') { EV.running = false; EV.err = p; status(p); renderTree(); if (view === 'events') render(); }
   if (kind === 'duError') { DU.running = false; DU.err = p; status(p); renderTree(); if (view === 'disk-usage') render(); }
   if (kind === 'battPoint') { BT.now = p; BT.points.push(p); if (view === 'battery-test') { render(); drawBattChart(); } }

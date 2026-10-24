@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { formatDateTimeFr } from '@/lib/datetime';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
+    BookOpen,
     Download,
     KeyRound,
     Link2,
@@ -51,6 +52,8 @@ type DiagApp = {
     tokens: AppToken[];
     newToken: string | null;
     downloadUrl: string | null;
+    eventNotesUrl: string;
+    eventNotesCount: number;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Diag rapide', href: '/diag' }];
@@ -172,14 +175,22 @@ export default function DiagnosticsIndex({
                             clé USB, associez-la une fois avec une clé d’accès,
                             elle n’installe rien sur le PC du client.
                         </p>
-                        {app.downloadUrl && (
+                        <div className="flex flex-wrap gap-2">
+                            {app.downloadUrl && (
+                                <Button asChild variant="outline" size="sm">
+                                    <a href={app.downloadUrl} download>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Télécharger PC2Diag.exe
+                                    </a>
+                                </Button>
+                            )}
                             <Button asChild variant="outline" size="sm">
-                                <a href={app.downloadUrl} download>
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Télécharger PC2Diag.exe
-                                </a>
+                                <Link href={app.eventNotesUrl}>
+                                    <BookOpen className="mr-2 h-4 w-4" />
+                                    Événements appris ({app.eventNotesCount})
+                                </Link>
                             </Button>
-                        )}
+                        </div>
                         {app.newToken && (
                             <div className="space-y-2 rounded-md border border-emerald-600/40 bg-emerald-50 p-3 dark:bg-emerald-950/40">
                                 <p className="font-medium">

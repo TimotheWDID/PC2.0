@@ -98,6 +98,27 @@ func (c *Client) Ticket(id int) (*Ticket, error) {
 	return &out.Ticket, nil
 }
 
+// EventNotes downloads the events taught to PC2 Diag (events_learned.go).
+func (c *Client) EventNotes() ([]evNote, error) {
+	var out struct {
+		Notes []evNote `json:"notes"`
+	}
+	err := c.do("GET", "/event-notes", nil, &out)
+	return out.Notes, err
+}
+
+// SaveEventNote teaches the site an event: creates its note, or updates the
+// one a colleague already wrote.
+func (c *Client) SaveEventNote(n evNote) (*evNote, error) {
+	var out struct {
+		Note evNote `json:"note"`
+	}
+	if err := c.do("POST", "/event-notes", n, &out); err != nil {
+		return nil, err
+	}
+	return &out.Note, nil
+}
+
 // AtelierExport is what the Diag Atelier sends with « Envoyer au ticket »
 // (diagAppExport() in the page): the report, the inventory sheet, the manual
 // checks and the files it was built from (base64).
