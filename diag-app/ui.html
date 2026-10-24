@@ -238,6 +238,63 @@ table.du .mono{text-align:right}
 .tm span{display:block;padding:1px 5px;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
 .tm span b{font:500 11px var(--f-mono);opacity:.75}
 .tm:hover{outline:2px solid var(--accent);outline-offset:-2px;z-index:1}
+/* observateur d'événements */
+.ev-seg button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.ev-seg button:disabled{opacity:.5;cursor:default}
+.ev-tiles{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ev-tile{border:1px solid var(--line);border-left:4px solid var(--sev);border-radius:8px;padding:7px 12px;background:var(--panel);cursor:pointer;min-width:130px;text-align:left;font:inherit;color:var(--fg)}
+.ev-tile b{display:block;font:600 19px var(--f-mono);color:var(--sev)}
+.ev-tile span{font-size:12px;color:var(--muted)}
+.ev-tile.crit{--sev:var(--crit)} .ev-tile.warn{--sev:var(--warn)} .ev-tile.info{--sev:var(--info)}
+.ev-tile[aria-pressed="true"]{background:var(--row);box-shadow:0 0 0 1px var(--sev)}
+.ev-keep{margin:8px 0 0;padding-left:20px;display:grid;gap:3px}
+.ev-keep a{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:transparent}
+.ev-keep a:hover{text-decoration-color:currentColor}
+.ev-hist{display:flex;align-items:flex-end;gap:3px;height:96px;margin-top:10px}
+.ev-hist button{flex:1;min-width:6px;height:100%;border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-end;border-radius:3px}
+.ev-hist button:hover,.ev-hist button[aria-pressed="true"]{background:var(--row)}
+.ev-hist i{display:block;width:100%}
+.ev-hist i.c{background:var(--crit)} .ev-hist i.w{background:var(--warn)} .ev-hist i.n{background:var(--info);opacity:.55}
+.ev-hlbl{display:flex;gap:3px;font:10.5px var(--f-mono);color:var(--muted);margin-top:3px}
+.ev-hlbl span{flex:1;min-width:6px;text-align:center;overflow:hidden;white-space:nowrap}
+.ev-tl{display:grid;gap:2px;margin-top:8px}
+.ev-tl div{display:grid;grid-template-columns:118px 18px 1fr;gap:6px;align-items:baseline;font-size:12.5px;padding:2px 4px;border-radius:4px}
+.ev-tl div[data-ev-open]{cursor:pointer} .ev-tl div[data-ev-open]:hover{background:var(--row)}
+.ev-tl time{font:12px var(--f-mono);color:var(--muted)}
+.ev-tl .k{width:10px;height:10px;border-radius:50%;background:var(--faint);align-self:center}
+.ev-tl .k.crash,.ev-tl .k.bsod,.ev-tl .k.threat{background:var(--crit)} .ev-tl .k.updatefail{background:var(--warn)} .ev-tl .k.boot,.ev-tl .k.update{background:var(--ok)} .ev-tl .k.restart,.ev-tl .k.shutdown,.ev-tl .k.wake,.ev-tl .k.chkdsk{background:var(--info)}
+.ev-tl em{font-style:normal;color:var(--muted)}
+.ev-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ev-filters select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.ev-filters label{display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--muted)}
+.ev-chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;border:1px solid var(--accent);color:var(--accent);border-radius:12px;padding:1px 4px 1px 10px}
+.ev-chip button{border:0;background:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 4px}
+.ev-g{cursor:default}
+.ev-g .top{cursor:pointer}
+.ev-g .n{font:600 12px var(--f-mono);color:var(--sev);white-space:nowrap}
+.ev-g .when{font-size:12px;color:var(--muted);white-space:nowrap}
+.ev-g h3 small{font-weight:400;color:var(--muted);font-family:var(--f-mono);font-size:12px}
+.ev-g.noise{--sev:var(--faint);opacity:.9}
+.ev-g .meta{font:11.5px var(--f-mono);color:var(--muted);overflow-wrap:anywhere}
+.ev-g .times{display:flex;flex-wrap:wrap;gap:4px}
+.ev-g .times span{font:11px var(--f-mono);background:var(--row);border-radius:4px;padding:1px 5px}
+.ev-g pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.45 var(--f-mono);background:var(--row);border-radius:6px;padding:7px 9px;max-height:220px;overflow:auto}
+.ev-g .chev{transition:transform .15s;color:var(--muted)} .ev-g.open .chev{transform:rotate(90deg)}
+.ev-g ol.causes{margin:2px 0 0;padding-left:22px;display:grid;gap:1px;font-size:12.5px}
+.ev-hints{background:var(--info-bg);border-radius:6px;padding:7px 10px;font-size:12.5px}
+.ev-hints b{color:var(--info)} .ev-hints ul{margin:3px 0 0;padding-left:18px;display:grid;gap:2px}
+.ev-cross{display:grid;gap:8px;margin-top:8px}
+.ev-cross article{border:1px solid var(--line);border-left:4px solid var(--sev);border-radius:8px;padding:9px 12px;display:grid;gap:5px;background:var(--panel)}
+.ev-cross article.crit{--sev:var(--crit)} .ev-cross article.warn{--sev:var(--warn)} .ev-cross article.info{--sev:var(--info)}
+.ev-cross h3{margin:0;font-size:13.5px} .ev-cross p{margin:0;font-size:12.5px;max-width:95ch}
+.ev-cross ul{margin:0;padding-left:18px;font:12px var(--f-mono);color:var(--muted)}
+.ev-cross .acts{display:flex;gap:8px;flex-wrap:wrap}
+.ev-sym{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.ev-sym button{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:4px 11px;font:600 12px var(--f-ui);color:var(--fg);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.ev-sym button i{font:600 11px var(--f-mono);font-style:normal;background:var(--row);border-radius:8px;padding:0 6px;color:var(--muted)}
+.ev-sym button.hit i{background:var(--warn-bg);color:var(--warn)}
+.ev-sym button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ev-symres{margin-top:8px;font-size:12.5px}
 .tm.leaf span{white-space:normal;word-break:break-word}
 .tm.grey{background:repeating-linear-gradient(45deg,#e4e7ee 0 5px,#d9dde6 5px 10px);color:#5b6475}
 .tm.grey:not([data-du-dir]){cursor:default}
@@ -342,7 +399,7 @@ table.du .mono{text-align:right}
   const call = (m, a) => new Promise((res, rej) => { if (!window.goCall) { rej('Programme indisponible'); return; } const id = seq++; pend[id] = {res, rej}; window.goCall(id, m, a); });
   ['goInfo','goScan','goSensorsStart','goActions','goRunAction','goCancelAction','goOpenTool','goGetConfig','goSaveConfig','goExport','goOpenPath','goHistory','goLoadScan','goSaveHTML','goSaveCSV','goReboot','goCancelReboot','goBatteryTest','goBatteryCtl',
    'goSiteState','goSitePair','goSiteUnpair','goSiteCheck','goSiteTickets','goSiteSend','goOpenURL','goAtelierPart','goSiteAPI','goSiteUpload','goSiteOpenFile','goLinkGet','goLinkSave','goSiteLoadDiag',
-   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree'].forEach(n => { window[n] = (...a) => call(n, a); });
+   'goDiskDrives','goDiskScan','goDiskCancel','goDiskDir','goDiskReveal','goDiskCSV','goDiskTree','goEvents','goEventsCSV'].forEach(n => { window[n] = (...a) => call(n, a); });
 })();
 window.onerror = (msg, src, line) => { const el = document.getElementById('stMsg'); if (el) el.textContent = 'Erreur de l\'interface : ' + msg + ' (ligne ' + line + ')'; };
 </script>
@@ -603,6 +660,7 @@ function nodes(){
   add('sensors','Capteurs en direct','pulse',0);
   add('tests','Tests manuels','check',0);
   add('disk-usage','Espace disque','pie',0);
+  add('events','Observateur d\'événements','log',0);
   add('repair','Réparations','wrench',0);
   add('battery-test','Test de batterie','bat',0);
   add('report','Rapport client','doc',0);
@@ -655,6 +713,7 @@ function renderTree(){
     else if (D && (n.cats.length || n.match) && n.id !== 'report') { const w = worst(fs); badge = `<span class="dot ${w || 'ok'}" title="${w ? fs.length + ' constat(s)' : 'OK'}"></span>`; }
     if (n.id === 'repair' && run.id) badge = '<span class="spin" title="Réparation en cours"></span>';
     if (n.id === 'disk-usage' && DU.running) badge = '<span class="spin" title="Analyse en cours"></span>';
+    if (n.id === 'events') { if (EV.running) badge = '<span class="spin" title="Lecture en cours"></span>'; else if (EV.res) { const w = worst(EV.res.groups.filter(g => !g.noise && g.sev !== 'info')); badge = `<span class="dot ${w || 'ok'}" title="${w ? evVerdict(EV.res)[0] : 'Rien d\'inquiétant'}"></span>`; } }
     return `<div class="node${view === n.id ? ' sel' : ''}" style="--d:${n.d}" data-id="${esc(n.id)}" tabindex="0" role="treeitem">${ico(n.icon)}<span class="lbl">${esc(n.label)}</span>${badge}</div>`;
   }).join('');  markToolbar();
 }
@@ -711,13 +770,13 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','atelier','sensors','tests','disk-usage','repair','report','site','battery-test','tickets','ticket'].includes(view.split(':')[0])) view = 'summary';
+  if (!D && !['summary','atelier','sensors','tests','disk-usage','events','repair','report','site','battery-test','tickets','ticket'].includes(view.split(':')[0])) view = 'summary';
   const at = view === 'atelier';
   $('#atelier').hidden = !at; c.hidden = at;
   if (at) { c.innerHTML = ''; atelierSync(); return; }
   const n = nodes().find(x => x.id === view);
   const fn = V[view.split(':')[0]];
-  c.innerHTML = (IMP.on && !/^(tickets?|site|repair|sensors|disk-usage|battery-test|tests)$/.test(view.split(':')[0]) ? impBanner() : '') + (fn ? fn(view.split(':')[1], n) : '');
+  c.innerHTML = (IMP.on && !/^(tickets?|site|repair|sensors|disk-usage|events|battery-test|tests)$/.test(view.split(':')[0]) ? impBanner() : '') + (fn ? fn(view.split(':')[1], n) : '');
   afterRender();
 }
 function afterRender(){
@@ -823,7 +882,7 @@ V.security = (_, n) => { const s = D.security || {}, d = s.defender;
 V.stability = (_, n) => { const e = D.events || {};
   return section('Stabilité et journaux', '30 derniers jours', n, props([['Événements', [['Indice de fiabilité', has(D.reliability) ? D.reliability + ' / 10' : ''], ['Écrans bleus', arr(e.bsod).length], ['Arrêts brutaux (Kernel-Power 41)', e.kernelPower41], ['Arrêts inattendus (6008)', e.unexpected6008], ['Erreurs disque / NTFS', (e.disk || 0) + ' / ' + (e.ntfs || 0)], ['Réinitialisations contrôleur', e.storReset], ['Fichiers minidump', e.dumps ? e.dumps.count + (e.dumps.last ? ' (dernier ' + fdate(e.dumps.last) + ')' : '') : '']]],
     ['Applications qui plantent', arr(e.appCrashes).map(a => [esc(a.app), a.count + ' fois'])], ['Applications qui ne répondent plus', arr(e.appHangs).map(a => [esc(a.app), a.count + ' fois'])], ['Écrans bleus', arr(e.bsod).map(b => [fdt(b.date), `<span class="mono">${esc(bsodName(b.code))}</span>`])]])
-    + `<div class="acts" style="display:flex;gap:8px"><button class="btn" data-tool="reliability">Ouvrir l'analyse de fiabilité</button><button class="btn" data-tool="eventvwr">Observateur d'événements</button></div>`); };
+    + `<div class="acts" style="display:flex;gap:8px"><button class="btn" data-tool="reliability">Ouvrir l'analyse de fiabilité</button><button class="btn go" data-nav="events">Voir les événements expliqués</button><button class="btn" data-tool="eventvwr">Observateur d'événements de Windows</button></div>`); };
 V.services = (_, n) => section('Services', 'Services automatiques qui ne tournent pas', n, arr(D.services).length ? props([['Services arrêtés', arr(D.services).map(s => [esc(s.display), `<span class="mono">${esc(s.name)}</span>` + (s.exit ? ' · code ' + s.exit : '')])]]) : '<div class="empty">Tous les services automatiques fonctionnent.</div>');
 V.startup = (_, n) => section('Démarrage', `${arr(D.startup).length} programme(s)`, n, '<div style="overflow:auto"><table class="list"><thead><tr><th>Programme</th><th>Commande</th><th>Emplacement</th></tr></thead><tbody>' + arr(D.startup).map(s => `<tr><td>${esc(s.name)}</td><td class="mono" style="font-size:11.5px">${esc(s.cmd)}</td><td>${esc(s.loc)}</td></tr>`).join('') + '</tbody></table></div><div><button class="btn" data-tool="startup">Gérer les applications au démarrage</button></div>');
 V.software = (_, n) => section('Logiciels installés', `${arr(D.software).length} logiciel(s)`, n, '<input class="search" id="swq" type="search" placeholder="Filtrer par nom ou éditeur…" aria-label="Filtrer"><div style="overflow:auto"><table class="list"><thead><tr><th>Logiciel</th><th>Version</th><th>Éditeur</th><th>Installé</th></tr></thead><tbody id="swb"></tbody></table></div>');
@@ -988,6 +1047,196 @@ $('#content').addEventListener('click', async e => {
   const dd = e.target.closest('[data-du-dir]'); if (dd && !dd.matches('.du-crumbs button:last-child')) { duGo(+dd.dataset.duDir); $('#content').scrollTop = 0; }
 });
 $('#content').addEventListener('keydown', e => { if (e.target.id === 'du-path' && e.key === 'Enter') { DU.path = e.target.value.trim(); duStart(DU.path); } });
+
+// ----- observateur d'événements simplifié : le programme lit les erreurs et
+// avertissements des journaux Système et Application (et les démarrages, arrêts,
+// mises à jour, antivirus), les regroupe et les explique (events.go).
+const EV = {running: false, res: null, err: '', days: 7, sev: '', cat: '', log: '', q: '', noise: false, sort: 'sev', day: '', sym: '', focus: null, open: new Set(), tl: false, started: 0, timer: 0, noted: false};
+const EVSEV = {crit: 'Grave', warn: 'À surveiller', info: 'Pour information'};
+const EVLOG = l => /defender/i.test(l) ? 'Antivirus' : l === 'System' ? 'Système' : l === 'Application' ? 'Applications' : l;
+const EVTOOLS = {reliability: 'Analyse de fiabilité', devmgmt: 'Gestionnaire de périphériques', services: 'Services', defender: 'Sécurité Windows', minidump: 'Dossier Minidump', diskmgmt: 'Gestion des disques', resmon: 'Moniteur de ressources', windowsupdate: 'Windows Update'};
+const evDT = iso => iso ? new Date(iso).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}).replace(' ', ' à ') : '';
+const evDay = iso => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function evRel(iso){
+  if (!iso) return '';
+  const t = new Date(iso), m = (Date.now() - t) / 6e4, hm = t.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+  if (m < 1) return 'à l\'instant';
+  if (m < 60) return 'il y a ' + Math.round(m) + ' min';
+  if (evDay(iso) === evDay(new Date().toISOString())) return 'aujourd\'hui à ' + hm;
+  if (evDay(iso) === evDay(new Date(Date.now() - 864e5).toISOString())) return 'hier à ' + hm;
+  return 'le ' + t.toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}) + ' à ' + hm;
+}
+const evName = g => g.title + (g.subject ? ' (' + g.subject + ')' : '');
+const evSevOf = g => g.noise ? 'noise' : g.sev;
+async function evStart(days){
+  if (EV.running) return;
+  if (days) EV.days = days;
+  EV.err = ''; EV.day = ''; EV.sym = ''; EV.focus = null;
+  let ok = false; try { ok = await goEvents(EV.days); } catch (e) { EV.err = String(e); }
+  EV.running = ok;
+  if (ok) { EV.started = Date.now(); status('Observateur d\'événements : lecture des journaux…'); clearInterval(EV.timer); EV.timer = setInterval(() => { const el = $('#ev-el'); if (el) el.textContent = Math.round((Date.now() - EV.started) / 1000) + ' s'; if (!EV.running) clearInterval(EV.timer); }, 1000); }
+  renderTree(); if (view === 'events') render();
+}
+function evFiltered(){
+  const r = EV.res; if (!r) return [];
+  const q = EV.q.trim().toLowerCase(), sym = EV.sym && arr(r.symptoms).find(x => x.id === EV.sym), only = EV.focus ? EV.focus.keys : sym ? sym.keys : null;
+  const out = r.groups.filter(g => (!only || only.includes(g.key)) && (EV.noise || !g.noise || only) && (!EV.sev || (!g.noise && g.sev === EV.sev)) && (!EV.cat || g.cat === EV.cat) && (!EV.log || EVLOG(g.log) === EV.log) && (!EV.day || g.days.includes(EV.day))
+    && (!q || [g.title, g.subject, g.src, String(g.id), g.cat, g.explain].concat(g.messages.map(m => m.msg)).join(' ').toLowerCase().includes(q)));
+  if (EV.sort === 'recent') out.sort((a, b) => b.last.localeCompare(a.last));
+  if (EV.sort === 'count') out.sort((a, b) => b.count - a.count);
+  return out;
+}
+// les points importants, en phrases : d'abord le grave, puis ce qui se répète
+function evKeep(r){
+  return r.groups.filter(g => !g.noise && (g.sev === 'crit' || g.sev === 'warn')).sort((a, b) => (a.sev === b.sev ? 0 : a.sev === 'crit' ? -1 : 1) || b.count - a.count).slice(0, 5);
+}
+function evVerdict(r){
+  const gc = r.groups.filter(g => !g.noise && g.sev === 'crit').length, gw = r.groups.filter(g => !g.noise && g.sev === 'warn').length;
+  return gc ? [`${gc} problème${gc > 1 ? 's' : ''} grave${gc > 1 ? 's' : ''} dans les journaux`, 'crit', gc, gw] : gw ? [`Rien de grave, ${gw} point${gw > 1 ? 's' : ''} à surveiller`, 'warn', gc, gw] : ['Journaux propres : rien d\'inquiétant sur la période', 'ok', gc, gw];
+}
+function evHist(r){
+  const days = []; const end = new Date(r.to || Date.now()); const by = {}; r.daily.forEach(d => by[d.date] = d);
+  for (let i = r.days - 1; i >= 0; i--) { const d = new Date(end - i * 864e5); days.push(evDay(d.toISOString())); }
+  const max = Math.max(1, ...days.map(d => by[d] ? by[d].crit + by[d].warn + by[d].info : 0));
+  const step = days.length > 14 ? 5 : days.length > 7 ? 2 : 1;
+  const bars = days.map(d => { const x = by[d] || {crit: 0, warn: 0, info: 0}, h = v => (100 * v / max).toFixed(1) + '%';
+    const lbl = new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'});
+    return `<button data-ev-day="${d}" aria-pressed="${EV.day === d}" title="${lbl} : ${x.crit} grave(s), ${x.warn} à surveiller, ${x.info} pour information"><i class="n" style="height:${h(x.info)}"></i><i class="w" style="height:${h(x.warn)}"></i><i class="c" style="height:${h(x.crit)}"></i></button>`; }).join('');
+  const lbls = days.map((d, i) => `<span>${i % step === 0 || i === days.length - 1 ? d.slice(8) + '/' + d.slice(5, 7) : ''}</span>`).join('');
+  return `<div class="ev-hist">${bars}</div><div class="ev-hlbl">${lbls}</div>`;
+}
+const EVKIND = {boot: 'Démarrage', shutdown: 'Arrêt', restart: 'Redémarrage', crash: 'Arrêt brutal', bsod: 'Écran bleu', update: 'Mise à jour', updatefail: 'Mise à jour échouée', wake: 'Sortie de veille', threat: 'Antivirus', chkdsk: 'Vérification du disque'};
+function evTimeline(r){
+  const all = r.timeline.filter(m => !EV.day || evDay(m.t) === EV.day), list = EV.tl ? all : all.slice(0, 12);
+  if (!all.length) return '<div class="sub" style="color:var(--muted);font-size:12.5px;margin-top:6px">Aucun démarrage, arrêt ni incident noté sur la période.</div>';
+  return `<div class="ev-tl">${list.map(m => `<div data-ev-open="${esc(m.key)}"><time>${evDT(m.t)}</time><span class="k ${m.kind}" title="${EVKIND[m.kind] || ''}"></span><span>${esc(m.title)}${m.detail ? ` <em>· ${esc(m.detail)}</em>` : ''}</span></div>`).join('')}</div>`
+    + (all.length > 12 ? `<button class="btn" data-ev-tl style="margin-top:6px">${EV.tl ? 'Réduire' : 'Tout voir (' + all.length + ')'}</button>` : '');
+}
+function evGroupHTML(g){
+  const open = EV.open.has(g.key), s = evSevOf(g);
+  const acts = [];
+  if (g.act && typeof ACTIONS !== 'undefined' && ACTIONS.find(x => x.id === g.act)) acts.push(`<button class="btn go" data-act="${g.act}">Réparer : ${esc(ACTIONS.find(x => x.id === g.act).title)}…</button>`);
+  if (g.tool && EVTOOLS[g.tool]) acts.push(`<button class="btn" data-tool="${g.tool}">Ouvrir : ${EVTOOLS[g.tool]}</button>`);
+  if (!g.known) acts.push(`<button class="btn" data-ev-web="${esc(g.key)}">Chercher cet événement en ligne</button>`);
+  if (!LK.off) acts.push(`<button class="btn" data-ev-note="${esc(g.key)}">Noter dans le suivi du ticket</button>`);
+  const body = open ? `
+    <div class="fix">${g.known ? esc(g.explain) : 'Événement que PC2 Diag ne connaît pas encore : le message de Windows ci-dessous en dit plus. S\'il ne se répète pas et que le client ne se plaint de rien, il est probablement sans conséquence.'}</div>
+    ${arr(g.hints).length ? `<div class="ev-hints"><b>Sur ce PC</b><ul>${g.hints.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+    ${arr(g.causes).length ? `<div class="fix"><b>D'où ça vient le plus souvent</b><ol class="causes">${g.causes.map(c => `<li>${esc(c)}</li>`).join('')}</ol></div>` : ''}
+    ${g.advice ? `<div class="fix"><b>Que faire :</b> ${esc(g.advice)}</div>` : ''}
+    ${acts.length ? `<div class="acts">${acts.join('')}</div>` : ''}
+    <div class="meta">${g.count} fois · du ${evDT(g.first)} au ${evDT(g.last)} · ${g.days.length} jour(s) différent(s) · journal ${esc(EVLOG(g.log))} · source ${esc(g.src)} · n° ${g.id} · niveau Windows : ${['', 'critique', 'erreur', 'avertissement', 'information'][g.level] || ''}</div>
+    ${g.count > 1 ? `<div class="times">${g.times.map(t => `<span>${evDT(t)}</span>`).join('')}${g.count > g.times.length ? `<span>… et ${g.count - g.times.length} de plus</span>` : ''}</div>` : ''}
+    ${g.messages.map((m, i) => `<div class="sub" style="font-size:12px;color:var(--muted)">Message de Windows${g.messages.length > 1 ? ' (' + (i + 1) + '/' + g.messages.length + ', ' + evDT(m.t) + ')' : ''}</div><pre>${esc(m.msg)}</pre>`).join('')}` : '';
+  return `<article class="f ev-g ${s}${open ? ' open' : ''}" data-ev-key="${esc(g.key)}"><div class="top" data-ev-toggle="${esc(g.key)}" role="button" tabindex="0" aria-expanded="${open}">
+    <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg>
+    <span class="sev">${g.noise ? 'Sans gravité' : EVSEV[g.sev]}</span><h3>${esc(g.title)}${g.subject ? ` <small>${esc(g.subject)}</small>` : ''}</h3><span class="cat">${esc(g.cat)}</span><span class="n">× ${g.count}</span><span class="when">${evRel(g.last)}</span></div>${body}</article>`;
+}
+function evListHTML(){
+  const list = evFiltered();
+  if (!list.length) return `<div class="empty">${EV.res.groups.length ? 'Aucun événement ne correspond aux filtres.' : 'Aucune erreur ni avertissement sur la période.'}</div>`;
+  return list.slice(0, 300).map(evGroupHTML).join('') + (list.length > 300 ? `<div class="sub" style="color:var(--muted)">… ${list.length - 300} groupe(s) de plus : affinez les filtres.</div>` : '');
+}
+function evPaintList(){ const el = $('#ev-list'); if (el) el.innerHTML = evListHTML(); const n = $('#ev-n'); if (n) n.textContent = evFiltered().length + ' groupe(s)'; }
+V.events = () => {
+  if (!EV.res && !EV.running && !EV.err) setTimeout(() => evStart(), 0);
+  const per = `<div class="seg ev-seg" role="group" aria-label="Période">${[[1, '24 h'], [7, '7 jours'], [30, '30 jours']].map(([d, l]) => `<button data-ev-days="${d}" aria-pressed="${EV.days === d}"${EV.running ? ' disabled' : ''}>${l}</button>`).join('')}</div>`;
+  const right = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${per}<button class="btn" id="ev-reload"${EV.running ? ' disabled' : ''}>Actualiser</button>${EV.res ? '<button class="btn" id="ev-csv">Exporter en CSV</button>' : ''}<button class="btn" data-tool="eventvwr">Observateur Windows</button></div>`;
+  let out = head('Observateur d\'événements', 'Les erreurs et avertissements de Windows, regroupés et expliqués simplement. Rien n\'est modifié : l\'outil ne fait que lire.', right) + '<div class="stack">';
+  if (EV.err) out += `<div class="banner">${esc(EV.err)}</div>`;
+  if (EV.running) return out + `<div class="card"><div class="du-bar"><span class="spin"></span><b>Lecture des journaux de Windows (${EV.days === 1 ? '24 dernières heures' : EV.days + ' derniers jours'})…</b><span class="mono" id="ev-el" style="color:var(--muted)">${Math.round((Date.now() - EV.started) / 1000)} s</span></div><div class="sub" style="color:var(--muted);font-size:12px;margin-top:6px">En général 5 à 30 secondes, davantage sur un PC lent ou des journaux très chargés.</div></div></div>`;
+  const r = EV.res;
+  if (!r) return out + (EV.err ? `<div><button class="btn go" id="ev-reload">Réessayer</button></div>` : '<div class="empty">Préparation…</div>') + '</div>';
+  const [vt, vs, gc, gw] = evVerdict(r);
+  const notes = [];
+  if (!r.admin) notes.push('Sans droits administrateur, une partie des journaux peut manquer : relancez l\'application en administrateur.');
+  if (arr(r.truncated).length) notes.push('Journaux très chargés : seuls les 2 000 derniers événements de « ' + arr(r.truncated).map(EVLOG).join(' », « ') + ' » sont lus. Réduisez la période pour voir plus loin en détail.');
+  arr(r.errors).forEach(e => notes.push('Lecture incomplète : ' + e));
+  const keep = evKeep(r);
+  out += `<div class="card"><div class="du-bar" style="justify-content:space-between"><b style="font-size:15px"><span class="dot ${vs}" style="display:inline-block;margin-right:6px"></span>${esc(vt)}</b><span class="sub" style="color:var(--muted);font-size:12px">${r.days === 1 ? '24 dernières heures' : r.days + ' derniers jours'} · ${r.total.toLocaleString('fr-FR')} événement(s) lus en ${r.seconds.toLocaleString('fr-FR')} s${LK.off ? '' : ' · <button class="btn" id="ev-note-all" style="margin-left:6px">Noter le bilan dans le suivi</button>'}</span></div>
+    <div class="ev-tiles">${['crit', 'warn', 'info'].map(s => { const n = r.groups.filter(g => !g.noise && g.sev === s); return `<button class="ev-tile ${s}" data-ev-sev="${s}" aria-pressed="${EV.sev === s}"><b>${n.length}</b><span>${EVSEV[s]} · ${n.reduce((a, g) => a + g.count, 0)} fois</span></button>`; }).join('')}</div>
+    ${keep.length ? `<div class="sub" style="margin-top:10px;font-weight:600">Ce qu'il faut retenir</div><ul class="ev-keep">${keep.map(g => `<li><span class="dot ${g.sev}" style="display:inline-block;margin-right:5px"></span><a data-ev-open="${esc(g.key)}">${esc(evName(g))}</a> : ${g.count > 1 ? g.count + ' fois, la dernière ' : ''}${evRel(g.last)}${g.days.length > 1 ? ` (sur ${g.days.length} jours)` : ''}</li>`).join('')}</ul>` : ''}
+    ${r.counts.noise ? `<div class="sub" style="color:var(--muted);font-size:12px;margin-top:8px">${r.counts.noise.toLocaleString('fr-FR')} message(s) habituels et sans gravité (DCOM, compteurs, certificats…) sont masqués${EV.noise ? '' : ' : cochez « Afficher les messages sans gravité » pour les voir'}.</div>` : ''}
+    ${notes.map(n => `<div class="sub" style="color:var(--warn);font-size:12px;margin-top:4px">${esc(n)}</div>`).join('')}</div>`;
+  out += evSymHTML(r) + evCrossHTML(r);
+  if (r.days > 1) out += `<div class="card"><div class="du-bar" style="justify-content:space-between"><b>Jour par jour</b><span class="sub" style="color:var(--muted);font-size:12px">Cliquez un jour pour ne voir que ses événements.</span></div>${evHist(r)}</div>`;
+  out += `<div class="card"><b>Démarrages, arrêts et incidents</b>${evTimeline(r)}</div>`;
+  const cats = [...new Set(r.groups.filter(g => EV.noise || !g.noise).map(g => g.cat))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const logs = [...new Set(r.groups.map(g => EVLOG(g.log)))];
+  out += `<div class="ev-filters"><input class="search" id="ev-q" type="search" placeholder="Rechercher (programme, service, n°, mot du message…)" value="${esc(EV.q)}" aria-label="Rechercher">
+    <div class="seg ev-seg" role="group" aria-label="Gravité">${[['', 'Tout'], ['crit', 'Grave'], ['warn', 'À surveiller'], ['info', 'Pour info']].map(([k, l]) => `<button data-ev-sev="${k}" aria-pressed="${EV.sev === k}">${l}</button>`).join('')}</div>
+    <select id="ev-cat" aria-label="Catégorie"><option value="">Toutes les catégories</option>${cats.map(c => `<option${EV.cat === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+    ${logs.length > 1 ? `<select id="ev-log" aria-label="Journal"><option value="">Tous les journaux</option>${logs.map(l => `<option${EV.log === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}
+    <select id="ev-sort" aria-label="Tri"><option value="sev"${EV.sort === 'sev' ? ' selected' : ''}>Les plus graves d'abord</option><option value="recent"${EV.sort === 'recent' ? ' selected' : ''}>Les plus récents d'abord</option><option value="count"${EV.sort === 'count' ? ' selected' : ''}>Les plus fréquents d'abord</option></select>
+    <label><input type="checkbox" id="ev-noise"${EV.noise ? ' checked' : ''}> Afficher les messages sans gravité</label>
+    ${EV.focus ? `<span class="ev-chip">${esc(EV.focus.title)}<button data-ev-unfocus title="Tous les événements">×</button></span>` : ''}
+    ${EV.day ? `<span class="ev-chip">${new Date(EV.day + 'T12:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}<button data-ev-day="" title="Tous les jours">×</button></span>` : ''}
+    <span class="sub" id="ev-n" style="color:var(--muted);font-size:12px;margin-left:auto">${evFiltered().length} groupe(s)</span></div>
+    <div class="stack" id="ev-list">${evListHTML()}</div>`;
+  return out + '</div>';
+};
+// diagnostic croisé : les combinaisons d'erreurs de ce PC qui désignent souvent une seule cause (events_hints.go)
+function evCrossHTML(r){
+  const list = arr(r.cross);
+  if (!list.length) return `<div class="card"><b>Diagnostic croisé</b><div class="sub" style="color:var(--muted);font-size:12.5px;margin-top:4px">Aucune combinaison d'erreurs typique d'une panne sur la période. Les événements ci-dessous restent à lire un par un.</div></div>`;
+  return `<div class="card"><div class="du-bar" style="justify-content:space-between"><b>Diagnostic croisé : ce que les erreurs disent ensemble</b><span class="sub" style="color:var(--muted);font-size:12px">Pistes calculées à partir des événements de ce PC.</span></div><div class="ev-cross">${list.map((c, i) => {
+    const acts = [`<button class="btn" data-ev-focus="${i}">${c.keys.length > 1 ? 'Voir les événements' : 'Voir l\'événement'}</button>`];
+    if (c.act && typeof ACTIONS !== 'undefined' && ACTIONS.find(x => x.id === c.act)) acts.unshift(`<button class="btn go" data-act="${c.act}">Réparer : ${esc(ACTIONS.find(x => x.id === c.act).title)}…</button>`);
+    if (c.tool && EVTOOLS[c.tool]) acts.push(`<button class="btn" data-tool="${c.tool}">Ouvrir : ${EVTOOLS[c.tool]}</button>`);
+    if (!LK.off) acts.push(`<button class="btn" data-ev-crossnote="${i}">Noter dans le suivi</button>`);
+    return `<article class="${c.sev}"><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p>${arr(c.evidence).length ? `<ul>${c.evidence.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}<div class="acts">${acts.join('')}</div></article>`; }).join('')}</div></div>`;
+}
+// ce que dit le client : chaque symptôme filtre les événements qui peuvent l'expliquer
+function evSymHTML(r){
+  const list = arr(r.symptoms); if (!list.length) return '';
+  const cur = list.find(x => x.id === EV.sym);
+  let res = '';
+  if (cur) res = cur.keys.length ? `<div class="ev-symres">Pour « ${esc(cur.label)} », ${cur.keys.length} groupe(s) d'événements peuvent l'expliquer : ils sont listés plus bas, les plus graves d'abord.</div>`
+    : `<div class="ev-symres" style="color:var(--muted)">Rien dans les journaux pour « ${esc(cur.label)} ». ${esc(cur.none)}</div>`;
+  return `<div class="card"><b>Ce que dit le client</b><div class="sub" style="color:var(--muted);font-size:12px">Choisissez le symptôme décrit : seuls les événements qui peuvent l'expliquer restent affichés. Le chiffre indique ce qui a été trouvé sur ce PC.</div>
+    <div class="ev-sym">${list.map(x => `<button data-ev-sym="${x.id}" class="${x.keys.length ? 'hit' : ''}" aria-pressed="${EV.sym === x.id}">${esc(x.label)}<i>${x.keys.length}</i></button>`).join('')}</div>${res}</div>`;
+}
+function evNoteLine(g){ return `${g.noise ? 'Sans gravité' : EVSEV[g.sev]} : ${evName(g)}, ${g.count} fois${g.count > 1 ? ' du ' + evDT(g.first) + ' au ' + evDT(g.last) : ', le ' + evDT(g.last)}`; }
+function evNoteAll(auto){
+  const r = EV.res; if (!r) return;
+  const [vt] = evVerdict(r), top = r.groups.filter(g => !g.noise && g.sev !== 'info').slice(0, 10);
+  lkNote('events', `Observateur d'événements (${r.days === 1 ? '24 h' : r.days + ' jours'}) : ${vt.charAt(0).toLowerCase() + vt.slice(1)}`, arr(r.cross).map(c => `Diagnostic croisé : ${c.title}. ${c.text}`).concat(top.map(evNoteLine)));
+  if (!auto) status(LK.ticket ? 'Bilan des événements noté dans le suivi du ticket #' + LK.ticket.id + '.' : 'Bilan des événements gardé : il partira dans le suivi dès que le PC sera rattaché à un ticket.');
+}
+function evOpen(key){
+  EV.open.add(key);
+  const g = EV.res && EV.res.groups.find(x => x.key === key);
+  if (g && !evFiltered().includes(g)) { EV.sev = ''; EV.cat = ''; EV.log = ''; EV.q = ''; EV.day = ''; EV.sym = ''; EV.focus = null; if (g.noise) EV.noise = true; }
+  render();
+  setTimeout(() => { const el = document.querySelector(`[data-ev-key="${CSS.escape(key)}"]`); el && el.scrollIntoView({block: 'start', behavior: 'smooth'}); }, 30);
+}
+$('#content').addEventListener('click', async e => {
+  if (view !== 'events') return;
+  const t = e.target;
+  const dy = t.closest('[data-ev-days]'); if (dy) { EV.days = +dy.dataset.evDays; EV.res = null; evStart(); return; }
+  if (t.closest('#ev-reload')) { evStart(); return; }
+  if (t.closest('#ev-csv')) { try { const f = await goEventsCSV(); if (f) { status('Exporté : ' + f); api.open(f); } } catch (err) { status(String(err)); } return; }
+  if (t.closest('#ev-note-all')) { evNoteAll(false); return; }
+  const sv = t.closest('[data-ev-sev]'); if (sv) { EV.sev = EV.sev === sv.dataset.evSev && sv.classList.contains('ev-tile') ? '' : sv.dataset.evSev; render(); return; }
+  const d = t.closest('[data-ev-day]'); if (d) { EV.day = EV.day === d.dataset.evDay ? '' : d.dataset.evDay; render(); return; }
+  if (t.closest('[data-ev-tl]')) { EV.tl = !EV.tl; render(); return; }
+  const op = t.closest('[data-ev-open]'); if (op) { evOpen(op.dataset.evOpen); return; }
+  const sy = t.closest('[data-ev-sym]'); if (sy) { EV.sym = EV.sym === sy.dataset.evSym ? '' : sy.dataset.evSym; EV.focus = null; render(); return; }
+  const fc = t.closest('[data-ev-focus]'); if (fc) { const c = EV.res.cross[+fc.dataset.evFocus]; if (c) { EV.focus = {title: c.title, keys: c.keys}; EV.sym = ''; EV.sev = ''; EV.cat = ''; EV.log = ''; EV.q = ''; EV.day = ''; c.keys.slice(0, 3).forEach(k => EV.open.add(k)); render(); setTimeout(() => { const el = $('#ev-list'); el && el.scrollIntoView({block: 'start', behavior: 'smooth'}); }, 30); } return; }
+  if (t.closest('[data-ev-unfocus]')) { EV.focus = null; render(); return; }
+  const cn = t.closest('[data-ev-crossnote]'); if (cn) { const c = EV.res.cross[+cn.dataset.evCrossnote]; if (c) { lkNote('events', 'Diagnostic croisé : ' + c.title, [c.text].concat(arr(c.evidence))); status(LK.ticket ? 'Noté dans le suivi du ticket #' + LK.ticket.id + '.' : 'Gardé : partira dans le suivi dès que le PC sera rattaché à un ticket.'); } return; }
+  const nt = t.closest('[data-ev-note]'); if (nt) { const g = EV.res.groups.find(x => x.key === nt.dataset.evNote); if (g) { lkNote('events', 'Événement Windows : ' + evName(g), [evNoteLine(g)].concat(arr(g.hints), [g.known ? g.explain : '', `Source ${g.src}, n° ${g.id}`])); status(LK.ticket ? 'Noté dans le suivi du ticket #' + LK.ticket.id + '.' : 'Gardé : partira dans le suivi dès que le PC sera rattaché à un ticket.'); } return; }
+  const wb = t.closest('[data-ev-web]'); if (wb) { const g = EV.res.groups.find(x => x.key === wb.dataset.evWeb); if (g) goOpenURL('https://www.google.com/search?q=' + encodeURIComponent(`Event ID ${g.id} ${g.src}`)); return; }
+  const tg = t.closest('[data-ev-toggle]'); if (tg) { const k = tg.dataset.evToggle; EV.open.has(k) ? EV.open.delete(k) : EV.open.add(k); const el = tg.closest('.ev-g'), g = EV.res.groups.find(x => x.key === k); if (el && g) el.outerHTML = evGroupHTML(g); }
+});
+$('#content').addEventListener('keydown', e => { if (view === 'events' && e.key === 'Enter' && e.target.matches('[data-ev-toggle]')) { e.preventDefault(); e.target.click(); } });
+$('#content').addEventListener('input', e => { if (view === 'events' && e.target.id === 'ev-q') { EV.q = e.target.value; evPaintList(); } });
+$('#content').addEventListener('change', e => {
+  if (view !== 'events') return;
+  const id = e.target.id;
+  if (id === 'ev-cat') EV.cat = e.target.value; else if (id === 'ev-log') EV.log = e.target.value; else if (id === 'ev-sort') EV.sort = e.target.value; else if (id === 'ev-noise') { EV.noise = e.target.checked; render(); return; } else return;
+  evPaintList();
+});
 
 // ----- tests manuels : la liste et les résultats du Diag atelier (envoyés avec le rapport),
 // avec pour chaque test une aide pour le faire sur place (écran, clavier, son, webcam…).
@@ -2657,6 +2906,8 @@ window.onGo = (kind, p) => {
   if (kind === 'sensors') onSensors(p);
   if (kind === 'duProgress') duOnProgress(p);
   if (kind === 'duDone') { DU.running = false; DU.result = p; DU.dir = p.view; DU.prog = null; lkNote('disk', `Analyse de l'espace disque : ${p.root} (${duSize(p.size)})`); status(`Espace disque : ${p.root} analysé, ${duSize(p.size)} en ${Math.round(p.seconds)} s`); renderTree(); if (view === 'disk-usage') render(); }
+  if (kind === 'evDone') { EV.running = false; EV.res = p; EV.err = ''; EV.open.clear(); const [vt] = evVerdict(p); status(`Observateur d'événements : ${vt.charAt(0).toLowerCase() + vt.slice(1)} (${p.total} événements en ${p.seconds} s)`); if (!EV.noted) { EV.noted = true; evNoteAll(true); } renderTree(); if (view === 'events') render(); }
+  if (kind === 'evError') { EV.running = false; EV.err = p; status(p); renderTree(); if (view === 'events') render(); }
   if (kind === 'duError') { DU.running = false; DU.err = p; status(p); renderTree(); if (view === 'disk-usage') render(); }
   if (kind === 'battPoint') { BT.now = p; BT.points.push(p); if (view === 'battery-test') { render(); drawBattChart(); } }
   if (kind === 'battTick') { BT.elapsed = p.elapsed; BT.target = p.target; status(`Test de batterie : ${Math.floor(p.elapsed/60)}:${String(p.elapsed%60).padStart(2,'0')} / ${BT.dur}:00`); if (view === 'battery-test' && !$('#btChart')) render(); else { const bar = document.querySelector('#content .progress i'); if (bar) bar.style.width = Math.min(100, Math.round(100 * p.elapsed / (p.target || 1))) + '%'; } }

@@ -51,6 +51,32 @@ site à l'identique.
   OneDrive « en ligne uniquement » ne sont pas comptés, puisqu'ils ne sont pas
   sur le disque. Sans droits administrateur, les dossiers inaccessibles sont
   signalés.
+- **Observateur d'événements**, en plus simple : les erreurs et avertissements
+  des journaux Système et Application (24 h, 7 ou 30 jours), regroupés (même
+  événement, même application ou même service) et expliqués en français, avec
+  la marche à suivre et, quand il y en a une, la réparation ou l'outil Windows
+  qui va avec. En tête, le bilan (grave, à surveiller, pour information) et
+  « Ce qu'il faut retenir » ; puis le nombre d'événements jour par jour (un
+  clic filtre sur le jour) et la chronologie des démarrages, arrêts brutaux,
+  écrans bleus, mises à jour et alertes de l'antivirus (Microsoft Defender).
+  Filtres par gravité, catégorie, journal, recherche et tri ; les messages
+  habituels sans gravité (DCOM, compteurs de performance, certificats…) sont
+  masqués par défaut. Chaque groupe garde ses dates et le message de Windows ;
+  un événement non répertorié se cherche en ligne en un clic.
+  Pour chaque événement : d'où il vient le plus souvent (causes classées) et
+  ce que les événements de ce PC disent en plus (« Sur ce PC ») : code et nom
+  de l'écran bleu, arrêt forcé au bouton ou pendant la veille, module fautif
+  d'un plantage d'application, code d'erreur de Windows Update expliqué,
+  disque concerné, erreur qui revient à chaque démarrage. Le **diagnostic
+  croisé** repère les combinaisons qui désignent souvent une seule cause
+  (écrans bleus aux codes différents, coupures nettes à répétition, disque
+  qui fige le PC, erreurs juste avant les arrêts brutaux, carte graphique,
+  mémoire vive, Windows Update bloqué, réseau perdu après la veille, pile du
+  BIOS, infection). **Ce que dit le client** : un symptôme (« il s'éteint tout
+  seul », « il rame »…) ne garde que les événements qui peuvent l'expliquer,
+  ou donne la piste à suivre quand les journaux ne disent rien. Export CSV dans
+  `PC2Diag-rapports`. Le bilan part dans le suivi du ticket à la première
+  lecture, et chaque événement peut y être noté.
 - **Réparations**, une par une ou enchaînées (préréglages « Entretien
   complet », « Réparer Windows Update », « Réparer le réseau ») : point de
   restauration, DISM, SFC, chkdsk en ligne ou au redémarrage, nettoyage,
@@ -181,7 +207,7 @@ site »), ce que le technicien fait dans l'application s'inscrit dans le
 **suivi technicien** du ticket, sous le type « PC2 Diag » : ouverture de
 l'application sur le PC, analyses (constats principaux), réparations et
 enchaînements de réparations (réussies ou non), tests manuels (regroupés),
-test de batterie, espace disque, rapports enregistrés, redémarrages, et les
+test de batterie, espace disque, bilan des journaux d'événements, rapports enregistrés, redémarrages, et les
 notes saisies dans la fenêtre de suivi. Ce qui a été fait avant le
 rattachement part au moment du rattachement.
 
@@ -266,14 +292,16 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `gpu_windows.go` | capteurs des cartes graphiques NVIDIA (NVML) et AMD (ADL) |
 | `hwinfo.go`, `hwinfo_windows.go` | lecture des capteurs de HWiNFO (mémoire partagée) |
 | `diskusage.go`, `diskusage_windows.go` | espace disque : parcours des dossiers, arbre pour la carte, lecteurs, export CSV |
+| `events.ps1`, `events.go`, `events_windows.go` | observateur d'événements : lecture des journaux (PowerShell, lecture seule), regroupement, explications en français (`evKB`), chronologie, export CSV |
+| `events_hints.go` | pistes de l'observateur : causes classées, indices tirés des événements du PC, diagnostic croisé, symptômes |
 
 ## Compiler
 
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.7.0        # Linux, macOS, Git Bash
-build.cmd 1.7.0         # invite de commandes Windows
+./build.sh 1.9.0        # Linux, macOS, Git Bash
+build.cmd 1.9.0         # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans

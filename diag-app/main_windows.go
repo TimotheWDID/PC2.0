@@ -630,6 +630,12 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		return diskReveal(p), nil
 	case "goDiskCSV":
 		return diskCSV()
+	case "goEvents":
+		var days int
+		arg(0, &days)
+		return a.startEventScan(days), nil
+	case "goEventsCSV":
+		return eventsCSV()
 
 	case "goSiteState":
 		return a.siteState(), nil
