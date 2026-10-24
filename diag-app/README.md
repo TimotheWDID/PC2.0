@@ -11,7 +11,8 @@ site à l'identique.
 
 - **Analyse** en lecture seule : système et BIOS, processeur, mémoire
   (barrettes), cartes graphiques et écrans, audio, températures, disques
-  (santé, usure SSD, erreurs, heures), volumes et BitLocker, batterie (usure,
+  (santé, usure SSD, erreurs, heures), volumes et BitLocker (la clé USB d'où
+  tourne l'exe est écartée, toutes ses partitions comprises), batterie (usure,
   cycles), périphériques en erreur, cartes réseau, écrans bleus, arrêts
   brutaux, erreurs WHEA et disque, plantages d'applications et de services,
   diagnostic mémoire, Windows Update, sécurité (antivirus, pare-feu,
