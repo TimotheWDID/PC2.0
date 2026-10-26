@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DiagAppController;
 use App\Http\Controllers\DiagAppTicketController;
+use App\Http\Controllers\DiagEventNoteController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\TicketFileController;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
     Route::get('me', [DiagAppController::class, 'me'])->name('diag-app.me');
     Route::post('diagnostics', [DiagAppController::class, 'submit'])->name('diag-app.diagnostics.store');
+
+    // Windows events taught by the technicians, shared by every app
+    Route::get('event-notes', [DiagEventNoteController::class, 'apiIndex'])->name('diag-app.event-notes');
+    Route::post('event-notes', [DiagEventNoteController::class, 'apiStore'])->name('diag-app.event-notes.store');
 
     // Tickets: same paths as on the site, so its download paths work here too
     Route::get('tickets', [DiagAppTicketController::class, 'index'])->name('diag-app.tickets');

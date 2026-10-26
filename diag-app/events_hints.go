@@ -439,7 +439,7 @@ func evAnalyze(res *evResult, loc *time.Location) {
 
 	for i := range res.Groups {
 		g := &res.Groups[i]
-		if g.Known {
+		if g.Known && !g.Learned { // une fiche apprise apporte ses propres causes
 			g.Causes = evCauses[g.Title]
 		}
 		g.Hints = evGroupHints(g, nearBsod)

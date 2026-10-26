@@ -636,6 +636,10 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		return a.startEventScan(days), nil
 	case "goEventsCSV":
 		return eventsCSV()
+	case "goEvLearn":
+		var n evNote
+		arg(0, &n)
+		return a.learnEvent(n)
 
 	case "goSiteState":
 		return a.siteState(), nil
@@ -754,6 +758,7 @@ func main() {
 	}
 	a := &app{cfg: loadConfig(), resumed: resumed}
 	a.machine, _ = os.Hostname()
+	loadLearnedCache()
 
 	// Cache de la fenêtre WebView2 dans un dossier temporaire, effacé à la fermeture
 	cache, err := os.MkdirTemp("", "pc2diag-webview")

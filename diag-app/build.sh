@@ -3,7 +3,7 @@
 # Nécessite Go 1.24 ou plus récent : https://go.dev/dl/
 set -e
 cd "$(dirname "$0")"
-VERSION="${1:-1.9.1}"
+VERSION="${1:-1.10.0}"
 # le diagnostic détaillé est le Diag Atelier du site, intégré à l'exe
 cp ../resources/diag/diag-atelier.html atelier.html
 # icône, manifeste et informations de version (éditeur, produit, version) de l'exe :
@@ -15,5 +15,5 @@ mkdir -p dist
 # aux programmes malveillants pour les antivirus
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
   -ldflags "-H windowsgui -X main.Version=$VERSION" \
-  -o dist/PC2Diag.exe .
-echo "dist/PC2Diag.exe (v$VERSION)"
+  -o "dist/PC2Diag-$VERSION.exe" .
+echo "dist/PC2Diag-$VERSION.exe"

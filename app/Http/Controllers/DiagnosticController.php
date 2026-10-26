@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\AuthorizesTicketAccess;
 use App\Models\Device;
 use App\Models\DeviceEvent;
 use App\Models\DiagAppToken;
+use App\Models\DiagEventNote;
 use App\Models\Diagnostic;
 use App\Models\Ticket;
 use App\Models\TicketTimelineEvent;
@@ -314,6 +315,8 @@ class DiagnosticController extends Controller
                 'tokens' => $appTokens,
                 'newToken' => session('diag_app_token'),
                 'downloadUrl' => is_file(public_path('downloads/PC2Diag.exe')) ? asset('downloads/PC2Diag.exe') : null,
+                'eventNotesUrl' => route('diag.event-notes.index', [], false),
+                'eventNotesCount' => DiagEventNote::query()->count(),
             ],
         ]);
     }
