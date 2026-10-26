@@ -396,6 +396,7 @@ table.du .mono{text-align:right}
   <span>Disque <b id="sbDisk">—</b></span>
   <span>Réseau <b id="sbNet">—</b></span>
   <span id="sbTempWrap" hidden>Temp. <b id="sbTemp">—</b></span>
+  <span id="sbVer" title="Version de PC2 Diag">PC2 Diag <b>—</b></span>
 </footer>
 <div id="adminNote" hidden></div>
 
@@ -3037,7 +3038,7 @@ function onSensors(list){
 function startScan(){ if (scanState && scanState.running) return; $('#bScan').disabled = true; scanState = {running:true, step:0, total:14, label:'Démarrage de la collecte…'}; status('Analyse en cours…'); api.scan(); if (view !== 'summary') go('summary'); else render(); }
 $('#bScan').addEventListener('click', startScan);
 (async () => {
-  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) document.title = 'Planete-Computers 2.0 · PC2 Diag ' + info.version;
+  info = await api.info(); $('#pcName').textContent = info.computer; if (info.version) { document.title = 'Planete-Computers 2.0 · PC2 Diag ' + info.version; $('#sbVer b').textContent = 'v' + info.version; }
   const pill = $('#adminPill'); if (!info.admin) { pill.textContent = 'Mode limité'; pill.classList.add('limited'); pill.title = 'Sans droits administrateur : diagnostic partiel'; }
   try { ACTIONS = await api.actions(); } catch (_) {}
   try { CFG = await api.cfg() || {}; } catch (_) {}

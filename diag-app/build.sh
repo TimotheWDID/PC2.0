@@ -15,5 +15,5 @@ mkdir -p dist
 # aux programmes malveillants pour les antivirus
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
   -ldflags "-H windowsgui -X main.Version=$VERSION" \
-  -o dist/PC2Diag.exe .
-echo "dist/PC2Diag.exe (v$VERSION)"
+  -o "dist/PC2Diag-$VERSION.exe" .
+echo "dist/PC2Diag-$VERSION.exe"

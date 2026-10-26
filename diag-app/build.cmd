@@ -10,5 +10,5 @@ if not exist dist mkdir dist
 set GOOS=windows
 set GOARCH=amd64
 set CGO_ENABLED=0
-go build -trimpath -ldflags "-H windowsgui -X main.Version=%VERSION%" -o dist\PC2Diag.exe .
-echo dist\PC2Diag.exe (v%VERSION%)
+go build -trimpath -ldflags "-H windowsgui -X main.Version=%VERSION%" -o dist\PC2Diag-%VERSION%.exe .
+echo dist\PC2Diag-%VERSION%.exe
