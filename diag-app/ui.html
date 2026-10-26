@@ -2728,7 +2728,15 @@ async function lkFlush(){
     }
     LK.err = ''; LK.wait = 60;
   } catch (err) {
-    LK.err = 'Suivi pas encore envoyé (' + err + '). Nouvel essai dans ' + Math.round(LK.wait / 60) + ' min.';
+    let why = String(err);
+    const t = LK.queue.length ? LK.queue[0].t : 0;
+    // « introuvable » : le ticket a disparu, ou le site n'a pas encore l'adresse du suivi (site pas à jour)
+    if (t && /introuvable sur le site/.test(why)) {
+      let exists = false; try { await tkapi.call('GET', `/tickets/${t}`); exists = true; } catch (_) {}
+      why = exists ? `le ticket #${t} existe, mais le site ne connaît pas encore le suivi de PC2 Diag : il doit être mis à jour (déploiement de main, puis php artisan optimize:clear et route:cache)`
+        : `le ticket #${t} est introuvable sur le site : rattachez le PC à un autre ticket et abandonnez les entrées en attente`;
+    }
+    LK.err = 'Suivi pas encore envoyé (' + why + '). Nouvel essai dans ' + Math.round(LK.wait / 60) + ' min.';
     LK.retry = setTimeout(lkFlush, LK.wait * 1000); LK.wait = Math.min(LK.wait * 2, 900);
   }
   LK.flushing = false; lkPaint();
