@@ -264,8 +264,10 @@ function rules(D){
   if (u.rebootPending) add('warn','Mises à jour','Redémarrage en attente pour terminer des mises à jour','Windows Update / maintenance','Redémarrer le PC pour finaliser l\'installation.','shutdown /r /t 0');
   if (u.wuService === 'Disabled') add('crit','Mises à jour','Service Windows Update désactivé','Service wuauserv','Les mises à jour de sécurité ne s\'installent plus. Remettre le service en démarrage manuel.','sc config wuauserv start= demand');
   if (u.pausedUntil && new Date(u.pausedUntil) > new Date()) add('info','Mises à jour','Mises à jour suspendues',`Jusqu'au ${fdate(u.pausedUntil)}`,'Reprendre les mises à jour dans Paramètres › Windows Update.');
-  if (D.dism) { if (!/healthy/i.test(D.dism)) add('crit','Logiciel',`Image Windows endommagée (${D.dism})`,'DISM CheckHealth','Réparer l\'image puis les fichiers système (connexion Internet requise, 10 à 30 minutes) :','DISM /Online /Cleanup-Image /RestoreHealth && sfc /scannow');
-    else ok('Logiciel','Image Windows intègre (DISM)'); }
+  // seuls les trois verdicts de DISM comptent : une autre valeur laisse l'image « non vérifiée »
+  if (/^healthy$/i.test(D.dism || '')) ok('Logiciel','Image Windows intègre (DISM)');
+  else if (/^nonrepairable$/i.test(D.dism || '')) add('crit','Logiciel','Image Windows endommagée, irréparable par DISM','DISM CheckHealth : NonRepairable','DISM ne peut pas réparer cette image : faire une réparation sur place (réinstaller Windows par-dessus en gardant fichiers et applications, depuis l\'Assistant d\'installation ou l\'ISO).');
+  else if (/^repairable$/i.test(D.dism || '')) add('crit','Logiciel','Image Windows endommagée (réparable)','DISM CheckHealth : Repairable','Réparer l\'image puis les fichiers système (connexion Internet requise, 10 à 30 minutes), redémarrer, puis relancer l\'analyse :','DISM /Online /Cleanup-Image /RestoreHealth && sfc /scannow');
 
   // ---- Sécurité
   const s = D.security || {};
