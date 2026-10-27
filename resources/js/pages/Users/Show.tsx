@@ -37,6 +37,17 @@ type Device = {
   display_name: string;
 };
 
+type ClientAudit = {
+  id: number;
+  title: string;
+  status: string;
+  status_label: string;
+  site_name: string | null;
+  created_at: string | null;
+  devices_count: number;
+  diagnosed_count: number;
+};
+
 type CompanyMember = {
   id: number;
   name: string;
@@ -103,11 +114,13 @@ export default function Show({
   tickets = [],
   devices = [],
   members = [],
+  audits = null,
 }: {
   user: UserShow;
   tickets: UserTicket[];
   devices: Device[];
   members?: CompanyMember[];
+  audits?: ClientAudit[] | null;
 }) {
   const page = usePage();
   const auth = page.props as any;
@@ -258,6 +271,37 @@ export default function Show({
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground">Aucune personne rattachée à cette entreprise.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {audits && (
+              <Card>
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle>Audits</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{audits.length}</Badge>
+                    <Link href={`/audits?client=${user.id}`}>
+                      <Button variant="outline" size="sm">Nouvel audit</Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {audits.length ? (
+                    audits.map((audit) => (
+                      <Link key={audit.id} href={`/audits/${audit.id}`} className="flex flex-col gap-1 rounded-md border p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-medium">{audit.title}{audit.site_name ? ` · ${audit.site_name}` : ''}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Créé le {formatDateFr(audit.created_at)} · {audit.diagnosed_count} / {audit.devices_count} appareil(s) diagnostiqué(s)
+                          </p>
+                        </div>
+                        <Badge variant={audit.status === 'in_progress' ? 'default' : audit.status === 'done' ? 'secondary' : 'outline'}>{audit.status_label}</Badge>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Aucun audit pour ce client.</p>
                   )}
                 </CardContent>
               </Card>

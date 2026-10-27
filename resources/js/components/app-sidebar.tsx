@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Bell, BookOpen, Computer, FilePlus, FileText, Folder, HardHat, LayoutGrid, Mail, MonitorSmartphone, ShieldCheck, ShoppingCart, Stethoscope, User, Wrench } from 'lucide-react';
+import { Bell, BookOpen, ClipboardList, Computer, FilePlus, FileText, Folder, HardHat, LayoutGrid, Mail, MonitorSmartphone, ShieldCheck, ShoppingCart, Stethoscope, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -73,6 +73,11 @@ const mainNavItems: NavItem[] = [
         title: 'Diag rapide',
         href: '/diag',
         icon: Stethoscope,
+    },
+    {
+        title: 'Audits',
+        href: '/audits',
+        icon: ClipboardList,
     },
     {
         title: 'Abonnements NinjaOne',

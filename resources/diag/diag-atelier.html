@@ -3119,7 +3119,8 @@ const EXAMPLE_HWINFO_B64 = "77u/RGF0ZSxUaW1lLCJNw6ltb2lyZSB2aXJ0dWVsbGUgZW5nYWfD
    9. TICKET MODE — only when the page is served by the ticket system,
       which defines window.DIAG_TICKET. Opened from disk, nothing changes.
       With DIAG_TICKET.quick (no ticket), the report is saved as a quick
-      diag, to attach to a ticket later from the ticket system.
+      diag, to attach to a ticket later from the ticket system. With
+      DIAG_TICKET.audit, it is saved on a device of a client audit.
    ========================================================================= */
 
 const TICKET = window.DIAG_TICKET || null;
@@ -3182,7 +3183,7 @@ async function ticketRequest(url, body){
 async function sendToTicket(){
   const r = window.__report;
   if (!r){ toast('Déposez d’abord les fichiers du poste'); return; }
-  if (state.isExample){ toast(TICKET.quick ? 'L’exemple ne peut pas être enregistré' : 'L’exemple ne peut pas être envoyé au ticket'); return; }
+  if (state.isExample){ toast(TICKET.quick || TICKET.audit ? 'L’exemple ne peut pas être enregistré' : 'L’exemple ne peut pas être envoyé au ticket'); return; }
   const btn = document.getElementById('btnSendTicket');
   const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Envoi…';
@@ -3201,7 +3202,7 @@ async function sendToTicket(){
     }
     const res = await ticketRequest(TICKET.storeUrl, fd);
     TICKET.device = res.device || TICKET.device;
-    if (TICKET.quick) showQuickResult(res); else showTicketResult(res);
+    if (TICKET.audit) showAuditResult(res); else if (TICKET.quick) showQuickResult(res); else showTicketResult(res);
   } catch(e){
     ticketDialog('Envoi impossible', `<div class="tk-warn">${esc(e.message || String(e))}</div><p>Le rapport n’a pas été enregistré. Vous pouvez réessayer ou l’exporter en JSON.</p>`,
       [{label:'Réessayer', primary:true, onClick: () => { document.getElementById('ticketDialog').close(); sendToTicket(); }}]);
@@ -3216,6 +3217,16 @@ function showQuickResult(res){
     `<p>Vous pourrez le rouvrir ou le rattacher à un ticket depuis la liste des diags rapides.</p>`,
     [{label:'Rester ici', onClick: () => document.getElementById('ticketDialog').close()},
      {label:'Voir les diags rapides', primary:true, href: res.list_url || TICKET.quick.url}]);
+}
+
+function showAuditResult(res){
+  let html = `<p><b>Diagnostic enregistré dans l’audit « ${esc(TICKET.audit.title)} ».</b></p>`;
+  if (res.device) html += `<p>${res.device_created ? 'Fiche appareil du client créée' : 'Fiche appareil du client'} : <b>${esc(res.device.name)}</b>.</p>`;
+  (res.warnings || []).forEach(w => { html += `<div class="tk-warn">${esc(w)}</div>`; });
+  if (res.conflicts && res.conflicts.length) html += `<p>Valeurs différentes de la fiche appareil, non remplacées : ${res.conflicts.map(c => esc(c.label)).join(', ')}.</p>`;
+  ticketDialog('Enregistré dans l’audit ✓', html,
+    [{label:'Rester ici', onClick: () => document.getElementById('ticketDialog').close()},
+     {label:'Retour à l’audit', primary:true, href: res.audit_url || TICKET.audit.url}]);
 }
 
 function showTicketResult(res){
@@ -3277,7 +3288,8 @@ async function loadTicketPreload(pre){
     }
     const when = pre.created_at ? new Date(pre.created_at).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : '';
     banner.innerHTML = `<span><b>Diagnostic enregistré</b>${when ? ' le ' + esc(when) : ''}${pre.technician ? ' par ' + esc(pre.technician) : ''}. ` +
-      (TICKET.quick ? `Les modifications ne sont pas enregistrées tant que vous ne réenregistrez pas le diag.</span>`
+      (TICKET.audit ? `Les modifications ne sont pas enregistrées tant que vous ne réenregistrez pas le diag dans l’audit.</span>`
+        : TICKET.quick ? `Les modifications ne sont pas enregistrées tant que vous ne réenregistrez pas le diag.</span>`
         : `Les modifications ne sont pas enregistrées tant que vous ne renvoyez pas le rapport au ticket.</span>`);
     banner.hidden = false;
   } catch(e){
@@ -3289,6 +3301,7 @@ async function loadTicketPreload(pre){
 
 function initTicketMode(){
   if (!TICKET) return;
+  if (TICKET.audit){ initAuditMode(); return; }
   if (TICKET.quick){ initQuickMode(); return; }
   const chip = document.getElementById('ticketChip');
   chip.href = TICKET.ticket.url;
@@ -3300,6 +3313,21 @@ function initTicketMode(){
   send.addEventListener('click', sendToTicket);
   document.title = 'Diag · Ticket #' + TICKET.ticket.id;
   document.querySelector('footer').textContent = 'Diag Atelier — analyse dans votre navigateur ; le rapport et les fichiers ne sont envoyés au ticket que si vous cliquez sur « Envoyer au ticket ».';
+  if (TICKET.preload) loadTicketPreload(TICKET.preload);
+}
+
+function initAuditMode(){
+  const chip = document.getElementById('ticketChip');
+  chip.href = TICKET.audit.url;
+  chip.textContent = '← Audit' + (TICKET.audit.client ? ' · ' + TICKET.audit.client : '') + (TICKET.audit.device ? ' · ' + TICKET.audit.device : '');
+  chip.title = TICKET.audit.title || '';
+  chip.hidden = false;
+  const send = document.getElementById('btnSendTicket');
+  send.textContent = 'Enregistrer dans l’audit';
+  send.hidden = false;
+  send.addEventListener('click', sendToTicket);
+  document.title = 'Diag · Audit ' + (TICKET.audit.client || '');
+  document.querySelector('footer').textContent = 'Diag Atelier — analyse dans votre navigateur ; le rapport et les fichiers ne sont enregistrés dans l’audit que si vous cliquez sur « Enregistrer dans l’audit ».';
   if (TICKET.preload) loadTicketPreload(TICKET.preload);
 }
 

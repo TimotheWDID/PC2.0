@@ -171,6 +171,11 @@ class User extends Authenticatable
         return $this->hasMany(InternalTicket::class);
     }
 
+    public function audits(): HasMany
+    {
+        return $this->hasMany(Audit::class);
+    }
+
     public function routeNotificationForSmsfactory(?Notification $notification = null): ?string
     {
         $phone = trim((string) ($this->phone ?? ''));
