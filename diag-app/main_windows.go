@@ -56,6 +56,9 @@ type config struct {
 	Phone   string `json:"phone"`
 	Email   string `json:"email"`
 	Tech    string `json:"tech"`
+	// audit en cours : l'exe passe de PC en PC sur la clé USB du technicien
+	Audit      int    `json:"audit,omitempty"`
+	AuditTitle string `json:"audit_title,omitempty"`
 }
 
 func exeDir() string {
@@ -723,6 +726,40 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		// the Diag Atelier page is over 1 Mo: handed to the interface in pieces
 		data, next := chunkAt(atelierHTML, off, 256<<10)
 		return map[string]any{"data": data, "next": next}, nil
+	case "goAuditGet":
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return map[string]any{"id": a.cfg.Audit, "title": a.cfg.AuditTitle}, nil
+	case "goAuditSet":
+		var id int
+		var title string
+		arg(0, &id)
+		arg(1, &title)
+		a.mu.Lock()
+		a.cfg.Audit, a.cfg.AuditTitle = id, title
+		err := a.cfg.save()
+		a.mu.Unlock()
+		return err == nil, err
+	case "goNetScan":
+		return a.startNetScan(), nil
+	case "goNetCancel":
+		return cancelNetScan(), nil
+	case "goNetLast":
+		return lastNetScan(), nil
+	case "goAuditScanSend":
+		var id int
+		var add bool
+		arg(0, &id)
+		arg(1, &add)
+		return a.sendNetScan(id, add)
+	case "goAuditSend":
+		var id int
+		var t AuditTarget
+		var exp AtelierExport
+		arg(0, &id)
+		arg(1, &t)
+		arg(2, &exp)
+		return a.sendAudit(id, t, exp)
 	case "goOpenURL":
 		var u string
 		arg(0, &u)

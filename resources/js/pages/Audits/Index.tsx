@@ -48,6 +48,7 @@ export type AuditRow = {
     url: string;
     devices_count: number;
     diagnosed_count: number;
+    todo_count: number;
     network_scans_count: number;
 };
 
@@ -122,10 +123,7 @@ export default function AuditsIndex({
                 .reduce((sum, a) => sum + a.devices_count, 0),
             todo: audits
                 .filter((a) => a.status !== 'done')
-                .reduce(
-                    (sum, a) => sum + (a.devices_count - a.diagnosed_count),
-                    0,
-                ),
+                .reduce((sum, a) => sum + a.todo_count, 0),
         }),
         [audits],
     );

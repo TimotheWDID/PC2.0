@@ -214,7 +214,8 @@ export default function AuditShow({
         () => ({
             devices: devices.length,
             diagnosed: devices.filter((d) => d.diagnostic).length,
-            todo: devices.filter((d) => d.status === 'todo').length,
+            todo: devices.filter((d) => d.diagnosable && d.status === 'todo')
+                .length,
             crit: devices.filter((d) => d.diagnostic?.overall === 'crit')
                 .length,
             warn: devices.filter((d) => d.diagnostic?.overall === 'warn')
@@ -567,9 +568,12 @@ export default function AuditShow({
                                                 </>
                                             ) : (
                                                 <Badge variant="outline">
-                                                    {deviceStatuses[
-                                                        device.status
-                                                    ] ?? device.status}
+                                                    {device.diagnosable ||
+                                                    device.status === 'skipped'
+                                                        ? (deviceStatuses[
+                                                              device.status
+                                                          ] ?? device.status)
+                                                        : 'Inventorié'}
                                                 </Badge>
                                             )}
                                         </div>

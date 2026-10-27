@@ -135,7 +135,9 @@ class DiagAppAuditController extends AuditController
             'local_ip' => $data['local_ip'] ?? null,
             'gateway' => $data['gateway'] ?? null,
             'dns' => $data['dns'] ?? null,
-            'public_ip' => $data['public_ip'] ?? null,
+            // the site sees the client's public address, unless it runs on the same network
+            'public_ip' => $data['public_ip']
+                ?? (filter_var($request->ip(), FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null),
             'duration_ms' => $data['duration_ms'] ?? null,
             'host_count' => count($hosts),
             'hosts' => $hosts,

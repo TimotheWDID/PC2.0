@@ -80,7 +80,7 @@
               <span class="pill {{ $row['overall'] }}">{{ $row['overall_label'] ?: ['good' => 'Bon état', 'warn' => 'À surveiller', 'crit' => 'Critique'][$row['overall']] }}</span>
               @if($row['score'] !== null)<br><span class="muted">Viabilité {{ $row['score'] }}/100</span>@endif
             @else
-              <span class="muted">Non diagnostiqué</span>
+              <span class="muted">{{ $row['diagnosable'] ? 'Non diagnostiqué' : 'Inventorié' }}</span>
             @endif
           </td>
           <td>
@@ -101,14 +101,15 @@
       Réseau {{ $scan->subnet ?: '—' }}@if($scan->gateway) · passerelle {{ $scan->gateway }}@endif @if($scan->dns) · DNS {{ $scan->dns }}@endif @if($scan->public_ip) · IP publique {{ $scan->public_ip }}@endif
       <br><span class="muted">{{ $scan->host_count }} équipement(s) détecté(s) le {{ $scan->created_at?->timezone('Europe/Paris')->format('d/m/Y à H:i') }}</span>
     </p>
+    @php($withVendor = collect($scan->hosts ?? [])->contains(fn ($h) => ! empty($h['vendor'])))
     <div class="scroll"><table>
-      <thead><tr><th>Adresse IP</th><th>Nom</th><th>Fabricant</th><th>Type</th><th>Services</th></tr></thead>
+      <thead><tr><th>Adresse IP</th><th>Nom</th>@if($withVendor)<th>Fabricant</th>@endif<th>Type</th><th>Services</th></tr></thead>
       <tbody>
       @foreach(collect($scan->hosts ?? [])->sortBy(fn ($h) => ip2long($h['ip'] ?? '') ?: PHP_INT_MAX) as $host)
         <tr>
           <td>{{ $host['ip'] ?? '' }}</td>
           <td>{{ $host['hostname'] ?? '' }}</td>
-          <td>{{ $host['vendor'] ?? '' }}</td>
+          @if($withVendor)<td>{{ $host['vendor'] ?? '' }}</td>@endif
           <td>{{ \App\Models\AuditDevice::KINDS[$host['kind'] ?? ''] ?? '' }}@if(!empty($host['kind_hint']))<br><span class="muted">{{ $host['kind_hint'] }}</span>@endif</td>
           <td>{{ implode(', ', $host['ports'] ?? []) }}</td>
         </tr>

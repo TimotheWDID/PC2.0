@@ -34,6 +34,7 @@ class AuditController extends DiagnosticController
             ->withCount([
                 'devices',
                 'devices as diagnosed_count' => fn ($q) => $q->where('status', 'done'),
+                'devices as todo_count' => fn ($q) => $q->where('status', 'todo')->whereIn('kind', AuditDevice::DIAGNOSABLE),
                 'networkScans',
             ]);
 
@@ -63,6 +64,7 @@ class AuditController extends DiagnosticController
                 ...$this->presentAudit($audit),
                 'devices_count' => $audit->devices_count,
                 'diagnosed_count' => $audit->diagnosed_count,
+                'todo_count' => $audit->todo_count,
                 'network_scans_count' => $audit->network_scans_count,
             ]);
 
@@ -335,6 +337,7 @@ class AuditController extends DiagnosticController
 
             return [
                 'kind' => AuditDevice::KINDS[$device->kind] ?? $device->kind,
+                'diagnosable' => in_array($device->kind, AuditDevice::DIAGNOSABLE, true),
                 'name' => $device->name,
                 'ip' => $device->ip,
                 'location' => $device->location,

@@ -250,6 +250,40 @@ PC-ci. **Revenir à ce PC** (ou une nouvelle analyse) remet l'analyse locale.
 Seuls les diagnostics qui contiennent l'analyse de l'application (fichier
 `app`) se rouvrent ; les autres s'ouvrent sur le site.
 
+## Audit d'un client
+
+Pour auditer une entreprise ou un client en entier (tout son parc et son
+réseau) :
+
+1. Sur le site, page **Audits** › **Nouvel audit** (ou **Nouvel audit** sur la
+   fiche du client) : choisir l'entreprise ou le client.
+2. Dans l'application, bouton **Audit** en haut : choisir l'audit. Il reste
+   choisi d'un PC à l'autre (gardé dans `PC2Diag-config.json`, à côté de
+   l'exe) ; **Changer d'audit** pour en prendre un autre. Pendant un audit,
+   l'application ne demande plus à quel ticket correspond le PC.
+3. **Scanner le réseau** (depuis un seul PC suffit) : chaque adresse du
+   réseau local du PC est interrogée (ARP, quelques ports courants, nom
+   réseau et nom NetBIOS, titre de la page web de l'équipement). Le type de
+   chaque équipement est deviné (box, imprimante, NAS, caméra, serveur,
+   contrôleur de domaine, PC Windows…). Rien n'est installé ni modifié, aucun
+   droit particulier n'est nécessaire ; un réseau plus grand qu'un /22 est
+   limité à la plage /24 du PC. **Envoyer le scan à l'audit** : les
+   équipements trouvés deviennent des appareils de l'audit (ceux déjà
+   présents, même MAC ou même IP, sont mis à jour). Le scan reste dans
+   `PC2Diag-rapports\Reseau_<date>.json` pour être envoyé plus tard.
+4. Sur chaque PC : **Analyser**, puis dans **Audit**, **Envoyer l'analyse à
+   l'audit** (emplacement et utilisateur facultatifs). Le PC est retrouvé
+   parmi les appareils de l'audit par son numéro de série, sa MAC ou son nom
+   réseau, sinon il est ajouté. Comme sur un ticket, la fiche appareil du
+   client est complétée ou créée.
+
+Sur le site, la fiche de l'audit montre les appareils avec le verdict et le
+score de leur diagnostic (rapport à rouvrir dans le Diag Atelier), le dernier
+scan réseau (sélection d'équipements à ajouter), les observations, et produit
+le **rapport d'audit** imprimable en PDF pour le client. Un PC sans PC2 Diag
+peut aussi être diagnostiqué depuis la fiche de l'audit, dans le Diag Atelier
+du navigateur (rapport HWiNFO, rapport batterie).
+
 ## API utilisée
 
 Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
@@ -275,6 +309,10 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | GET | `…/files/{f}/download`, `…/messages/{m}/attachments/{a}`, `…/diagnostics/{d}/client-report` | téléchargements (mêmes chemins que sur le site) |
 | PATCH | `/tickets/{id}/diagnostics/{d}/visibility` | diagnostic visible par le client |
 | POST | `/diagnostics` | multipart, comme « Envoyer au ticket » : `ticket_id?`, `report`, `inventory`, `state`, `files[]`, `file_sources[]`, `file_names[]`, `file_encodings[]` |
+| GET | `/audits?q=&all=` | audits en cours (tous avec `all=1`) |
+| GET | `/audits/{id}` | l'audit, ses appareils (avec leur dernier diagnostic) et ses scans |
+| POST | `/audits/{id}/network-scans` | scan réseau : `subnet`, `local_ip`, `gateway`, `dns`, `duration_ms`, `hosts[]` (`ip`, `mac`, `hostname`, `kind`, `kind_hint`, `ports[]`, `self`, `gateway`), `add_devices` |
+| POST | `/audits/{id}/diagnostics` | multipart, comme `/diagnostics`, plus `audit_device_id?`, `kind?`, `location?`, `assigned_to?`, `ip?`, `mac?` |
 
 Côté site, le suivi (statut, priorité, attribution, événements, interventions
 appareil) passe par `App\Support\TicketWorkflow`, partagé avec la page du
@@ -294,7 +332,9 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `report.html` | modèle du rapport technique (`__DATA__`, `__BRAND__`) |
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
-| `api.go` | client de l'API (envoi multipart du Diag Atelier, appels des tickets, pièces jointes, téléchargements) |
+| `api.go` | client de l'API (envoi multipart du Diag Atelier, appels des tickets et des audits, pièces jointes, téléchargements) |
+| `netscan.go` | scan réseau d'un audit : plage d'adresses, ports, NetBIOS, titre web, type deviné |
+| `netscan_windows.go`, `netscan_app_windows.go` | ARP (`SendARP`), carte réseau avec sa passerelle et ses DNS ; scan en arrière-plan et envoi à l'audit |
 | `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planete-Computers 2.0 de l'exe |
 | `main_windows.go` | fenêtre, pont `goCall`, analyse, historique, rapports, site |
 | `runner_windows.go` | exécution des réparations, redémarrage, outils Windows |
@@ -312,15 +352,15 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.10.0       # Linux, macOS, Git Bash
-build.cmd 1.10.0        # invite de commandes Windows
+./build.sh 1.11.0       # Linux, macOS, Git Bash
+build.cmd 1.11.0        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
 `atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
 l'exe après une modification du Diag Atelier.
 
-Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.10.0.exe`),
+Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.11.0.exe`),
 un seul fichier sans installation. La version est aussi dans le titre de la
 fenêtre et en bas à droite de l'application. Il faut le runtime WebView2
 (présent sur Windows 10 et 11 à jour). Pour proposer le téléchargement sur la
