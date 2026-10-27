@@ -2632,7 +2632,7 @@ setInterval(() => {
 const LK = {ticket:null, serial:'', off:false, queue:[], log:[], pending:[], machine:{}, started:new Date().toISOString(),
   looked:false, asked:false, busy:false, err:'', cands:null, q:'', found:null, searching:false, sessionFor:0, flushing:false,
   timer:null, retry:null, wait:60, tests:{}, testsTimer:null, ovl:null};
-const LKBY = {device:'n° de série de l\'appareil du ticket', diagnostic:'n° de série d\'un diagnostic du ticket', app:'déjà suivi par PC2 Diag sur ce ticket', name:'même nom de PC'};
+const LKBY = {device:'n° de série de l\'appareil du ticket', diagnostic:'n° de série d\'un diagnostic du ticket', app:'déjà suivi par PC2 Diag sur ce ticket', name:'même nom de PC', last:'le rattachement de la dernière fois sur ce PC', client:'autre ticket ouvert du même client'};
 const lkUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 const lkT = t => ({id: t.id, title: t.title, client: t.client || '', device: t.device || ''});
 const lkTime = iso => new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
@@ -2665,15 +2665,21 @@ async function lkLookup(){
   let r;
   try { r = await tkapi.call('GET', '/tickets/for-machine?serial=' + encodeURIComponent(m.serial || '') + '&computer=' + encodeURIComponent(m.computer || '') + (LK.ticket ? '&ticket=' + LK.ticket.id : '')); }
   catch (err) { LK.busy = false; LK.err = 'Recherche du ticket de ce PC impossible : ' + err; lkPaint(); return; }
-  LK.busy = false; LK.looked = true; LK.cands = r.tickets || [];
+  LK.busy = false; LK.looked = true; LK.cands = r.tickets || []; LK.others = r.client_tickets || [];
   if (LK.ticket) {
-    if (r.current && r.current.open) { LK.ticket = lkT(r.current); lkSave(); lkSessionStart('restored'); lkPaint(); return; }
+    // PC déjà vu : si le client a d'autres tickets ouverts, on demande lequel est le bon plutôt que de reprendre l'ancien
+    // (sauf à la reprise après un redémarrage, au milieu d'une intervention)
+    if (r.current && r.current.open && (!LK.others.length || info.resumed)) { LK.ticket = lkT(r.current); lkSave(); lkSessionStart('restored'); lkPaint(); return; }
+    if (r.current && r.current.open) {
+      LK.cands = [{...r.current, match: {by: 'last', strong: true}}].concat(LK.cands.filter(t => t.id !== r.current.id));
+      LK.ticket = null; LK.sessionFor = 0; lkSave(); lkPaint(); LK.asked = true; lkPanel(); return;
+    }
     status(r.current ? `Le ticket #${LK.ticket.id} est ${(TST[r.current.status] || r.current.status).toLowerCase()} : ce PC n'y est plus rattaché.` : `Le ticket #${LK.ticket.id} n'existe plus : ce PC n'y est plus rattaché.`);
     LK.ticket = null; LK.sessionFor = 0; lkSave();
   }
   if (LK.off) { lkPaint(); return; }
   const strong = LK.cands.filter(t => t.match && t.match.strong);
-  if (strong.length === 1) { lkLink(strong[0], 'auto'); return; }
+  if (strong.length === 1 && !LK.others.length) { lkLink(strong[0], 'auto'); return; }
   lkPaint();
   if (!LK.asked) { LK.asked = true; lkPanel(); }
 }
@@ -2803,9 +2809,10 @@ function lkPanelRender(){
   const table = (list, how) => `<div style="overflow:auto;max-height:340px"><table class="list tk-tbl"><thead><tr><th>Ticket</th><th>Client</th><th>Appareil</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(t => row(t, how && t.match ? `<div class="tk-sub">${t.match.strong ? 'Trouvé par ' : 'Indice : '}${esc(LKBY[t.match.by] || t.match.by)}</div>` : '')).join('')}</tbody></table></div>`;
   let cur;
   if (LK.ticket) cur = `<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-left:4px solid var(--ok)"><div style="flex:1;min-width:220px">Ce PC est rattaché au <b>ticket #${LK.ticket.id}</b> — ${esc(LK.ticket.title)}${LK.ticket.client ? ' · ' + esc(LK.ticket.client) : ''}<div class="tk-sub">Analyses, réparations, tests, rapports et redémarrages s'inscrivent dans son suivi technicien.</div></div>
-      <button class="btn go" data-close data-tkopen="${LK.ticket.id}">Voir le ticket</button><button class="btn" id="lk-change">Changer de ticket</button><button class="btn" id="lk-unlink">Détacher</button></div>`;
+      <button class="btn go" data-close data-tkopen="${LK.ticket.id}">Voir le ticket</button><button class="btn" id="lk-change">Changer de ticket</button><button class="btn" id="lk-unlink">Détacher</button></div>`
+      + (arr(LK.others).filter(t => t.id !== LK.ticket.id).length ? `<div class="card"><div style="margin-bottom:8px">Autres tickets ouverts de ce client :</div>${table(LK.others.filter(t => t.id !== LK.ticket.id), true)}</div>` : '');
   else cur = `<div class="card">${LK.busy ? '<div class="empty">Recherche du ticket de ce PC…</div>'
-      : LK.cands && LK.cands.length ? `<div style="margin-bottom:8px">${LK.cands.some(t => t.match.strong) ? 'Plusieurs tickets ouverts correspondent à ce PC' : 'Aucun ticket n\'a ce numéro de série ; ces tickets ouverts ont un PC du même nom'} : lequel est le bon ?</div>${table(LK.cands, true)}`
+      : LK.cands && LK.cands.length || arr(LK.others).length ? `<div style="margin-bottom:8px">${arr(LK.others).length ? 'Ce PC est déjà connu. Voici le ticket qui lui correspond et les autres tickets ouverts du client : lequel est en cours ?' : LK.cands.some(t => t.match.strong) ? 'Plusieurs tickets ouverts correspondent à ce PC' : 'Aucun ticket n\'a ce numéro de série ; ces tickets ouverts ont un PC du même nom'}${arr(LK.others).length ? '' : ' : lequel est le bon ?'}</div>${table((LK.cands || []).concat(arr(LK.others)), true)}`
       : `<div style="margin-bottom:4px">Aucun ticket ouvert ne correspond à ce PC${m.serial ? ' (n° de série ' + esc(m.serial) + ')' : ''}. Cherchez-le ci-dessous.</div>`}</div>`;
   const search = LK.ticket && !LK.changing ? '' : `<div class="card"><h3 style="margin:0 0 8px">Chercher le ticket</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="search" id="lk-q" type="search" style="flex:1;min-width:220px;margin:0" placeholder="N° de ticket, client, téléphone, titre ou n° de série" value="${esc(q)}"><button class="btn" id="lk-search">Rechercher</button></div>
     ${LK.searching ? '<div class="empty">Recherche…</div>' : LK.found ? (LK.found.length ? '<div style="margin-top:8px">' + table(LK.found) + '</div>' : '<div class="empty">Aucun ticket ouvert ne correspond.</div>') : ''}
@@ -2826,7 +2833,7 @@ document.addEventListener('click', e => {
   if (t.closest('#bLink')) { lkPanel(); return; }
   if (!t.closest('.lk-box')) return;
   const ln = t.closest('[data-lklink]');
-  if (ln) { const id = +ln.dataset.lklink, tk = [...(LK.cands || []), ...(LK.found || [])].find(x => x.id === id); if (tk) { LK.changing = false; LK.found = null; lkLink(tk, 'pick'); } return; }
+  if (ln) { const id = +ln.dataset.lklink, tk = [...(LK.cands || []), ...arr(LK.others), ...(LK.found || [])].find(x => x.id === id); if (tk) { LK.changing = false; LK.found = null; lkLink(tk, 'pick'); } return; }
   if (t.id === 'lk-search') { lkSearch(); return; }
   if (t.id === 'lk-new') { ntStart(); lkPanelRender(); return; }
   if (t.id === 'lk-change') { LK.changing = true; lkSearch(); return; }
