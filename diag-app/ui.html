@@ -673,6 +673,7 @@ function nodes(){
   add('tests','Tests manuels','check',0);
   add('disk-usage','Espace disque','pie',0);
   add('events','Observateur d\'événements','log',0);
+  add('lan','Scan réseau','net',0);
   add('repair','Réparations','wrench',0);
   add('battery-test','Test de batterie','bat',0);
   add('report','Rapport client','doc',0);
@@ -725,7 +726,7 @@ function renderTree(){
     else if (n.id === 'passed' && D) badge = `<span class="cnt ok">${OK.length}</span>`;
     else if (D && (n.cats.length || n.match) && n.id !== 'report') { const w = worst(fs); badge = `<span class="dot ${w || 'ok'}" title="${w ? fs.length + ' constat(s)' : 'OK'}"></span>`; }
     if (n.id === 'repair' && run.id) badge = '<span class="spin" title="Réparation en cours"></span>';
-    if (n.id === 'audit' && AUD.net.running) badge = '<span class="spin" title="Scan réseau en cours"></span>';
+    if ((n.id === 'audit' || n.id === 'lan') && AUD.net.running) badge = '<span class="spin" title="Scan réseau en cours"></span>';
     if (n.id === 'disk-usage' && DU.running) badge = '<span class="spin" title="Analyse en cours"></span>';
     if (n.id === 'events') { if (EV.running) badge = '<span class="spin" title="Lecture en cours"></span>'; else if (EV.res) { const w = worst(EV.res.groups.filter(g => !g.noise && g.sev !== 'info')); badge = `<span class="dot ${w || 'ok'}" title="${w ? evVerdict(EV.res)[0] : 'Rien d\'inquiétant'}"></span>`; } }
     return `<div class="node${view === n.id ? ' sel' : ''}" style="--d:${n.d}" data-id="${esc(n.id)}" tabindex="0" role="treeitem">${ico(n.icon)}<span class="lbl">${esc(n.label)}</span>${badge}</div>`;
@@ -784,7 +785,7 @@ $('#content').addEventListener('click', e => {
 const V = {};
 function render(){
   const c = $('#content');
-  if (!D && !['summary','atelier','sensors','tests','disk-usage','events','repair','report','site','battery-test','tickets','ticket','audit'].includes(view.split(':')[0])) view = 'summary';
+  if (!D && !['summary','atelier','sensors','tests','disk-usage','events','repair','report','site','battery-test','tickets','ticket','audit','lan'].includes(view.split(':')[0])) view = 'summary';
   const at = view === 'atelier';
   $('#atelier').hidden = !at; c.hidden = at;
   if (at) { c.innerHTML = ''; atelierSync(); return; }
@@ -878,7 +879,7 @@ V.disk = (i, n) => { const d = arr(D.disks)[+i]; if (!d) return '';
 V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', (D.junkPartial ? 'au moins ' : '') + D.junkGB + ' Go' + (D.junkPartial ? ' (comptage arrêté au bout de 30 s)' : '')]]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
 V.battery = (_, n) => { const b = D.battery || {};
   return section('Batterie', esc(b.name), n, props([['Batterie', [['Modèle', esc(b.name)], ['Charge', `<span id="pv-bat">${S.bat ? S.bat.v : b.charge} %</span>`], ['Capacité d\'origine', b.design ? (b.design / 1000).toFixed(1) + ' Wh' : ''], ['Capacité actuelle', b.full ? (b.full / 1000).toFixed(1) + ' Wh' : ''], ['Usure', has(b.wearPct) ? b.wearPct + ' %' + meter(b.wearPct, 20, 40) : ''], ['Cycles', b.cycles]]]])); };
-V.network = (_, n) => { const x = D.network || {};
+V.lan = (_, n) => { const x = D.network || {};
   return section('Réseau', '', n, props([['Connectivité', [['Adresses IP', arr(x.ip).map(esc).join('<br>')], ['Passerelle', esc(x.gateway) + (x.gwPing ? ' ' + st('ok','répond') : x.gwPing === false ? ' ' + st('warn','ne répond pas') : '')], ['Serveurs DNS', arr(x.dnsServers).map(esc).join(', ')], ['Résolution DNS', x.dns ? st('ok','OK') : st('warn','Échec')], ['Accès Internet', x.internet ? st('ok','OK') : st('crit','Échec')], ['Wi-Fi', x.wifi ? esc(x.wifi.ssid) + ' — signal ' + x.wifi.signal + ' %' : '']]],
     ['Cartes réseau', arr(x.adapters).map(a => [esc(a.name), esc(a.desc) + ' · ' + esc(a.status) + (a.speed ? ' · ' + esc(a.speed) : '')])]])); };
 V.nic = i => { const a = arr((D.network||{}).adapters)[+i]; if (!a) return '';
@@ -2263,10 +2264,37 @@ async function audPick(a){
 function audOnGo(kind, p){
   const n = AUD.net;
   if (kind === 'netProgress') { n.prog = p; status(`Scan réseau : ${p.done}/${p.total} adresses, ${p.found} équipement(s)`);
-    const bar = document.querySelector('#aud-net .progress i'); if (bar && view === 'audit') { bar.style.width = Math.round(100 * p.done / (p.total || 1)) + '%'; const l = $('#aud-net-lbl'); if (l) l.textContent = `${p.done}/${p.total} adresses · ${p.found} équipement(s)`; return; } }
-  if (kind === 'netDone') { n.running = false; n.res = p; n.prog = null; n.sent = null; status(`Scan réseau terminé : ${p.hosts.length} équipement(s) sur ${p.subnet} en ${Math.round(p.duration_ms / 1000)} s`); renderTree(); }
+    const bar = document.querySelector('#aud-net .progress i'); if (bar && (view === 'audit' || view === 'lan')) { bar.style.width = Math.round(100 * p.done / (p.total || 1)) + '%'; const l = $('#aud-net-lbl'); if (l) l.textContent = `${p.done}/${p.total} adresses · ${p.found} équipement(s)`; return; } }
+  if (kind === 'netDone') { n.running = false; n.res = p; n.prog = null; n.sent = null; n.csv = '';
+    const byKind = {}; p.hosts.forEach(h => { const k = AUD_KINDS[h.kind] || 'Autre'; byKind[k] = (byKind[k] || 0) + 1; });
+    lkNote('network', `Scan du réseau ${p.subnet} : ${p.hosts.length} équipement(s)`, [Object.entries(byKind).map(([k, c]) => c + ' ' + k.toLowerCase()).join(', '), p.gateway ? 'Passerelle ' + p.gateway : '']);
+    status(`Scan réseau terminé : ${p.hosts.length} équipement(s) sur ${p.subnet} en ${Math.round(p.duration_ms / 1000)} s`); renderTree(); }
   if (kind === 'netError') { n.running = false; n.prog = null; n.err = String(p); status(String(p)); renderTree(); }
-  if (view === 'audit') render();
+  if (view === 'audit' || view === 'lan') render();
+}
+// Carte du scan réseau, dans l'écran Audit et seule (Scan réseau) : audit dit
+// si l'envoi à l'audit choisi est proposé.
+function netScanCard(audit){
+  const n = AUD.net, nr = n.res;
+  let net = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn${n.running ? '' : ' go'}" id="${n.running ? 'aud-net-stop' : 'aud-net-go'}">${n.running ? 'Arrêter le scan' : nr ? 'Relancer le scan' : 'Scanner le réseau'}</button>
+    <span style="color:var(--muted);font-size:12.5px">Chaque adresse du réseau de ce PC est interrogée (ARP, quelques ports courants, nom). Rien n'est installé ni modifié. Comptez 15 à 60 s.</span></div>`;
+  if (n.running) net += `<div style="margin-top:10px"><div class="progress"><i style="width:${n.prog ? Math.round(100 * n.prog.done / (n.prog.total || 1)) : 2}%"></i></div><div id="aud-net-lbl" style="color:var(--muted);font-size:12.5px;margin-top:4px">${n.prog ? `${n.prog.done}/${n.prog.total} adresses · ${n.prog.found} équipement(s)` : 'Préparation…'}</div></div>`;
+  if (n.err) net += `<div class="banner" style="margin-top:10px">${esc(n.err)}</div>`;
+  if (nr && !n.running) {
+    net += `<div style="margin-top:10px">${props([['', [['Réseau', esc(nr.subnet) + (nr.truncated ? ' <span style="color:var(--muted)">(réseau plus grand : seule la plage de ce PC est scannée)</span>' : '')], ['Carte', esc(nr.interface)], ['Passerelle', esc(nr.gateway || '—')], ['DNS', esc(nr.dns || '—')], ['Scan', fdt(nr.date) + ' · ' + nr.hosts.length + ' équipement(s) en ' + Math.round(nr.duration_ms / 1000) + ' s']]]])}</div>
+      <div style="overflow:auto;margin-top:8px;max-height:420px"><table class="list"><thead><tr><th>Adresse IP</th><th>Nom</th><th>MAC</th><th>Type</th><th>Ports ouverts</th></tr></thead><tbody>${nr.hosts.map(h => `<tr><td class="mono">${esc(h.ip)}${h.gateway ? ' <span class="pill">passerelle</span>' : ''}${h.self ? ' <span class="pill">ce PC</span>' : ''}</td><td>${esc(h.hostname || '')}</td><td class="mono">${esc(h.mac || '')}</td><td>${esc(AUD_KINDS[h.kind] || '')}${h.kind_hint ? `<div style="color:var(--muted);font-size:12px">${esc(h.kind_hint)}</div>` : ''}</td><td>${esc((h.ports || []).join(', '))}</td></tr>`).join('')}</tbody></table></div>
+      <div class="acts" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn" id="net-csv">Exporter en CSV</button>${n.csv ? `<span style="color:var(--muted);font-size:12.5px">Enregistré : ${esc(n.csv)}</span>` : ''}</div>
+      ${audit ? `<label class="check" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="aud-net-add" ${n.add ? 'checked' : ''} style="width:auto"> Ajouter les équipements trouvés aux appareils de l'audit (ceux déjà présents sont mis à jour)</label>
+      <div class="acts" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn go" id="aud-net-send" ${n.sending ? 'disabled' : ''}>${n.sending ? 'Envoi…' : 'Envoyer le scan à l\'audit' + (AUD.cur && AUD.cur.client ? ' ' + esc(AUD.cur.client) : '')}</button>${n.sent ? `<span style="color:var(--ok)">Scan envoyé : ${n.sent.host_count} équipement(s)${n.add ? ', ' + n.sent.devices_added + ' nouvel(s) appareil(s)' : ''}.</span>` : ''}<span style="color:var(--crit)">${esc(n.sendErr)}</span></div>`
+      : `<div style="color:var(--muted);font-size:12.5px;margin-top:10px">${LK.ticket ? `Le résumé du scan est inscrit dans le suivi du ticket #${LK.ticket.id}. ` : ''}Pour l'envoyer sur l'audit d'un client, choisissez l'audit dans <button class="btn" data-nav="audit">Audit</button>.</div>`}`;
+  }
+  return `<div class="card" id="aud-net"><h3 style="margin:0 0 8px">Scan du réseau</h3>${net}</div>`;
+}
+V.lan = () => head('Scan réseau', 'Les équipements du réseau local de ce PC : box, imprimantes, NAS, caméras, serveurs et PC, avec leurs ports ouverts. Sans audit ni ticket : le résultat reste dans PC2Diag-rapports.') + `<div class="stack">${netScanCard(!!AUD.cur && tkPaired())}</div>`;
+// CSV du scan, pour le garder ou le joindre à un devis
+function netCSV(r){
+  const q = t => '"' + String(t ?? '').replace(/"/g, '""') + '"';
+  return ['Adresse IP;Nom;MAC;Type;Détail;Ports ouverts'].concat(r.hosts.map(h => [h.ip, h.hostname, h.mac, AUD_KINDS[h.kind] || '', h.kind_hint, (h.ports || []).join(', ')].map(q).join(';'))).join('\r\n') + '\r\n';
 }
 const audBadge = d => { const g = d && AUD_LVL[d.overall]; return g ? st(g[0], esc(g[1]) + (has(d.viability_score) ? ' · ' + d.viability_score + '/100' : '')) : ''; };
 V.audit = () => {
@@ -2321,19 +2349,7 @@ V.audit = () => {
   }
   const pcCard = `<div class="card"><h3 style="margin:0 0 8px">Ce PC</h3>${pc}</div>`;
 
-  // ----- scan du réseau
-  const n = AUD.net, nr = n.res;
-  let net = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn${n.running ? '' : ' go'}" id="${n.running ? 'aud-net-stop' : 'aud-net-go'}">${n.running ? 'Arrêter le scan' : nr ? 'Relancer le scan' : 'Scanner le réseau'}</button>
-    <span style="color:var(--muted);font-size:12.5px">Chaque adresse du réseau de ce PC est interrogée (ARP, quelques ports courants, nom). Rien n'est installé ni modifié. Comptez 15 à 60 s.</span></div>`;
-  if (n.running) net += `<div style="margin-top:10px"><div class="progress"><i style="width:${n.prog ? Math.round(100 * n.prog.done / (n.prog.total || 1)) : 2}%"></i></div><div id="aud-net-lbl" style="color:var(--muted);font-size:12.5px;margin-top:4px">${n.prog ? `${n.prog.done}/${n.prog.total} adresses · ${n.prog.found} équipement(s)` : 'Préparation…'}</div></div>`;
-  if (n.err) net += `<div class="banner" style="margin-top:10px">${esc(n.err)}</div>`;
-  if (nr && !n.running) {
-    net += `<div style="margin-top:10px">${props([['', [['Réseau', esc(nr.subnet) + (nr.truncated ? ' <span style="color:var(--muted)">(réseau plus grand : seule la plage de ce PC est scannée)</span>' : '')], ['Carte', esc(nr.interface)], ['Passerelle', esc(nr.gateway || '—')], ['DNS', esc(nr.dns || '—')], ['Scan', fdt(nr.date) + ' · ' + nr.hosts.length + ' équipement(s) en ' + Math.round(nr.duration_ms / 1000) + ' s']]]])}</div>
-      <div style="overflow:auto;margin-top:8px;max-height:420px"><table class="list"><thead><tr><th>Adresse IP</th><th>Nom</th><th>MAC</th><th>Type</th><th>Ports ouverts</th></tr></thead><tbody>${nr.hosts.map(h => `<tr><td class="mono">${esc(h.ip)}${h.gateway ? ' <span class="pill">passerelle</span>' : ''}${h.self ? ' <span class="pill">ce PC</span>' : ''}</td><td>${esc(h.hostname || '')}</td><td class="mono">${esc(h.mac || '')}</td><td>${esc(AUD_KINDS[h.kind] || '')}${h.kind_hint ? `<div style="color:var(--muted);font-size:12px">${esc(h.kind_hint)}</div>` : ''}</td><td>${esc((h.ports || []).join(', '))}</td></tr>`).join('')}</tbody></table></div>
-      <label class="check" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="aud-net-add" ${n.add ? 'checked' : ''} style="width:auto"> Ajouter les équipements trouvés aux appareils de l'audit (ceux déjà présents sont mis à jour)</label>
-      <div class="acts" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn go" id="aud-net-send" ${n.sending || !a ? 'disabled' : ''}>${n.sending ? 'Envoi…' : 'Envoyer le scan à l\'audit'}</button>${n.sent ? `<span style="color:var(--ok)">Scan envoyé : ${n.sent.host_count} équipement(s)${n.add ? ', ' + n.sent.devices_added + ' nouvel(s) appareil(s)' : ''}.</span>` : ''}<span style="color:var(--crit)">${esc(n.sendErr)}</span></div>`;
-  }
-  const netCard = `<div class="card" id="aud-net"><h3 style="margin:0 0 8px">Scan du réseau</h3>${net}</div>`;
+  const netCard = netScanCard(!!a);
 
   // ----- appareils de l'audit
   const devCard = d ? `<div class="card"><h3 style="margin:0 0 8px">Appareils de l'audit (${devs.length})</h3>${devs.length ? `<div style="overflow:auto"><table class="list"><thead><tr><th>Appareil</th><th>Type</th><th>Adresse IP</th><th>Emplacement</th><th>État</th></tr></thead><tbody>${devs.map(x => `<tr><td><b>${esc(x.name)}</b>${x.serial_number ? `<div style="color:var(--muted);font-size:12px">S/N ${esc(x.serial_number)}</div>` : ''}</td><td>${esc(x.kind_label)}</td><td class="mono">${esc(x.ip || '')}</td><td>${esc([x.location, x.assigned_to].filter(Boolean).join(' · '))}</td><td>${x.diagnostic ? audBadge(x.diagnostic) : esc(x.status === 'skipped' ? 'Ignoré' : x.diagnosable ? 'À diagnostiquer' : '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun appareil pour l\'instant : envoyez le scan du réseau ou l\'analyse d\'un PC.</div>'}</div>` : '';
@@ -2341,8 +2357,9 @@ V.audit = () => {
   return intro + `<div class="stack">${top}${pcCard}${netCard}${devCard}</div>`;
 };
 $('#content').addEventListener('click', async e => {
-  if (view !== 'audit') return;
+  if (view !== 'audit' && view !== 'lan') return;
   const t = e.target;
+  if (t.id === 'net-csv' && AUD.net.res) { const r = AUD.net.res; try { AUD.net.csv = await api.saveFile('Reseau_' + String(r.subnet || '').replace(/[^\d]+/g, '-') + '_' + String(r.date || '').slice(0, 10), netCSV(r)); status('Scan réseau exporté : ' + AUD.net.csv); } catch (err) { status('Export impossible : ' + err); } render(); return; }
   if (t.id === 'aud-search') { AUD.q = $('#aud-q').value.trim(); audSearch(); return; }
   const pk = t.closest('[data-audpick]'); if (pk) { audPick((AUD.list || []).find(x => x.id === +pk.dataset.audpick)); return; }
   if (t.id === 'aud-change') { AUD.list = null; audPick(null); return; }
@@ -2367,7 +2384,7 @@ $('#content').addEventListener('click', async e => {
   }
 });
 $('#content').addEventListener('change', e => {
-  if (view !== 'audit') return;
+  if (view !== 'audit' && view !== 'lan') return;
   const t = e.target, f = AUD.form;
   if (t.id === 'aud-dev') f.device = +t.value;
   if (t.id === 'aud-kind') f.kind = t.value;

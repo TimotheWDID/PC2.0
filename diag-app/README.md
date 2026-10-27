@@ -250,6 +250,16 @@ PC-ci. **Revenir à ce PC** (ou une nouvelle analyse) remet l'analyse locale.
 Seuls les diagnostics qui contiennent l'analyse de l'application (fichier
 `app`) se rouvrent ; les autres s'ouvrent sur le site.
 
+## Scan réseau
+
+**Scan réseau** (menu Diagnostic) se lance sans audit ni ticket, même sans
+association au site : les équipements du réseau local du PC (box,
+imprimantes, NAS, caméras, serveurs, PC), avec adresse IP et MAC, nom,
+ports ouverts et type deviné. Le scan est gardé dans
+`PC2Diag-rapports\Reseau_<date>.json` et s'exporte en CSV ; quand le PC est
+rattaché à un ticket, son résumé part dans le suivi technicien. Le même scan
+peut ensuite être envoyé à un audit (voir ci-dessous).
+
 ## Audit d'un client
 
 Pour auditer une entreprise ou un client en entier (tout son parc et son
