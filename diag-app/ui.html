@@ -396,7 +396,7 @@ table.du .mono{text-align:right}
   <span>Disque <b id="sbDisk">—</b></span>
   <span>Réseau <b id="sbNet">—</b></span>
   <span id="sbTempWrap" hidden>Temp. <b id="sbTemp">—</b></span>
-  <span id="sbVer" title="Version de PC2 Diag">PC2 Diag <b>—</b></span>
+  <span id="sbVer" title="Compte du site de tickets et version de PC2 Diag"><span>PC2 Diag</span> <b>—</b></span>
 </footer>
 <div id="adminNote" hidden></div>
 
@@ -2773,7 +2773,10 @@ function lkBeforeReboot(resume){
 }
 
 // La pastille du ticket dans la barre du haut, et la fenêtre de suivi.
+// barre d'état : le technicien connecté au site à la place de « PC2 Diag », puis la version
+function sbWho(){ const n = $('#sbVer span'); if (n) n.textContent = (tkPaired() && SITE.state.me && SITE.state.me.user) || 'PC2 Diag'; }
 function lkPaint(){
+  sbWho();
   const b = $('#bLink'); if (!b) return;
   b.hidden = !tkPaired();
   const wait = LK.queue.length + (LK.ticket ? 0 : LK.pending.length);
@@ -3053,6 +3056,7 @@ $('#bScan').addEventListener('click', startScan);
   // nom du magasin : « Planete-Computers 2.0 », aussi pour les en-têtes enregistrés avec l'ancien nom
   if (!CFG.shop || /^plan[eèé]te[\s-]*computers(\s*2\.0)?$/i.test(CFG.shop.trim())) CFG.shop = 'Planete-Computers 2.0';
   try { SITE.state = await sapi.state(); } catch (_) {}
+  sbWho();
   await lkRestore();
   await refreshHist();
   if (info.resumed) status('Reprise automatique après le redémarrage — nouvelle analyse en cours pour le comparatif avant/après.');

@@ -312,17 +312,18 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.10.0       # Linux, macOS, Git Bash
-build.cmd 1.10.0        # invite de commandes Windows
+./build.sh 1.10.1       # Linux, macOS, Git Bash
+build.cmd 1.10.1        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
 `atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
 l'exe après une modification du Diag Atelier.
 
-Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.10.0.exe`),
+Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.10.1.exe`),
 un seul fichier sans installation. La version est aussi dans le titre de la
-fenêtre et en bas à droite de l'application. Il faut le runtime WebView2
+fenêtre et en bas à droite de l'application, à côté du nom du technicien
+connecté au site (« PC2 Diag » tant que l'exe n'est pas associé). Il faut le runtime WebView2
 (présent sur Windows 10 et 11 à jour). Pour proposer le téléchargement sur la
 page Diag rapide, copier l'exe dans `public/downloads/PC2Diag.exe` sur le
 serveur (nom sans version : le lien de la page reste le même).
