@@ -212,6 +212,14 @@ est rattaché tout seul. Sinon, une fenêtre demande au technicien de choisir
 (tickets correspondants, puis tous les tickets ouverts et une recherche), ou
 d'indiquer que ce PC n'a pas de ticket.
 
+**PC déjà connu** : quand le client de ce PC a d'autres tickets ouverts
+(propriétaire d'un appareil de ce numéro de série, ou client d'un ticket où
+ce PC a déjà été diagnostiqué ou suivi, même fermé), l'application ne reprend
+pas l'ancien ticket toute seule. La fenêtre liste le ticket de la dernière
+fois et tous les tickets ouverts du client, pour choisir celui en cours.
+Exception : à la réouverture automatique après un redémarrage, le ticket de
+l'intervention en cours est repris sans rien demander.
+
 Une fois rattaché (bouton **Ticket #n** en haut, à côté de « Envoyer au
 site »), ce que le technicien fait dans l'application s'inscrit dans le
 **suivi technicien** du ticket, sous le type « PC2 Diag » : ouverture de
@@ -262,7 +270,7 @@ Préfixe `/api/diag-app`, en-tête `Authorization: Bearer <clé>` :
 | GET | `/todos` | actions non faites des tickets ouverts |
 | GET, POST | `/tickets/create?q=`, `/tickets` | choix du formulaire et clients trouvés ; création du ticket (mêmes champs que le formulaire du site, plus `machine`) |
 | GET | `/tickets/{id}/diagnostics/{d}/files/{source}` | fichiers d'un diagnostic (`app` : l'analyse PC2 Diag, rouverte par l'application) |
-| GET | `/tickets/for-machine?serial=&computer=&ticket=` | tickets ouverts de ce PC (et où en est le ticket déjà rattaché) |
+| GET | `/tickets/for-machine?serial=&computer=&ticket=` | tickets ouverts de ce PC, où en est le ticket déjà rattaché, et les autres tickets ouverts du client (`client_tickets`) |
 | POST | `/tickets/{id}/activity` | suivi écrit par l'application : `machine`, `entries[]` (`uid`, `kind`, `summary`, `note`, `happened_at`) |
 | GET | `/tickets/{id}` | le ticket complet : fiche, suivi, échanges, fichiers, diagnostics, appareil, choix des formulaires |
 | PATCH | `/tickets/{id}/status`, `/priority` | statut, priorité |
@@ -312,17 +320,18 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.10.0       # Linux, macOS, Git Bash
-build.cmd 1.10.0        # invite de commandes Windows
+./build.sh 1.10.2       # Linux, macOS, Git Bash
+build.cmd 1.10.2        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
 `atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
 l'exe après une modification du Diag Atelier.
 
-Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.10.0.exe`),
+Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.10.2.exe`),
 un seul fichier sans installation. La version est aussi dans le titre de la
-fenêtre et en bas à droite de l'application. Il faut le runtime WebView2
+fenêtre et en bas à droite de l'application, à côté du nom du technicien
+connecté au site (« PC2 Diag » tant que l'exe n'est pas associé). Il faut le runtime WebView2
 (présent sur Windows 10 et 11 à jour). Pour proposer le téléchargement sur la
 page Diag rapide, copier l'exe dans `public/downloads/PC2Diag.exe` sur le
 serveur (nom sans version : le lien de la page reste le même).

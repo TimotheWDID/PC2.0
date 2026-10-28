@@ -295,6 +295,30 @@ it('finds the open tickets of the PC the application runs on', function () {
         ->assertJsonPath('serial', null)->assertJsonCount(0, 'tickets');
 });
 
+it('lists the other open tickets of the client of a PC already seen', function () {
+    $agent = dtAgent();
+    $old = dtTicket(['title' => 'Ancien ticket', 'status' => 'closed']);
+    $old->update(['device_id' => Device::create(['user_id' => $old->user_id, 'device_type' => 'laptop', 'serial_number' => 'SN-500'])->id]);
+    $current = Ticket::create(['user_id' => $old->user_id, 'title' => 'Écran cassé', 'message' => 'x', 'priority' => 'medium', 'status' => 'open']);
+    $other = Ticket::create(['user_id' => $old->user_id, 'title' => 'Imprimante', 'message' => 'x', 'priority' => 'low', 'status' => 'pending']);
+    Ticket::create(['user_id' => $old->user_id, 'title' => 'Terminé', 'message' => 'x', 'priority' => 'low', 'status' => 'closed']);
+    dtTicket(['title' => 'Autre client']);
+    $key = dtKey($agent);
+
+    $response = $this->withToken($key)->getJson('/api/diag-app/tickets/for-machine?serial=sn-500&computer=PC-CLAIRE&ticket='.$old->id)
+        ->assertOk()
+        ->assertJsonPath('current.open', false)
+        ->assertJsonCount(0, 'tickets')
+        ->assertJsonPath('client_tickets.0.match.by', 'client');
+    expect(collect($response->json('client_tickets'))->pluck('id')->sort()->values()->all())->toBe([$current->id, $other->id]);
+
+    // linked to the current ticket: the other one is still offered
+    $this->withToken($key)->getJson('/api/diag-app/tickets/for-machine?computer=PC-CLAIRE&ticket='.$current->id)
+        ->assertJsonPath('current.open', true)
+        ->assertJsonCount(1, 'client_tickets')
+        ->assertJsonPath('client_tickets.0.id', $other->id);
+});
+
 it('writes the application follow-up once, and finds the PC by it later', function () {
     $agent = dtAgent();
     $ticket = dtTicket();
