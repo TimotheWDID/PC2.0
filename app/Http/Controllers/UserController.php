@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Audit;
 use App\Models\Device;
 use App\Models\User;
 use App\Models\Ticket;
@@ -214,7 +215,27 @@ class UserController extends Controller
             'members' => $this->getCompanyMembers($user),
             'tickets' => $this->getUserTickets($user),
             'devices' => $this->getUserDevices($user),
+            'audits' => auth()->user()?->agent ? $this->getUserAudits($user) : null,
         ]);
+    }
+
+    private function getUserAudits(User $user)
+    {
+        return $user->audits()
+            ->withCount(['devices', 'devices as diagnosed_count' => fn ($q) => $q->where('status', 'done')])
+            ->latest()
+            ->get()
+            ->map(fn (Audit $audit) => [
+                'id' => $audit->id,
+                'title' => $audit->title,
+                'status' => $audit->status,
+                'status_label' => Audit::STATUS_LABELS[$audit->status] ?? $audit->status,
+                'site_name' => $audit->site_name,
+                'created_at' => $audit->created_at?->toIso8601String(),
+                'devices_count' => $audit->devices_count,
+                'diagnosed_count' => $audit->diagnosed_count,
+            ])
+            ->values();
     }
 
     public function edit($id)

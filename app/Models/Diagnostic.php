@@ -13,6 +13,7 @@ class Diagnostic extends Model
     protected $fillable = [
         'ticket_id',
         'device_id',
+        'audit_device_id',
         'technician_id',
         'machine_name',
         'overall',
@@ -45,6 +46,11 @@ class Diagnostic extends Model
     public function device(): BelongsTo
     {
         return $this->belongsTo(Device::class);
+    }
+
+    public function auditDevice(): BelongsTo
+    {
+        return $this->belongsTo(AuditDevice::class);
     }
 
     public function technician(): BelongsTo

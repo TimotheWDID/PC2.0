@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DiagAppAuditController;
 use App\Http\Controllers\DiagAppController;
 use App\Http\Controllers\DiagAppTicketController;
 use App\Http\Controllers\DiagEventNoteController;
@@ -15,6 +16,14 @@ Route::middleware(['diag-app', 'throttle:240,1'])->group(function () {
     // Windows events taught by the technicians, shared by every app
     Route::get('event-notes', [DiagEventNoteController::class, 'apiIndex'])->name('diag-app.event-notes');
     Route::post('event-notes', [DiagEventNoteController::class, 'apiStore'])->name('diag-app.event-notes.store');
+
+    // Audits: network scan of the client's LAN and diagnostic of each of its PCs
+    Route::get('audits', [DiagAppAuditController::class, 'apiIndex'])->name('diag-app.audits');
+    Route::prefix('audits/{audit}')->whereNumber('audit')->name('diag-app.audits.')->group(function () {
+        Route::get('/', [DiagAppAuditController::class, 'apiShow'])->name('show');
+        Route::post('network-scans', [DiagAppAuditController::class, 'apiStoreScan'])->name('network-scans.store');
+        Route::post('diagnostics', [DiagAppAuditController::class, 'apiStoreDiagnostic'])->name('diagnostics.store');
+    });
 
     // Tickets: same paths as on the site, so its download paths work here too
     Route::get('tickets', [DiagAppTicketController::class, 'index'])->name('diag-app.tickets');

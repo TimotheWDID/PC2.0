@@ -74,3 +74,40 @@ func TestDownloadName(t *testing.T) {
 		t.Errorf("nom par défaut : %q", n)
 	}
 }
+
+func TestAuditCalls(t *testing.T) {
+	var got struct{ path, ct, body string }
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got.path, got.ct, got.body = r.URL.Path, r.Header.Get("Content-Type"), string(b)
+		w.WriteHeader(201)
+		_, _ = w.Write([]byte(`{"id":7,"audit":{"id":3},"audit_device":{"id":12,"name":"PC-ACCUEIL"},"device_created":true}`))
+	}))
+	defer srv.Close()
+	c := NewClient(srv.URL, "pc2d_k", "PC-ACCUEIL")
+
+	exp := AtelierExport{Report: json.RawMessage(`{"machine":{"name":"PC"}}`), Files: []AtelierFile{{Source: "app", Name: "Analyse.json", B64: base64.StdEncoding.EncodeToString([]byte("{}"))}}}
+	res, err := c.SendAudit(3, AuditTarget{Location: "Accueil"}, exp)
+	if err != nil || res.ID != 7 || !res.DeviceCreated || got.path != "/api/diag-app/audits/3/diagnostics" {
+		t.Fatalf("envoi à l'audit : %+v, %v, %s", res, err, got.path)
+	}
+	if !strings.Contains(got.body, `name="location"`) || strings.Contains(got.body, `name="audit_device_id"`) || strings.Contains(got.body, `name="assigned_to"`) {
+		t.Errorf("champs envoyés : %s", got.body)
+	}
+	if _, err := c.SendAudit(0, AuditTarget{}, exp); err == nil {
+		t.Error("audit manquant accepté")
+	}
+
+	scan := &netScanResult{Subnet: "192.168.1.0/24", Hosts: []netHost{{IP: "192.168.1.1", Gateway: true, Kind: "router"}}}
+	if _, err := c.SendScan(3, scan, true); err != nil || got.path != "/api/diag-app/audits/3/network-scans" || got.ct != "application/json" {
+		t.Fatalf("envoi du scan : %v, %+v", err, got)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(got.body), &body)
+	if body["add_devices"] != true || len(body["hosts"].([]any)) != 1 {
+		t.Errorf("scan envoyé : %s", got.body)
+	}
+	if _, err := c.Call("GET", "/audits?q=martin", nil); err != nil {
+		t.Errorf("liste des audits refusée : %v", err)
+	}
+}

@@ -138,8 +138,68 @@ type AtelierFile struct {
 // Send posts the export as the Diag Atelier does (multipart, files gzipped),
 // so the diagnostic reopens in the Diag Atelier on the site.
 func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
+	fields := map[string]string{}
+	if ticketID > 0 {
+		fields["ticket_id"] = strconv.Itoa(ticketID)
+	}
+	var res SendResult
+	return &res, c.sendExport("/diagnostics", fields, e, &res)
+}
+
+// AuditTarget says which device of the audit the analysis is for (none: the
+// site finds it by serial number or PC name, or creates it).
+type AuditTarget struct {
+	DeviceID   int    `json:"audit_device_id"`
+	Kind       string `json:"kind"`
+	Location   string `json:"location"`
+	AssignedTo string `json:"assigned_to"`
+	IP         string `json:"ip"`
+	MAC        string `json:"mac"`
+}
+
+type AuditSendResult struct {
+	ID            int              `json:"id"`
+	Audit         map[string]any   `json:"audit"`
+	AuditDevice   map[string]any   `json:"audit_device"`
+	ReportURL     string           `json:"report_url"`
+	AuditURL      string           `json:"audit_url"`
+	Device        map[string]any   `json:"device"`
+	DeviceCreated bool             `json:"device_created"`
+	Filled        []string         `json:"filled"`
+	Conflicts     []map[string]any `json:"conflicts"`
+	Warnings      []string         `json:"warnings"`
+}
+
+// SendAudit posts the export of a PC's analysis on an audit of the site.
+func (c *Client) SendAudit(auditID int, t AuditTarget, e AtelierExport) (*AuditSendResult, error) {
+	if auditID <= 0 {
+		return nil, errors.New("choisissez d'abord l'audit")
+	}
+	fields := map[string]string{"kind": t.Kind, "location": t.Location, "assigned_to": t.AssignedTo, "ip": t.IP, "mac": t.MAC}
+	if t.DeviceID > 0 {
+		fields["audit_device_id"] = strconv.Itoa(t.DeviceID)
+	}
+	var res AuditSendResult
+	return &res, c.sendExport(fmt.Sprintf("/audits/%d/diagnostics", auditID), fields, e, &res)
+}
+
+// SendScan posts a network scan on an audit; with addDevices every host
+// found becomes a device of the audit.
+func (c *Client) SendScan(auditID int, r *netScanResult, addDevices bool) (json.RawMessage, error) {
+	if auditID <= 0 || r == nil {
+		return nil, errors.New("rien à envoyer : choisissez l'audit et lancez le scan")
+	}
+	body := map[string]any{
+		"subnet": r.Subnet, "local_ip": r.LocalIP, "gateway": r.Gateway, "dns": r.DNS,
+		"duration_ms": r.DurationMs, "hosts": r.Hosts, "add_devices": addDevices,
+	}
+	var out json.RawMessage
+	return out, c.do("POST", fmt.Sprintf("/audits/%d/network-scans", auditID), body, &out)
+}
+
+func (c *Client) sendExport(path string, fields map[string]string, e AtelierExport, out any) error {
 	if len(e.Report) == 0 || string(e.Report) == "null" {
-		return nil, errors.New("rapport vide : lancez d'abord une analyse")
+		return errors.New("rapport vide : lancez d'abord une analyse")
 	}
 	raw := func(m json.RawMessage) string {
 		if len(m) == 0 {
@@ -149,8 +209,10 @@ func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
 	}
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	if ticketID > 0 {
-		_ = w.WriteField("ticket_id", strconv.Itoa(ticketID))
+	for k, v := range fields {
+		if v != "" {
+			_ = w.WriteField(k, v)
+		}
 	}
 	_ = w.WriteField("report", raw(e.Report))
 	_ = w.WriteField("inventory", raw(e.Inventory))
@@ -158,7 +220,7 @@ func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
 	for _, f := range e.Files {
 		data, err := base64.StdEncoding.DecodeString(f.B64)
 		if err != nil {
-			return nil, fmt.Errorf("fichier %s illisible : %w", f.Name, err)
+			return fmt.Errorf("fichier %s illisible : %w", f.Name, err)
 		}
 		var gz bytes.Buffer
 		zw := gzip.NewWriter(&gz)
@@ -166,7 +228,7 @@ func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
 		_ = zw.Close()
 		fw, err := w.CreateFormFile("files[]", f.Source+".gz")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		_, _ = fw.Write(gz.Bytes())
 		_ = w.WriteField("file_sources[]", f.Source)
@@ -174,15 +236,15 @@ func (c *Client) Send(ticketID int, e AtelierExport) (*SendResult, error) {
 		_ = w.WriteField("file_encodings[]", "gzip")
 	}
 	if err := w.Close(); err != nil {
-		return nil, err
+		return err
 	}
-	var res SendResult
-	return &res, c.request("POST", "/diagnostics", &buf, w.FormDataContentType(), &res)
+	return c.request("POST", path, &buf, w.FormDataContentType(), out)
 }
 
-// Tickets: the app reads and writes them through /tickets… and /todos only.
+// Tickets and audits: the app reads and writes them through /tickets…,
+// /todos and /audits… only.
 func ticketPath(path string) error {
-	if !strings.HasPrefix(path, "/tickets") && !strings.HasPrefix(path, "/todos") {
+	if !strings.HasPrefix(path, "/tickets") && !strings.HasPrefix(path, "/todos") && !strings.HasPrefix(path, "/audits") {
 		return fmt.Errorf("chemin refusé : %s", path)
 	}
 	if strings.Contains(path, "..") || strings.Contains(path, "://") {

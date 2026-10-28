@@ -41,3 +41,4 @@ require __DIR__.'/users.php';
 require __DIR__.'/agents.php';
 require __DIR__.'/devis.php';
 require __DIR__.'/remote-subscriptions.php';
+require __DIR__.'/audits.php';

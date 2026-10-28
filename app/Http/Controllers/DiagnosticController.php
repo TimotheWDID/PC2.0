@@ -263,6 +263,7 @@ class DiagnosticController extends Controller
     {
         $diagnostics = Diagnostic::query()
             ->whereNull('ticket_id')
+            ->whereNull('audit_device_id')
             ->with('technician:id,first_name,last_name')
             ->latest()
             ->limit(100)
@@ -331,6 +332,9 @@ class DiagnosticController extends Controller
         if ($diagnostic->ticket_id) {
             return redirect()->route('tickets.diagnostics.show', [$diagnostic->ticket_id, $diagnostic]);
         }
+        if ($diagnostic->audit_device_id) {
+            return redirect()->route('audits.diagnostics.show', [$diagnostic->auditDevice->audit_id, $diagnostic]);
+        }
 
         $diagnostic->loadMissing('technician:id,first_name,last_name');
 
@@ -356,7 +360,7 @@ class DiagnosticController extends Controller
 
     public function quickFile(Diagnostic $diagnostic, string $source): StreamedResponse
     {
-        abort_unless($diagnostic->ticket_id === null, 404);
+        abort_unless($diagnostic->ticket_id === null && $diagnostic->audit_device_id === null, 404);
 
         $file = collect($diagnostic->files ?? [])->firstWhere('source', $source);
         abort_unless($file && Storage::disk('local')->exists($file['path']), 404);
@@ -386,7 +390,7 @@ class DiagnosticController extends Controller
      */
     public function quickAttach(Request $request, Diagnostic $diagnostic): RedirectResponse
     {
-        abort_unless($diagnostic->ticket_id === null, 404);
+        abort_unless($diagnostic->ticket_id === null && $diagnostic->audit_device_id === null, 404);
 
         $ticketId = (int) $request->validate([
             'ticket_id' => 'required|integer|min:1',
@@ -413,7 +417,7 @@ class DiagnosticController extends Controller
 
     public function quickDestroy(Diagnostic $diagnostic): RedirectResponse
     {
-        abort_unless($diagnostic->ticket_id === null, 404);
+        abort_unless($diagnostic->ticket_id === null && $diagnostic->audit_device_id === null, 404);
 
         Storage::disk('local')->deleteDirectory($diagnostic->storageDirectory());
         $diagnostic->delete();
@@ -584,7 +588,7 @@ class DiagnosticController extends Controller
     /**
      * The Diag page with its server config (window.DIAG_TICKET) injected.
      */
-    private function renderDiag(array $config): Response
+    protected function renderDiag(array $config): Response
     {
         $path = resource_path('diag/diag-atelier.html');
         abort_unless(is_file($path), 404, 'Diag Atelier introuvable.');
@@ -721,6 +725,40 @@ class DiagnosticController extends Controller
             return ['device' => null, 'created' => false, 'filled' => [], 'conflicts' => [], 'warnings' => $warnings];
         }
 
+        [$filled, $conflicts] = $this->fillDevice($device, $inventory, $warnings);
+
+        if ((int) $ticket->device_id !== (int) $device->id) {
+            $ticket->device_id = $device->id;
+            $ticket->save();
+            $this->syncTicketPasswordToDevice($ticket, $device);
+
+            TicketTimelineEvent::create([
+                'ticket_id' => $ticket->id,
+                'technician_id' => Auth::id(),
+                'event_type' => 'device_attached',
+                'summary' => $created ? 'Appareil cree depuis le Diag et lie au ticket' : 'Appareil lie au ticket depuis le Diag',
+                'details' => ['device_id' => $device->id, 'device_name' => $device->display_name],
+                'happened_at' => now(),
+            ]);
+        }
+
+        return [
+            'device' => $device,
+            'created' => $created,
+            'filled' => $filled,
+            'conflicts' => $conflicts,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Fills the device's empty fields from the inventory sheet and saves it.
+     * Fields that already hold a different value come back as conflicts.
+     *
+     * @return array{0: array<int, string>, 1: array<int, array<string, string>>}
+     */
+    protected function fillDevice(Device $device, array $inventory, array &$warnings): array
+    {
         $filled = [];
         $conflicts = [];
 
@@ -748,28 +786,7 @@ class DiagnosticController extends Controller
 
         $device->save();
 
-        if ((int) $ticket->device_id !== (int) $device->id) {
-            $ticket->device_id = $device->id;
-            $ticket->save();
-            $this->syncTicketPasswordToDevice($ticket, $device);
-
-            TicketTimelineEvent::create([
-                'ticket_id' => $ticket->id,
-                'technician_id' => Auth::id(),
-                'event_type' => 'device_attached',
-                'summary' => $created ? 'Appareil cree depuis le Diag et lie au ticket' : 'Appareil lie au ticket depuis le Diag',
-                'details' => ['device_id' => $device->id, 'device_name' => $device->display_name],
-                'happened_at' => now(),
-            ]);
-        }
-
-        return [
-            'device' => $device,
-            'created' => $created,
-            'filled' => $filled,
-            'conflicts' => $conflicts,
-            'warnings' => $warnings,
-        ];
+        return [$filled, $conflicts];
     }
 
     private function currentValue(Device $device, string $column): string|int|null
@@ -812,7 +829,7 @@ class DiagnosticController extends Controller
         }
     }
 
-    private function diagnosticNote(Diagnostic $diagnostic): ?string
+    protected function diagnosticNote(Diagnostic $diagnostic): ?string
     {
         $parts = array_filter([
             $diagnostic->machine_name,
