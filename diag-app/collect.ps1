@@ -377,7 +377,18 @@ $R.software = @(Try-Get 'software' { Get-ItemProperty $keys -ErrorAction Silentl
   Sort-Object DisplayName -Unique | ForEach-Object { [ordered]@{ name = $_.DisplayName; version = $_.DisplayVersion; publisher = $_.Publisher; date = $_.InstallDate } } } @())
 
 Step "Intégrité de l'image Windows (DISM CheckHealth)"
-$R.dism = $(if ($isAdmin) { Try-Get 'dism' { [string](Repair-WindowsImage -Online -CheckHealth).ImageHealthState } } else { $null })
+# dism.exe en anglais (/English) : le verdict se lit de la même façon quelle que
+# soit la langue de Windows. Une réponse qui n'est aucun des trois verdicts connus
+# laisse « non vérifiée » plutôt que de signaler à tort une image endommagée.
+# CheckHealth ne fait que relire l'état noté par le dernier contrôle (ScanHealth,
+# RestoreHealth, Windows Update) : il répond en quelques secondes.
+$R.dism = $(if ($isAdmin) { Try-Get 'dism' {
+  $o = (& "$env:SystemRoot\System32\dism.exe" /Online /Cleanup-Image /CheckHealth /English | Out-String)
+  if ($o -match 'No component store corruption detected') { 'Healthy' }
+  elseif ($o -match 'component store cannot be repaired|not repairable') { 'NonRepairable' }
+  elseif ($o -match 'component store is repairable') { 'Repairable' }
+  else { throw ("verdict DISM introuvable (code {0}) : {1}" -f $LASTEXITCODE, (($o -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 2) -join ' ')) }
+} } else { $null })
 
 # ---------------------------------------------------------------- Réseau
 Step "Réseau et Internet"
