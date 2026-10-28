@@ -1743,7 +1743,10 @@ function appHealth(d){
   if (u.rebootPending) add('updates', 'info', 'Redémarrage en attente pour finir des mises à jour');
   if (appArr(u.failed).length) add('updates', 'warn', `${appArr(u.failed).length} mise(s) à jour en échec récemment`);
   if (/disabled/i.test(u.wuService || '')) add('updates', 'crit', 'Service Windows Update désactivé');
-  if (appHas(d.dism)) add('updates', /healthy/i.test(d.dism) ? 'good' : 'crit', /healthy/i.test(d.dism) ? 'Image Windows saine (DISM)' : `Image Windows endommagée (DISM : ${d.dism})`);
+  // seuls les trois verdicts de DISM comptent : une autre valeur laisse l'image non vérifiée
+  if (/^healthy$/i.test(d.dism || '')) add('updates', 'good', 'Image Windows saine (DISM)');
+  else if (/^nonrepairable$/i.test(d.dism || '')) add('updates', 'crit', 'Image Windows endommagée, irréparable par DISM (réparation sur place)');
+  else if (/^repairable$/i.test(d.dism || '')) add('updates', 'crit', 'Image Windows endommagée, réparable (DISM RestoreHealth)');
 
   appArr(d.volumes).forEach(v => {
     if (!appHas(v.freePct)) return;

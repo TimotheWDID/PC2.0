@@ -397,7 +397,7 @@ table.du .mono{text-align:right}
   <span>Disque <b id="sbDisk">—</b></span>
   <span>Réseau <b id="sbNet">—</b></span>
   <span id="sbTempWrap" hidden>Temp. <b id="sbTemp">—</b></span>
-  <span id="sbVer" title="Version de PC2 Diag">PC2 Diag <b>—</b></span>
+  <span id="sbVer" title="Compte du site de tickets et version de PC2 Diag"><span>PC2 Diag</span> <b>—</b></span>
 </footer>
 <div id="adminNote" hidden></div>
 
@@ -558,8 +558,10 @@ function rules(D){
   if (u.rebootPending) add('warn','Mises à jour','Redémarrage en attente pour terminer des mises à jour','Windows Update / maintenance','Redémarrer le PC pour finaliser l\'installation.','shutdown /r /t 0');
   if (u.wuService === 'Disabled') add('crit','Mises à jour','Service Windows Update désactivé','Service wuauserv','Les mises à jour de sécurité ne s\'installent plus. Remettre le service en démarrage manuel.','sc config wuauserv start= demand');
   if (u.pausedUntil && new Date(u.pausedUntil) > new Date()) add('info','Mises à jour','Mises à jour suspendues',`Jusqu'au ${fdate(u.pausedUntil)}`,'Reprendre les mises à jour dans Paramètres › Windows Update.');
-  if (D.dism) { if (!/healthy/i.test(D.dism)) add('crit','Logiciel',`Image Windows endommagée (${D.dism})`,'DISM CheckHealth','Réparer l\'image puis les fichiers système (connexion Internet requise, 10 à 30 minutes) :','DISM /Online /Cleanup-Image /RestoreHealth && sfc /scannow');
-    else ok('Logiciel','Image Windows intègre (DISM)'); }
+  // seuls les trois verdicts de DISM comptent : une autre valeur laisse l'image « non vérifiée »
+  if (/^healthy$/i.test(D.dism || '')) ok('Logiciel','Image Windows intègre (DISM)');
+  else if (/^nonrepairable$/i.test(D.dism || '')) add('crit','Logiciel','Image Windows endommagée, irréparable par DISM','DISM CheckHealth : NonRepairable','DISM ne peut pas réparer cette image : faire une réparation sur place (réinstaller Windows par-dessus en gardant fichiers et applications, depuis l\'Assistant d\'installation ou l\'ISO).');
+  else if (/^repairable$/i.test(D.dism || '')) add('crit','Logiciel','Image Windows endommagée (réparable)','DISM CheckHealth : Repairable','Réparer l\'image puis les fichiers système (connexion Internet requise, 10 à 30 minutes), redémarrer, puis relancer l\'analyse :','DISM /Online /Cleanup-Image /RestoreHealth && sfc /scannow');
 
   // ---- Sécurité
   const s = D.security || {};
@@ -889,7 +891,7 @@ V.health = (_, n) => { const e = D.events || {};
   return section('Santé matérielle', '30 derniers jours', n, props([['Indicateurs', [['Erreurs WHEA (CPU, RAM, PCIe)', e.whea ? st('warn', e.whea) : st('ok','0')], ['Dernier test mémoire', e.memDiag ? fdt(e.memDiag.date) + ' — ' + (e.memDiag.id === 1101 ? st('crit','erreurs trouvées') : st('ok','aucune erreur')) : 'jamais lancé'], ['Zones thermiques', arr(D.thermal).map(t => esc(t.zone) + ' : ' + t.c + ' °C').join('<br>')]]]])); };
 V.os = (_, n) => V.system(_, n);
 V.updates = (_, n) => { const u = D.updates || {};
-  return section('Mises à jour', '', n, props([['Windows Update', [['Dernière installation', fdate(u.lastSuccess || u.lastHotfix)], ['Dernière mise à jour', esc(u.lastTitle || u.lastHotfixId)], ['Redémarrage en attente', u.rebootPending ? st('warn','Oui') : st('ok','Non')], ['Service', esc(u.wuService)], ['Échecs récents', arr(u.failed).map(f => fdate(f.date) + ' — ' + esc(f.title)).join('<br>') || st('ok','Aucun')], ['Intégrité de l\'image (DISM)', D.dism ? (/healthy/i.test(D.dism) ? st('ok','Saine') : st('crit', esc(D.dism))) : 'non vérifiée']]]])); };
+  return section('Mises à jour', '', n, props([['Windows Update', [['Dernière installation', fdate(u.lastSuccess || u.lastHotfix)], ['Dernière mise à jour', esc(u.lastTitle || u.lastHotfixId)], ['Redémarrage en attente', u.rebootPending ? st('warn','Oui') : st('ok','Non')], ['Service', esc(u.wuService)], ['Échecs récents', arr(u.failed).map(f => fdate(f.date) + ' — ' + esc(f.title)).join('<br>') || st('ok','Aucun')], ['Intégrité de l\'image (DISM)', /^healthy$/i.test(D.dism || '') ? st('ok','Saine') : /^nonrepairable$/i.test(D.dism || '') ? st('crit','Endommagée, irréparable') : /^repairable$/i.test(D.dism || '') ? st('crit','Endommagée, réparable') : 'non vérifiée']]]])); };
 V.security = (_, n) => { const s = D.security || {}, d = s.defender;
   return section('Sécurité', '', n, props([['Protection', [['Antivirus', arr(s.av).map(a => (a.enabled ? st('ok', esc(a.name)) : st('info', esc(a.name) + ' (inactif)'))).join('<br>')], ['Defender temps réel', d ? (d.rtp ? st('ok','Actif') : st('info','Inactif')) : ''], ['Définitions', d ? d.sigAge + ' jour(s)' : ''], ['Anti-falsification', d ? (d.tamper ? 'Active' : 'Inactive') : ''], ['Pare-feu', arr(s.firewall).map(f => (f.enabled ? st('ok', esc(f.profile)) : st('crit', esc(f.profile) + ' désactivé'))).join(' ')]]],
     ['Système', [['Secure Boot', s.secureBoot === true ? st('ok','Actif') : s.secureBoot === false ? st('warn','Désactivé') : ''], ['TPM', s.tpm ? (s.tpm.present ? st('ok','Présent') : st('warn','Absent')) : ''], ['UAC', s.uac === 1 ? st('ok','Actif') : s.uac === 0 ? st('crit','Désactivé') : ''], ['SMBv1', s.smb1 === true ? st('warn','Activé') : s.smb1 === false ? st('ok','Désactivé') : ''], ['Bureau à distance', s.rdp ? st('info','Activé') : 'Désactivé'], ['BitLocker (C:)', esc((arr(D.volumes).find(v => v.letter === 'C:') || {}).bitlocker)]]],
@@ -2804,7 +2806,7 @@ setInterval(() => {
 const LK = {ticket:null, serial:'', off:false, queue:[], log:[], pending:[], machine:{}, started:new Date().toISOString(),
   looked:false, asked:false, busy:false, err:'', cands:null, q:'', found:null, searching:false, sessionFor:0, flushing:false,
   timer:null, retry:null, wait:60, tests:{}, testsTimer:null, ovl:null};
-const LKBY = {device:'n° de série de l\'appareil du ticket', diagnostic:'n° de série d\'un diagnostic du ticket', app:'déjà suivi par PC2 Diag sur ce ticket', name:'même nom de PC'};
+const LKBY = {device:'n° de série de l\'appareil du ticket', diagnostic:'n° de série d\'un diagnostic du ticket', app:'déjà suivi par PC2 Diag sur ce ticket', name:'même nom de PC', last:'le rattachement de la dernière fois sur ce PC', client:'autre ticket ouvert du même client'};
 const lkUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 const lkT = t => ({id: t.id, title: t.title, client: t.client || '', device: t.device || ''});
 const lkTime = iso => new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
@@ -2837,15 +2839,21 @@ async function lkLookup(){
   let r;
   try { r = await tkapi.call('GET', '/tickets/for-machine?serial=' + encodeURIComponent(m.serial || '') + '&computer=' + encodeURIComponent(m.computer || '') + (LK.ticket ? '&ticket=' + LK.ticket.id : '')); }
   catch (err) { LK.busy = false; LK.err = 'Recherche du ticket de ce PC impossible : ' + err; lkPaint(); return; }
-  LK.busy = false; LK.looked = true; LK.cands = r.tickets || [];
+  LK.busy = false; LK.looked = true; LK.cands = r.tickets || []; LK.others = r.client_tickets || [];
   if (LK.ticket) {
-    if (r.current && r.current.open) { LK.ticket = lkT(r.current); lkSave(); lkSessionStart('restored'); lkPaint(); return; }
+    // PC déjà vu : si le client a d'autres tickets ouverts, on demande lequel est le bon plutôt que de reprendre l'ancien
+    // (sauf à la reprise après un redémarrage, au milieu d'une intervention)
+    if (r.current && r.current.open && (!LK.others.length || info.resumed)) { LK.ticket = lkT(r.current); lkSave(); lkSessionStart('restored'); lkPaint(); return; }
+    if (r.current && r.current.open) {
+      LK.cands = [{...r.current, match: {by: 'last', strong: true}}].concat(LK.cands.filter(t => t.id !== r.current.id));
+      LK.ticket = null; LK.sessionFor = 0; lkSave(); lkPaint(); LK.asked = true; lkPanel(); return;
+    }
     status(r.current ? `Le ticket #${LK.ticket.id} est ${(TST[r.current.status] || r.current.status).toLowerCase()} : ce PC n'y est plus rattaché.` : `Le ticket #${LK.ticket.id} n'existe plus : ce PC n'y est plus rattaché.`);
     LK.ticket = null; LK.sessionFor = 0; lkSave();
   }
   if (LK.off) { lkPaint(); return; }
   const strong = LK.cands.filter(t => t.match && t.match.strong);
-  if (strong.length === 1) { lkLink(strong[0], 'auto'); return; }
+  if (strong.length === 1 && !LK.others.length) { lkLink(strong[0], 'auto'); return; }
   lkPaint();
   // pendant un audit, les PC du client n'ont en général pas de ticket : pas de question
   if (AUD.cur) { status('Analyse terminée : envoyez-la à l\'audit depuis l\'écran Audit.'); return; }
@@ -2947,7 +2955,10 @@ function lkBeforeReboot(resume){
 }
 
 // La pastille du ticket dans la barre du haut, et la fenêtre de suivi.
+// barre d'état : le technicien connecté au site à la place de « PC2 Diag », puis la version
+function sbWho(){ const n = $('#sbVer span'); if (n) n.textContent = (tkPaired() && SITE.state.me && SITE.state.me.user) || 'PC2 Diag'; }
 function lkPaint(){
+  sbWho();
   const b = $('#bLink'); if (!b) return;
   b.hidden = !tkPaired();
   const wait = LK.queue.length + (LK.ticket ? 0 : LK.pending.length);
@@ -2974,9 +2985,10 @@ function lkPanelRender(){
   const table = (list, how) => `<div style="overflow:auto;max-height:340px"><table class="list tk-tbl"><thead><tr><th>Ticket</th><th>Client</th><th>Appareil</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(t => row(t, how && t.match ? `<div class="tk-sub">${t.match.strong ? 'Trouvé par ' : 'Indice : '}${esc(LKBY[t.match.by] || t.match.by)}</div>` : '')).join('')}</tbody></table></div>`;
   let cur;
   if (LK.ticket) cur = `<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-left:4px solid var(--ok)"><div style="flex:1;min-width:220px">Ce PC est rattaché au <b>ticket #${LK.ticket.id}</b> — ${esc(LK.ticket.title)}${LK.ticket.client ? ' · ' + esc(LK.ticket.client) : ''}<div class="tk-sub">Analyses, réparations, tests, rapports et redémarrages s'inscrivent dans son suivi technicien.</div></div>
-      <button class="btn go" data-close data-tkopen="${LK.ticket.id}">Voir le ticket</button><button class="btn" id="lk-change">Changer de ticket</button><button class="btn" id="lk-unlink">Détacher</button></div>`;
+      <button class="btn go" data-close data-tkopen="${LK.ticket.id}">Voir le ticket</button><button class="btn" id="lk-change">Changer de ticket</button><button class="btn" id="lk-unlink">Détacher</button></div>`
+      + (arr(LK.others).filter(t => t.id !== LK.ticket.id).length ? `<div class="card"><div style="margin-bottom:8px">Autres tickets ouverts de ce client :</div>${table(LK.others.filter(t => t.id !== LK.ticket.id), true)}</div>` : '');
   else cur = `<div class="card">${LK.busy ? '<div class="empty">Recherche du ticket de ce PC…</div>'
-      : LK.cands && LK.cands.length ? `<div style="margin-bottom:8px">${LK.cands.some(t => t.match.strong) ? 'Plusieurs tickets ouverts correspondent à ce PC' : 'Aucun ticket n\'a ce numéro de série ; ces tickets ouverts ont un PC du même nom'} : lequel est le bon ?</div>${table(LK.cands, true)}`
+      : LK.cands && LK.cands.length || arr(LK.others).length ? `<div style="margin-bottom:8px">${arr(LK.others).length ? 'Ce PC est déjà connu. Voici le ticket qui lui correspond et les autres tickets ouverts du client : lequel est en cours ?' : LK.cands.some(t => t.match.strong) ? 'Plusieurs tickets ouverts correspondent à ce PC' : 'Aucun ticket n\'a ce numéro de série ; ces tickets ouverts ont un PC du même nom'}${arr(LK.others).length ? '' : ' : lequel est le bon ?'}</div>${table((LK.cands || []).concat(arr(LK.others)), true)}`
       : `<div style="margin-bottom:4px">Aucun ticket ouvert ne correspond à ce PC${m.serial ? ' (n° de série ' + esc(m.serial) + ')' : ''}. Cherchez-le ci-dessous.</div>`}</div>`;
   const search = LK.ticket && !LK.changing ? '' : `<div class="card"><h3 style="margin:0 0 8px">Chercher le ticket</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="search" id="lk-q" type="search" style="flex:1;min-width:220px;margin:0" placeholder="N° de ticket, client, téléphone, titre ou n° de série" value="${esc(q)}"><button class="btn" id="lk-search">Rechercher</button></div>
     ${LK.searching ? '<div class="empty">Recherche…</div>' : LK.found ? (LK.found.length ? '<div style="margin-top:8px">' + table(LK.found) + '</div>' : '<div class="empty">Aucun ticket ouvert ne correspond.</div>') : ''}
@@ -2997,7 +3009,7 @@ document.addEventListener('click', e => {
   if (t.closest('#bLink')) { lkPanel(); return; }
   if (!t.closest('.lk-box')) return;
   const ln = t.closest('[data-lklink]');
-  if (ln) { const id = +ln.dataset.lklink, tk = [...(LK.cands || []), ...(LK.found || [])].find(x => x.id === id); if (tk) { LK.changing = false; LK.found = null; lkLink(tk, 'pick'); } return; }
+  if (ln) { const id = +ln.dataset.lklink, tk = [...(LK.cands || []), ...arr(LK.others), ...(LK.found || [])].find(x => x.id === id); if (tk) { LK.changing = false; LK.found = null; lkLink(tk, 'pick'); } return; }
   if (t.id === 'lk-search') { lkSearch(); return; }
   if (t.id === 'lk-new') { ntStart(); lkPanelRender(); return; }
   if (t.id === 'lk-change') { LK.changing = true; lkSearch(); return; }
@@ -3228,6 +3240,7 @@ $('#bScan').addEventListener('click', startScan);
   // nom du magasin : « Planete-Computers 2.0 », aussi pour les en-têtes enregistrés avec l'ancien nom
   if (!CFG.shop || /^plan[eèé]te[\s-]*computers(\s*2\.0)?$/i.test(CFG.shop.trim())) CFG.shop = 'Planete-Computers 2.0';
   try { SITE.state = await sapi.state(); } catch (_) {}
+  sbWho();
   await lkRestore();
   await audRestore();
   await refreshHist();

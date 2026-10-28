@@ -45,9 +45,7 @@ class DiagAppTicketController extends Controller
         'mouse' => 'Souris',
     ];
 
-    public function __construct(private TicketWorkflow $workflow)
-    {
-    }
+    public function __construct(private TicketWorkflow $workflow) {}
 
     /**
      * Tickets by number, title, client or device. Without scope: the open
@@ -327,7 +325,7 @@ class DiagAppTicketController extends Controller
         $me = (int) $request->user()->id;
         $with = ['user:id,first_name,last_name,email', 'device', 'assignee:id,first_name,last_name'];
 
-        $current = null;
+        $current = $linked = null;
         if (! empty($data['ticket']) && ($linked = Ticket::query()->with($with)->find($data['ticket']))) {
             $current = $this->summary($linked, $me) + ['open' => in_array($linked->status, TicketWorkflow::OPEN_STATUSES, true)];
         }
@@ -417,7 +415,66 @@ class DiagAppTicketController extends Controller
             'computer' => $computer,
             'current' => $current,
             'tickets' => $tickets,
+            'client_tickets' => $this->clientTickets($serial, $linked, $tickets->pluck('id')->all(), $with, $me),
         ]);
+    }
+
+    /**
+     * The other open tickets of the clients this PC belongs to (owner of a
+     * device with its serial, client of a ticket it was diagnosed or followed
+     * on, even closed, client of the ticket it is linked to), so the
+     * technician picks the current one rather than an old ticket.
+     *
+     * @param  list<int>  $skip  tickets already listed
+     */
+    private function clientTickets(?string $serial, ?Ticket $linked, array $skip, array $with, int $me): array
+    {
+        $clients = collect([$linked?->user_id])
+            ->concat(Ticket::query()->whereKey($skip)->pluck('user_id'));
+
+        if ($serial) {
+            $clients = $clients->concat(Device::query()
+                ->whereNotNull('serial_number')
+                ->get(['id', 'user_id', 'serial_number'])
+                ->filter(fn (Device $device) => self::serialKey($device->serial_number) === $serial)
+                ->pluck('user_id'));
+
+            $ticketIds = Diagnostic::query()
+                ->whereNotNull('ticket_id')
+                ->latest('id')
+                ->limit(2000)
+                ->get(['id', 'ticket_id', 'inventory'])
+                ->filter(fn (Diagnostic $diagnostic) => self::serialKey(is_array($diagnostic->inventory) ? ($diagnostic->inventory['serial'] ?? null) : null) === $serial)
+                ->pluck('ticket_id')
+                ->concat(TicketTimelineEvent::query()
+                    ->where('event_type', TicketWorkflow::APP_ACTIVITY_EVENT)
+                    ->latest('id')
+                    ->limit(2000)
+                    ->get(['id', 'ticket_id', 'details'])
+                    ->filter(fn (TicketTimelineEvent $event) => self::serialKey($event->details['machine']['serial'] ?? null) === $serial)
+                    ->pluck('ticket_id'));
+            $clients = $clients->concat(Ticket::query()->whereKey($ticketIds->unique()->all())->pluck('user_id'));
+        }
+
+        $clients = $clients->filter()->unique()->values();
+        if ($clients->isEmpty()) {
+            return [];
+        }
+
+        return Ticket::query()
+            ->standardOnly()
+            ->with($with)
+            ->whereIn('user_id', $clients)
+            ->whereIn('status', TicketWorkflow::OPEN_STATUSES)
+            ->whereKeyNot(array_filter([...$skip, $linked?->id]))
+            ->orderByDesc('updated_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (Ticket $ticket) => $this->summary($ticket, $me) + [
+                'match' => ['by' => 'client', 'strong' => false, 'label' => 'Autre ticket ouvert du même client'],
+            ])
+            ->values()
+            ->all();
     }
 
     /**

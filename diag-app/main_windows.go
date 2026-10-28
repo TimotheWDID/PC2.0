@@ -488,6 +488,24 @@ func (a *app) checkPairing() {
 		a.me, a.meErr = me, ""
 	}
 	a.mu.Unlock()
+	a.updateTitle()
+}
+
+// updateTitle shows in the title bar who is signed in to the site, else « PC2 Diag ».
+func (a *app) updateTitle() {
+	a.mu.Lock()
+	name := ""
+	if a.me != nil && a.cfg.Token != "" {
+		name = a.me.User
+	}
+	a.mu.Unlock()
+	title := "PC2 Diag " + Version
+	if name != "" {
+		title = name + " · v" + Version
+	}
+	if a.w != nil {
+		a.w.Dispatch(func() { a.w.SetTitle(title) })
+	}
 }
 
 // send posts the Diag Atelier export of an analysis to the site.
@@ -663,6 +681,7 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		err = a.cfg.save()
 		a.me, a.meErr = me, ""
 		a.mu.Unlock()
+		a.updateTitle()
 		if err != nil {
 			return nil, err
 		}
@@ -673,6 +692,7 @@ func (a *app) handle(method string, raw json.RawMessage) (any, error) {
 		_ = a.cfg.save()
 		a.me = nil
 		a.mu.Unlock()
+		a.updateTitle()
 		return a.siteState(), nil
 	case "goSiteCheck":
 		a.checkPairing()
