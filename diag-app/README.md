@@ -202,6 +202,29 @@ perdue, révoquez la clé depuis la page Diag rapide.
    **Envoyer** : le rapport apparaît sur le ticket (ou dans Diag rapide) et
    s'ouvre en un clic.
 
+### Connexion au site sur le PC d'un client
+
+- Si le réseau n'est pas encore là au lancement (Wi-Fi qui se connecte
+  après, PC relancé après un redémarrage, câble branché plus tard),
+  l'application revérifie toute seule la clé pendant 30 minutes : plus besoin
+  de cliquer sur « Réessayer ».
+- Une coupure brève est rattrapée : une lecture (liste des tickets, fiche…)
+  est refaite deux fois ; un envoi (rapport, message, pièce jointe) n'est
+  refait que s'il n'a pas pu partir du tout, pour ne jamais rien créer en
+  double.
+- Le délai d'un envoi tient compte de sa taille (une seconde par 32 Ko en plus
+  des 60 s de base) : un gros rapport ou une photo passe aussi sur une ligne
+  ADSL lente. Un téléchargement a 15 minutes.
+- L'erreur dit ce qui bloque, en français : pas de réseau, DNS, site qui ne
+  répond pas, connexion coupée, certificat refusé parce que **l'horloge du
+  PC est fausse** (pile du BIOS, la date du PC est affichée), antivirus qui
+  filtre le HTTPS. Le détail technique suit entre parenthèses et figure dans
+  `PC2Diag-journal.txt`.
+- La connexion évite deux causes de coupures aléatoires : une connexion
+  restée ouverte que l'hébergeur ferme au même moment, et l'ouverture TLS
+  « post-quantique » de Go 1.24, trop grosse pour certains antivirus, box et
+  pare-feu.
+
 ## Suivi du PC sur son ticket
 
 Dès la première analyse, l'application cherche sur le site le ticket ouvert
@@ -351,6 +374,7 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 | `collect.ps1` | collecte en lecture seule |
 | `actions.go` | liste des réparations et leurs étapes |
 | `api.go` | client de l'API (envoi multipart du Diag Atelier, appels des tickets et des audits, pièces jointes, téléchargements) |
+| `netclient.go` | connexion au site : transport partagé, délais selon la taille, nouveaux essais sans risque de doublon, erreurs réseau expliquées |
 | `netscan.go` | scan réseau d'un audit : plage d'adresses, ports, NetBIOS, titre web, type deviné |
 | `netscan_windows.go`, `netscan_app_windows.go` | ARP (`SendARP`), carte réseau avec sa passerelle et ses DNS ; scan en arrière-plan et envoi à l'audit |
 | `rsrc_windows_amd64.syso`, `winres/icon.png` | icône Planete-Computers 2.0 de l'exe |
@@ -370,15 +394,15 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.11.0       # Linux, macOS, Git Bash
-build.cmd 1.11.0        # invite de commandes Windows
+./build.sh 1.11.1       # Linux, macOS, Git Bash
+build.cmd 1.11.1        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
 `atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
 l'exe après une modification du Diag Atelier.
 
-Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.11.0.exe`),
+Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.11.1.exe`),
 un seul fichier sans installation. La version est aussi dans le titre de la
 fenêtre et en bas à droite de l'application, à côté du nom du technicien
 connecté au site (« PC2 Diag » tant que l'exe n'est pas associé). Il faut le runtime WebView2

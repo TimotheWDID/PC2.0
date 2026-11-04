@@ -152,7 +152,7 @@ func (a *app) syncLearned() string {
 		return ""
 	}
 	c := a.client()
-	c.http.Timeout = 10 * time.Second // ne pas retarder la lecture des journaux
+	c.Timeout = 10 * time.Second // ne pas retarder la lecture des journaux
 	notes, err := c.EventNotes()
 	if err != nil {
 		a.log("Événements appris : site injoignable, copie locale utilisée (%v)", err)

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,11 +23,12 @@ type Client struct {
 	Server  string
 	Token   string
 	Machine string
-	http    *http.Client
+	// Timeout replaces the default limit of a JSON request (netclient.go).
+	Timeout time.Duration
 }
 
 func NewClient(server, token, machine string) *Client {
-	return &Client{Server: NormalizeServer(server), Token: token, Machine: machine, http: &http.Client{Timeout: 60 * time.Second}}
+	return &Client{Server: NormalizeServer(server), Token: token, Machine: machine}
 }
 
 // NormalizeServer keeps scheme and host (https by default), without trailing slash.
@@ -238,7 +240,7 @@ func (c *Client) sendExport(path string, fields map[string]string, e AtelierExpo
 	if err := w.Close(); err != nil {
 		return err
 	}
-	return c.request("POST", path, &buf, w.FormDataContentType(), out)
+	return c.request("POST", path, buf.Bytes(), w.FormDataContentType(), out)
 }
 
 // Tickets and audits: the app reads and writes them through /tickets…,
@@ -263,13 +265,13 @@ func (c *Client) Call(method, path string, body json.RawMessage) (json.RawMessag
 	if err := ticketPath(path); err != nil {
 		return nil, err
 	}
-	var rd io.Reader
+	var data []byte
 	ct := ""
 	if len(body) > 0 && string(body) != "null" {
-		rd, ct = bytes.NewReader(body), "application/json"
+		data, ct = body, "application/json"
 	}
 	var out json.RawMessage
-	return out, c.request(method, path, rd, ct, &out)
+	return out, c.request(method, path, data, ct, &out)
 }
 
 // UploadFile is a file picked in the interface, base64 encoded.
@@ -304,7 +306,7 @@ func (c *Client) Upload(path string, fields map[string]string, files []UploadFil
 		return nil, err
 	}
 	var out json.RawMessage
-	return out, c.request("POST", path, &buf, w.FormDataContentType(), &out)
+	return out, c.request("POST", path, buf.Bytes(), w.FormDataContentType(), &out)
 }
 
 // Download fetches a ticket file and returns its name (from the site) and content.
@@ -315,19 +317,21 @@ func (c *Client) Download(path string) (string, []byte, error) {
 	if c.Server == "" || c.Token == "" {
 		return "", nil, errors.New("application non associée au site")
 	}
-	req, err := http.NewRequest("GET", c.Server+"/api/diag-app"+path, nil)
+	resp, cancel, err := doRequest(func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", c.Server+"/api/diag-app"+path, nil)
+		if err == nil {
+			c.headers(req)
+		}
+		return req, err
+	}, c.timeout(downloadTimeout))
 	if err != nil {
 		return "", nil, err
 	}
-	c.headers(req)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", nil, fmt.Errorf("site injoignable : %w", err)
-	}
+	defer cancel()
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 200<<20))
 	if err != nil {
-		return "", nil, err
+		return "", nil, netError(err)
 	}
 	if resp.StatusCode >= 300 {
 		return "", nil, apiError(resp.StatusCode, data)
@@ -360,27 +364,39 @@ func (c *Client) do(method, path string, body any, out any) error {
 	if err != nil {
 		return err
 	}
-	return c.request(method, path, bytes.NewReader(b), "application/json", out)
+	return c.request(method, path, b, "application/json", out)
 }
 
-func (c *Client) request(method, path string, rd io.Reader, contentType string, out any) error {
+// request sends body (nil: none) and decodes the JSON answer into out. The
+// body is kept whole so that a failed attempt can be sent again (doRequest).
+func (c *Client) request(method, path string, body []byte, contentType string, out any) error {
 	if c.Server == "" || c.Token == "" {
 		return errors.New("application non associée au site")
 	}
-	req, err := http.NewRequest(method, c.Server+"/api/diag-app"+path, rd)
+	resp, cancel, err := doRequest(func(ctx context.Context) (*http.Request, error) {
+		var rd io.Reader
+		if body != nil {
+			rd = bytes.NewReader(body)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, c.Server+"/api/diag-app"+path, rd)
+		if err != nil {
+			return nil, err
+		}
+		c.headers(req)
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		return req, nil
+	}, requestTimeout(c.timeout(siteTimeout), len(body)))
 	if err != nil {
 		return err
 	}
-	c.headers(req)
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("site injoignable : %w", err)
-	}
+	defer cancel()
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return netError(err)
+	}
 	if resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, raw)
 	}

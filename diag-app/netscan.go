@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -194,12 +195,33 @@ func netbiosName(ip string, timeout time.Duration) (string, string, string) {
 	return parseNbstat(buf[:n])
 }
 
+// ptrResolver asks the DNS servers of the PC directly, so that the time limit
+// holds: Windows' own lookup ignores it and, with a box that does not answer
+// reverse queries, each address could block a scan worker for 10 s or more.
+// NetBIOS (netbiosName) still names the Windows PCs.
+var ptrResolver = &net.Resolver{PreferGo: true}
+
+// reverseName is the DNS name of ip, empty when none came within timeout.
+func reverseName(ip string, timeout time.Duration) string {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	names, err := ptrResolver.LookupAddr(ctx, ip)
+	if err != nil || len(names) == 0 {
+		return ""
+	}
+	return strings.TrimSuffix(names[0], ".")
+}
+
 var htmlTitle = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+// lanTransport reaches the devices of the LAN directly (never through a proxy
+// set on the PC) and keeps no connection open after the scan.
+var lanTransport = &http.Transport{DisableKeepAlives: true, ResponseHeaderTimeout: 2 * time.Second}
 
 // httpTitle reads the title of the web page of a device (printer, NAS,
 // camera, box…): it usually names the brand and model.
 func httpTitle(ip string, port int, timeout time.Duration) string {
-	client := &http.Client{Timeout: timeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	client := &http.Client{Timeout: timeout, Transport: lanTransport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 3 || req.URL.Hostname() != ip {
 			return http.ErrUseLastResponse
 		}
@@ -389,8 +411,8 @@ func scanHost(ip net.IP, local netLocal, alive func(net.IP) (string, bool)) (net
 		return h, false
 	}
 
-	if names, err := net.LookupAddr(s); err == nil && len(names) > 0 {
-		h.Hostname = strings.TrimSuffix(names[0], ".")
+	if name := reverseName(s, 1500*time.Millisecond); name != "" {
+		h.Hostname = name
 	}
 	if hasPort(h.Ports, 139, 445) || h.Hostname == "" {
 		if name, _, nbMAC := netbiosName(s, 800*time.Millisecond); name != "" {
