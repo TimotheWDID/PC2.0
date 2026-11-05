@@ -92,7 +92,11 @@ site à l'identique.
   restauration, DISM, SFC, chkdsk en ligne ou au redémarrage, nettoyage,
   réinitialisation de Windows Update, recherche de mises à jour, pile réseau,
   cache DNS, heure, analyse Defender, pare-feu, SMBv1, diagnostic mémoire,
-  pilote de batterie. Sortie en direct, arrêt possible, redémarrage à la fin
+  pilote de batterie, masquage des partitions système (EFI, MSR,
+  récupération, « Réservé au système ») qui ont reçu une lettre de lecteur
+  après une conversion MBR → GPT ou un clonage : l'analyse les signale, la
+  réparation retire seulement la lettre, sans jamais supprimer de partition
+  (ni le lecteur de Windows ni les disques USB). Sortie en direct, arrêt possible, redémarrage à la fin
   avec réouverture automatique de l'application.
 - **Test de batterie** : santé, test de décharge (avec ou sans charge CPU),
   dépannage d'une batterie non reconnue.
@@ -394,15 +398,15 @@ s'affichent par la vue `resources/views/diagnostics/app-report.blade.php`.
 Go 1.24 ou plus récent, depuis n'importe quel système :
 
 ```sh
-./build.sh 1.11.1       # Linux, macOS, Git Bash
-build.cmd 1.11.1        # invite de commandes Windows
+./build.sh 1.12.0       # Linux, macOS, Git Bash
+build.cmd 1.12.0        # invite de commandes Windows
 ```
 
 Les scripts copient d'abord `resources/diag/diag-atelier.html` dans
 `atelier.html` : l'exe embarque toujours le Diag Atelier du dépôt. Recompiler
 l'exe après une modification du Diag Atelier.
 
-Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.11.1.exe`),
+Résultat : `dist/PC2Diag-<version>.exe` (par exemple `PC2Diag-1.12.0.exe`),
 un seul fichier sans installation. La version est aussi dans le titre de la
 fenêtre et en bas à droite de l'application, à côté du nom du technicien
 connecté au site (« PC2 Diag » tant que l'exe n'est pas associé). Il faut le runtime WebView2

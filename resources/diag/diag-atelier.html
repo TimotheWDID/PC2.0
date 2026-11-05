@@ -1748,8 +1748,11 @@ function appHealth(d){
   else if (/^nonrepairable$/i.test(d.dism || '')) add('updates', 'crit', 'Image Windows endommagée, irréparable par DISM (réparation sur place)');
   else if (/^repairable$/i.test(d.dism || '')) add('updates', 'crit', 'Image Windows endommagée, réparable (DISM RestoreHealth)');
 
+  // partitions système (EFI, récupération…) qui ont reçu une lettre : pas de jauge « plein », un avertissement
+  const sysLetters = appArr(d.sysParts).map(p => p.letter);
+  appArr(d.sysParts).forEach(p => add('volumes', 'warn', `${p.letter} est la partition ${p.kind} (${p.sizeMB} Mo) : elle ne devrait pas être visible, retirer sa lettre (PC2 Diag › Réparations › Masquer les partitions système). Ne rien supprimer.`));
   appArr(d.volumes).forEach(v => {
-    if (!appHas(v.freePct)) return;
+    if (!appHas(v.freePct) || sysLetters.includes(v.letter)) return;
     const lvl = v.freePct < 10 || v.freeGB < 10 ? 'crit' : (v.freePct < 20 ? 'warn' : 'good');
     add('volumes', lvl, `${v.letter}${v.label ? ' « ' + v.label + ' »' : ''} : ${v.freeGB} Go libres sur ${v.sizeGB} Go (${v.freePct} %)` + (v.dirty ? ' — système de fichiers à vérifier (chkdsk)' : ''));
     if (v.dirty) add('volumes', 'warn', `${v.letter} marqué comme incohérent : chkdsk /f à prévoir`);

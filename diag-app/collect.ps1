@@ -238,6 +238,12 @@ $R.volumes = @($ld | Where-Object { $toolLetters -notcontains $_.DeviceID } | Fo
   }
   [ordered]@{ letter = $v.DeviceID; label = $v.VolumeName; fs = $v.FileSystem; sizeGB = (GB $v.Size); freeGB = (GB $v.FreeSpace)
     freePct = $(if ($v.Size) { [math]::Round($v.FreeSpace / $v.Size * 100, 0) } else { $null }); dirty = $dirty; bitlocker = $bl[$v.DeviceID] } })
+# Partitions système (EFI, récupération…) qui ont une lettre de lecteur : la
+# fonction Find-SysParts vient de sysparts.go, insérée ici par l'exe.
+#@SYSPARTS@
+$R.sysParts = @(Try-Get 'sysparts' { @(Find-SysParts | Where-Object { $toolLetters -notcontains $_.letter } | ForEach-Object {
+  [ordered]@{ letter = $_.letter; kind = $_.kind; disk = $_.disk; part = $_.part; sizeMB = $_.sizeMB; label = $_.label; fs = $_.fs } }) } @())
+if ($R.sysParts.Count) { Log ("      partitions système visibles : " + (($R.sysParts | ForEach-Object { "$($_.letter) $($_.kind)" }) -join ', ')) }
 $tempPaths = @($env:TEMP, "$env:windir\Temp", "$env:windir\SoftwareDistribution\Download")
 $junk = Try-Get 'temp' { Dir-Size $tempPaths 30 }
 if ($junk) {

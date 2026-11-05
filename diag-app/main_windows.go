@@ -284,7 +284,7 @@ func (a *app) collect() (map[string]any, error) {
 	out := filepath.Join(dir, "result.json")
 	progress := filepath.Join(dir, "progress.txt")
 	// BOM UTF-8 : sans lui, PowerShell 5.1 lit les accents du script en ANSI
-	body := append([]byte{0xEF, 0xBB, 0xBF}, strings.TrimPrefix(collectPS, "\ufeff")...)
+	body := append([]byte{0xEF, 0xBB, 0xBF}, strings.Replace(strings.TrimPrefix(collectPS, "\ufeff"), "#@SYSPARTS@", sysPartsFindPS, 1)...)
 	if err := os.WriteFile(script, body, 0o600); err != nil {
 		return nil, err
 	}

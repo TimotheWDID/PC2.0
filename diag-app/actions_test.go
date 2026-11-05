@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestActions(t *testing.T) {
 		}
 	}
 	// Réparations appelées par l'interface (boutons « Réparer… » et préréglages)
-	for _, id := range []string{"restore", "dism", "sfc", "chkdsk", "chkdskboot", "cleanup", "firewall", "smb1off", "wuenable", "netreset", "dnsflush", "defender", "memtest", "wuscan", "wureset", "timesync", "batteryreset"} {
+	for _, id := range []string{"restore", "dism", "sfc", "chkdsk", "chkdskboot", "cleanup", "firewall", "smb1off", "wuenable", "netreset", "dnsflush", "defender", "memtest", "wuscan", "wureset", "timesync", "batteryreset", "hidesys"} {
 		if findAction(id) == nil {
 			t.Errorf("réparation manquante : %s", id)
 		}
@@ -45,5 +46,20 @@ func TestDumpPS(t *testing.T) {
 			}
 		}
 	}
+	_ = os.WriteFile(filepath.Join(dir, "sysparts.ps1"), []byte(sysPartsFindPS), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "battery.ps1"), []byte(batteryPointPS), 0o644)
+}
+
+// collect.ps1 reçoit Find-SysParts (sysparts.go) à la place de « #@SYSPARTS@ ».
+func TestSysPartsPlaceholder(t *testing.T) {
+	b, err := os.ReadFile("collect.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(b), "#@SYSPARTS@"); n != 1 {
+		t.Errorf("collect.ps1 : %d emplacement(s) #@SYSPARTS@, 1 attendu", n)
+	}
+	if !strings.Contains(sysPartsHidePS, "function Find-SysParts") || strings.Contains(sysPartsFindPS, "Remove-") {
+		t.Error("Find-SysParts doit détecter sans rien modifier, et la réparation doit l'inclure")
+	}
 }

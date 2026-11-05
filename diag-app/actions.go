@@ -81,6 +81,12 @@ Write-Output ("Espace libéré : {0:N2} Go" -f (($before-$after)/1GB))`},
 		},
 	},
 	{
+		ID: "hidesys", Title: "Masquer les partitions système", Group: "Disque et nettoyage", Duration: "Immédiat",
+		Desc:  "Retire la lettre de lecteur des partitions EFI, MSR, de récupération ou « Réservé au système » visibles dans l'Explorateur (souvent après une conversion MBR → GPT ou un clonage). Les partitions ne sont ni supprimées ni modifiées : elles redeviennent seulement invisibles.",
+		Risk:  "Aucune donnée n'est effacée. Ne touche ni au lecteur de Windows, ni aux disques USB.",
+		Steps: []Step{{Label: "Retrait des lettres de lecteur", PS: sysPartsHidePS}},
+	},
+	{
 		ID: "wureset", Title: "Réinitialiser Windows Update", Group: "Windows Update", Duration: "2 à 5 min",
 		Desc: "Arrête les services, renomme les dossiers SoftwareDistribution et catroot2, redémarre les services et relance une recherche. Corrige la plupart des mises à jour bloquées.",
 		Risk: "L'historique des mises à jour affiché sera vidé (les mises à jour installées restent).",
