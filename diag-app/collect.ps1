@@ -400,7 +400,14 @@ $net.dns = Try-Get 'dns' { [bool](Resolve-DnsName www.microsoft.com -QuickTimeou
 $net.internet = Try-Get 'tcp443' { $c = New-Object Net.Sockets.TcpClient; $ok = $c.ConnectAsync('1.1.1.1', 443).Wait(3000); $c.Close(); $ok } $false
 $net.dnsServers = @(Try-Get 'dnsservers' { Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } | ForEach-Object { $_.ServerAddresses } | Select-Object -Unique } @())
 $net.ip = @(Try-Get 'ip' { Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127|169\.254)' } | ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength) ($($_.InterfaceAlias))" } } @())
-$net.apipa = @(Try-Get 'apipa' { Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -match '^169\.254' } | ForEach-Object { $_.InterfaceAlias } } @())
+# 169.254 : seulement sur une carte branchée (Up) qui n'a pas d'autre adresse.
+# Une carte débranchée, le Wi-Fi non connecté et les cartes virtuelles « Wi-Fi
+# Direct » (« Connexion au réseau local* 1, 2 ») gardent toujours une adresse
+# 169.254 sans que ce soit une panne.
+$net.apipa = @(Try-Get 'apipa' {
+  $up = @(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -notmatch 'Wi-Fi Direct|Virtual|Hyper-V|VirtualBox|VMware|Bluetooth' } | ForEach-Object { $_.ifIndex })
+  $all = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $up -contains $_.InterfaceIndex })
+  $all | Where-Object { $_.IPAddress -match '^169\.254' } | Where-Object { $i = $_.InterfaceIndex; -not ($all | Where-Object { $_.InterfaceIndex -eq $i -and $_.IPAddress -notmatch '^169\.254' }) } | ForEach-Object { $_.InterfaceAlias } | Select-Object -Unique } @())
 $w = Try-Get 'wlan' { & netsh wlan show interfaces 2>$null }
 if ($w) {
   $ssid = ($w | Where-Object { $_ -match '^\s*SSID\s*:' } | Select-Object -First 1) -replace '^[^:]*:\s*', ''
