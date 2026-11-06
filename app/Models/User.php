@@ -130,6 +130,11 @@ class User extends Authenticatable
         return $this->hasOne(Agent::class);
     }
 
+    public function isDisabledAgent(): bool
+    {
+        return $this->agent !== null && ! $this->agent->is_active;
+    }
+
     /**
      * Entreprise à laquelle une personne est rattachée.
      */
