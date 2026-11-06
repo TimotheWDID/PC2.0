@@ -466,7 +466,14 @@ function rules(D){
   const sysHdd = arr(D.disks).find(d => /HDD/i.test(d.media) && !/USB/i.test(d.bus));
   if (sysHdd) add('info','Performance','Disque dur mécanique détecté',`${sysHdd.name}`,'Si Windows est installé dessus, le passage à un SSD est l\'amélioration la plus visible (démarrage et ouverture des logiciels 3 à 5 fois plus rapides).');
 
-  arr(D.volumes).forEach(v => {
+  // partitions système qui ont reçu une lettre (conversion MBR → GPT, clonage) : visibles dans l'Explorateur
+  const sysParts = arr(D.sysParts), sysLetters = sysParts.map(p => p.letter);
+  if (sysParts.length) add('warn','Stockage',
+    sysParts.length > 1 ? `${sysParts.length} partitions système visibles dans l'Explorateur` : `Partition système visible dans l'Explorateur (${sysParts[0].letter})`,
+    sysParts.map(p => `${p.letter} partition ${p.kind} (${p.sizeMB} Mo${p.fs ? ', ' + p.fs : ''})`).join(' · '),
+    'Ces partitions servent au démarrage ou à la réparation de Windows : il ne faut <b>rien supprimer</b>. Elles ont seulement reçu une lettre de lecteur par erreur (souvent après une conversion MBR → GPT ou un clonage) : le client risque d\'y toucher ou de se plaindre d\'un lecteur plein. Retirer la lettre les cache de nouveau, sans rien effacer.',
+    sysParts.map(p => `diskpart : select volume=${p.letter[0]} puis remove letter=${p.letter[0]}`).join(' ; '));
+  arr(D.volumes).filter(v => !sysLetters.includes(v.letter)).forEach(v => {
     const w = `Lecteur ${v.letter}${v.label ? ' « ' + v.label + ' »' : ''} — ${v.freeGB} Go libres sur ${v.sizeGB} Go`;
     if (has(v.freePct)) {
       if (v.freePct < 10 || v.freeGB < 10) add('crit','Stockage',`Lecteur ${v.letter} presque plein (${v.freePct} % libre)`,w,
@@ -694,7 +701,7 @@ function nodes(){
   add('gpu','Graphique et écrans','gpu',0,[], {match:/graphique/i});
   add('storage','Stockage','disk',0,['Stockage']);
   arr(D.disks).forEach((d,i) => add('disk:'+i, d.name, 'disk', 1, [], {match: new RegExp(d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))}));
-  add('volumes','Volumes','vol',1,[], {match:/Lecteur|volume|fichiers temporaires/i});
+  add('volumes','Volumes','vol',1,[], {match:/Lecteur|volume|fichiers temporaires|Partition système/i});
   if (D.battery && D.battery.present) add('battery','Batterie','bat',0,[], {match:/Batterie/});
   add('network','Réseau','net',0,['Réseau']);
   arr((D.network||{}).adapters).forEach((a,i) => add('nic:'+i, a.name, /wi-?fi|wlan|802\.11/i.test(a.media + a.name) ? 'net' : 'eth', 1));
@@ -759,7 +766,7 @@ const st = (sev, text) => `<span class="st"><span class="dot ${sev}"></span>${te
 function head(title, sub, right){ return `<div class="ph"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${right || ''}</div>`; }
 
 const TOOLMAP = [[/devmgmt/,'devmgmt','Gestionnaire de périphériques'],[/perfmon \/rel/,'reliability','Analyse de fiabilité'],[/taskmgr/,'startup','Applications au démarrage'],[/services\.msc/,'services','Services'],[/netplwiz/,'netplwiz','Comptes utilisateurs'],[/lusrmgr/,'lusrmgr','Utilisateurs locaux'],[/UserAccountControl/,'uac','Réglages UAC'],[/windowsdefender/,'defender','Sécurité Windows'],[/Minidump/,'minidump','Dossier Minidump']];
-const ACTMAP = [[/RestoreHealth/,'dism'],[/chkdsk \S+ \/f/,'chkdskboot'],[/chkdsk \S+ \/scan/,'chkdsk'],[/cleanmgr/,'cleanup'],[/advfirewall/,'firewall'],[/SMB1/,'smb1off'],[/shutdown \/r/,'reboot'],[/wuauserv start/,'wuenable'],[/ipconfig \/(release|renew)/,'netreset'],[/flushdns/,'dnsflush'],[/MpCmdRun/,'defender'],[/mdsched/,'memtest'],[/ms-settings:windowsupdate/,'wuscan']];
+const ACTMAP = [[/RestoreHealth/,'dism'],[/chkdsk \S+ \/f/,'chkdskboot'],[/chkdsk \S+ \/scan/,'chkdsk'],[/cleanmgr/,'cleanup'],[/advfirewall/,'firewall'],[/SMB1/,'smb1off'],[/shutdown \/r/,'reboot'],[/wuauserv start/,'wuenable'],[/ipconfig \/(release|renew)/,'netreset'],[/flushdns/,'dnsflush'],[/MpCmdRun/,'defender'],[/mdsched/,'memtest'],[/ms-settings:windowsupdate/,'wuscan'],[/remove letter/,'hidesys']];
 function fixButtons(f){
   if (IMP.on) return ''; // diag d'un autre PC : une réparation s'appliquerait à ce PC-ci
   const c = f.cmd || ''; const out = [];
@@ -878,7 +885,7 @@ V.disk = (i, n) => { const d = arr(D.disks)[+i]; if (!d) return '';
   return section(d.name, `${d.media} ${d.bus} · ${d.sizeGB} Go`, n, props([['Identification', [['Modèle', esc(d.name)], ['N° de série', `<span class="mono">${esc(d.serial)}</span>`], ['Firmware', `<span class="mono">${esc(d.firmware)}</span>`], ['Type', esc(d.media)], ['Interface', esc(d.bus)], ['Capacité', d.sizeGB + ' Go']]],
     ['Santé (SMART)', [['État Windows', healthTxt(d)], ['État opérationnel', esc(d.op)], ['Usure', has(d.wear) ? d.wear + ' %' + meter(d.wear, 70, 90) : 'non communiquée'], ['Température', d.temp ? d.temp + ' °C' : ''], ['Température max relevée', d.tempMax ? d.tempMax + ' °C' : ''], ['Heures de fonctionnement', has(d.hours) ? d.hours + ' h (' + Math.round(d.hours / 24) + ' j)' : ''], ['Erreurs de lecture non corrigées', has(d.readErr) ? d.readErr : ''], ['Erreurs d\'écriture non corrigées', has(d.writeErr) ? d.writeErr : ''], ['Démarrages', has(d.starts) ? d.starts : '']]]])
     + (/USB/i.test(d.bus) ? '<div class="banner">Disque relié en USB : beaucoup de boîtiers ne transmettent pas les valeurs SMART, l\'état peut être incomplet.</div>' : '')); };
-V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', (D.junkPartial ? 'au moins ' : '') + D.junkGB + ' Go' + (D.junkPartial ? ' (comptage arrêté au bout de 30 s)' : '')]]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
+V.volumes = (_, n) => section('Volumes', '', n, props(arr(D.volumes).map(v => [v.letter + (v.label ? ' « ' + v.label + ' »' : ''), [...arr(D.sysParts).filter(p => p.letter === v.letter).map(p => ['Rôle', st('warn', `Partition ${esc(p.kind)} : ne devrait pas avoir de lettre`) + (IMP.on ? '' : ' <button class="btn" data-act="hidesys">Masquer…</button>')]), ['Système de fichiers', esc(v.fs)], ['Taille', v.sizeGB + ' Go'], ['Libre', `${v.freeGB} Go (${v.freePct} %)` + meter(100 - (v.freePct ?? 0), 80, 90)], ['Cohérence NTFS', v.dirty ? st('warn','Erreurs signalées') : v.dirty === false ? st('ok','OK') : ''], ['BitLocker', esc(v.bitlocker)]]]).concat([['Nettoyage', [['Fichiers temporaires', (D.junkPartial ? 'au moins ' : '') + D.junkGB + ' Go' + (D.junkPartial ? ' (comptage arrêté au bout de 30 s)' : '')]]]])) + '<div><button class="btn go" data-nav="disk-usage">Voir ce qui occupe le disque</button></div>');
 V.battery = (_, n) => { const b = D.battery || {};
   return section('Batterie', esc(b.name), n, props([['Batterie', [['Modèle', esc(b.name)], ['Charge', `<span id="pv-bat">${S.bat ? S.bat.v : b.charge} %</span>`], ['Capacité d\'origine', b.design ? (b.design / 1000).toFixed(1) + ' Wh' : ''], ['Capacité actuelle', b.full ? (b.full / 1000).toFixed(1) + ' Wh' : ''], ['Usure', has(b.wearPct) ? b.wearPct + ' %' + meter(b.wearPct, 20, 40) : ''], ['Cycles', b.cycles]]]])); };
 V.lan = (_, n) => { const x = D.network || {};
@@ -1535,7 +1542,7 @@ function actCard(a){
   const running = run.id === a.id, res = run.result[a.id];
   let body = '';
   if (running) body = `<div class="run"><span class="spin"></span><span id="runStep">${esc(run.step || 'Démarrage…')}</span><span class="spacer" style="flex:1"></span><button class="btn danger" id="cancelRun">Arrêter</button></div>`;
-  else if (run.confirm === a.id) body = `<div class="confirm"><span>Lancer « ${esc(a.title)} » maintenant ?${a.reboot ? ' Un redémarrage sera nécessaire.' : ''}</span><button class="btn go" data-run="${a.id}">Confirmer</button><button class="btn" data-noconf="1">Annuler</button></div>`;
+  else if (run.confirm === a.id) body = `<div class="confirm"><span>Lancer « ${esc(a.title)} » maintenant ?${a.reboot ? ' Un redémarrage sera nécessaire.' : ''}${a.id === 'hidesys' && typeof D !== 'undefined' && D && arr(D.sysParts).length ? ' Lettre(s) retirée(s) : ' + arr(D.sysParts).map(p => esc(p.letter + ' (' + p.kind + ')')).join(', ') + '. Aucune partition supprimée.' : ''}</span><button class="btn go" data-run="${a.id}">Confirmer</button><button class="btn" data-noconf="1">Annuler</button></div>`;
   else body = `<div><button class="btn${run.id ? '' : ' go'}" data-ask="${a.id}" ${run.id ? 'disabled' : ''}>Lancer</button>${res ? ` <span class="res ${res.ok ? 'ok' : 'ko'}">${res.ok ? 'Terminé' : 'Échec ou annulé'} en ${res.seconds} s</span>` : ''}</div>`;
   const log = (running || res) && run.logs && run.logs[a.id] ? `<div class="term" id="term-${a.id}">${run.logs[a.id].map(esc).join('\n')}</div>` : '';
   return `<article class="act${highlightAct === a.id ? ' hl' : ''}" id="act-${a.id}"><div class="top"><h3>${esc(a.title)}</h3><span class="meta"><span class="tag">${esc(a.duration)}</span>${a.reboot ? '<span class="tag reboot">Redémarrage</span>' : ''}</span></div><div style="color:var(--muted)">${esc(a.desc)}</div>${a.risk ? `<div class="risk">${esc(a.risk)}</div>` : ''}${body}${log}</article>`;
