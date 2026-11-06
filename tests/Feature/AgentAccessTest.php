@@ -6,7 +6,7 @@ use App\Models\User;
 
 function accessAgent(bool $isActive = true, bool $isAdmin = false): User
 {
-    $user = User::factory()->create();
+    $user = User::factory()->withoutTwoFactor()->create();
     Agent::create(['user_id' => $user->id, 'is_admin' => $isAdmin, 'is_active' => $isActive]);
 
     return $user;
