@@ -40,8 +40,6 @@ Route::get('tickets/{ticket}/diagnostics/{diagnostic}/client-report', [Diagnosti
     ->middleware('throttle:ticket-messages')
     ->name('tickets.diagnostics.clientReport');
 
-Route::get('kiosk/tickets/create', [TicketController::class, 'kioskCreate'])->name('kiosk.tickets.create');
-Route::post('kiosk/tickets', [TicketController::class, 'kioskStore'])->name('kiosk.tickets.store');
 
 Route::middleware('auth')->group(function () {
     Route::post('tickets/quick-user', [TicketController::class, 'quickCreateUser'])->name('tickets.quickUser');
