@@ -479,7 +479,9 @@ func (a *app) siteState() map[string]any {
 	}
 }
 
-func (a *app) checkPairing() {
+func (a *app) checkPairing() { _ = a.checkPairingErr() }
+
+func (a *app) checkPairingErr() error {
 	me, err := a.client().Me()
 	a.mu.Lock()
 	if err != nil {
@@ -489,6 +491,41 @@ func (a *app) checkPairing() {
 	}
 	a.mu.Unlock()
 	a.updateTitle()
+	return err
+}
+
+// watchPairing checks the key at startup. When the network is not up yet
+// (Wi-Fi qui se connecte après le lancement, PC relancé après un
+// redémarrage, câble branché plus tard), it tries again on its own for half
+// an hour, instead of leaving « site injoignable » until « Réessayer ».
+func (a *app) watchPairing() {
+	wait := 5 * time.Second
+	for deadline := time.Now().Add(30 * time.Minute); ; {
+		a.mu.Lock()
+		paired := a.cfg.Server != "" && a.cfg.Token != ""
+		a.mu.Unlock()
+		if !paired {
+			return
+		}
+		err := a.checkPairingErr()
+		a.emitGo("site", a.siteState())
+		if err == nil || !IsNetError(err) || time.Now().After(deadline) {
+			if err != nil {
+				a.log("Site : %v", err)
+			}
+			return
+		}
+		time.Sleep(wait)
+		if wait < time.Minute {
+			wait *= 2
+		}
+		a.mu.Lock()
+		ok := a.me != nil
+		a.mu.Unlock()
+		if ok { // « Réessayer » a réussi entre-temps
+			return
+		}
+	}
 }
 
 // updateTitle shows in the title bar who is signed in to the site, else « PC2 Diag ».
@@ -864,12 +901,7 @@ func main() {
 		}()
 	})
 
-	go func() {
-		if a.cfg.Server != "" && a.cfg.Token != "" {
-			a.checkPairing()
-			a.emitGo("site", a.siteState())
-		}
-	}()
+	go a.watchPairing()
 
 	w.SetHtml(uiHTML)
 	w.Run()
