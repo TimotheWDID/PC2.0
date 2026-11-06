@@ -114,6 +114,10 @@ class AgentController extends Controller
         $agent = Agent::with('user')->findOrFail($id);
         $wasActive = (bool) ($agent->is_active ?? true);
 
+        if ($request->has('is_active') && ! $request->boolean('is_active')) {
+            $this->preventSelfLockout($request, $agent);
+        }
+
         $data = $request->validate([
             'speciality_ids' => 'nullable|array',
             'speciality_ids.*' => 'exists:specialities,id',
@@ -162,11 +166,7 @@ class AgentController extends Controller
 
         $unassignedCount = 0;
         if ($wasActive && !$isActive) {
-            $unassignedCount = Ticket::query()
-                ->standardOnly()
-                ->where('assignee_id', $agent->user_id)
-                ->whereIn('status', ['open', 'in_progress', 'pending'])
-                ->update(['assignee_id' => null]);
+            $unassignedCount = $this->unassignActiveTickets($agent);
         }
 
         $message = 'Agent mis à jour.';
@@ -177,10 +177,30 @@ class AgentController extends Controller
         return redirect()->route('agents.index')->with('success', $message);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $agent = Agent::findOrFail($id);
-        $agent->delete();
+        $this->preventSelfLockout($request, $agent);
+
+        // Deleting the row or the user would keep the login valid or cascade
+        // to messages, devices and orders: the agent stays, without access.
+        $agent->update(['is_active' => false]);
+        $this->unassignActiveTickets($agent);
+
         return redirect()->route('agents.index')->with('success', 'Agent supprimé.');
+    }
+
+    private function preventSelfLockout(Request $request, Agent $agent): void
+    {
+        abort_if((int) $agent->user_id === (int) $request->user()->id, 403, 'Vous ne pouvez pas retirer votre propre accès.');
+    }
+
+    private function unassignActiveTickets(Agent $agent): int
+    {
+        return Ticket::query()
+            ->standardOnly()
+            ->where('assignee_id', $agent->user_id)
+            ->whereIn('status', ['open', 'in_progress', 'pending'])
+            ->update(['assignee_id' => null]);
     }
 }

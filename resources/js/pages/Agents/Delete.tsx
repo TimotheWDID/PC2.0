@@ -25,7 +25,7 @@ export default function Delete({ agent }: any) {
             <CardTitle>Supprimer</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>Êtes-vous sûr de vouloir supprimer cet agent ?</p>
+            <p>Êtes-vous sûr de vouloir supprimer cet agent ? Il perd tous ses accès, et son historique est conservé.</p>
             <Button
               type="button"
               variant="destructive"

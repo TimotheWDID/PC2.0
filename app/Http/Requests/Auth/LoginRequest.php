@@ -52,6 +52,12 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        if ($user->isDisabledAgent()) {
+            throw ValidationException::withMessages([
+                'email' => 'Ce compte est désactivé.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
 
         return $user;
